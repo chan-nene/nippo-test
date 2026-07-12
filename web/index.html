@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ja" class="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NIPPO | Daily Operations</title>
+
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="title-bar">
+      <div class="title-bar-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg
+            class="title-icon"
+            version="1.1"
+            id="_x31_0"
+            xmlns="http://www.w3.org/2000/svg"
+            xmlns:xlink="http://www.w3.org/1999/xlink"
+            x="0px"
+            y="0px"
+            viewBox="0 0 512 512"
+            xml:space="preserve"
+          >
+            <g>
+              <path
+                d="M446.277,0H65.723H39.02v26.703v438.218C39.02,490.879,60.14,512,86.098,512h339.808
+                                c25.958,0,47.074-21.121,47.074-47.078V26.703V0H446.277z M65.723,67.742V26.703h380.554v41.039H65.723z M425.906,485.297H86.098
+                                c-11.254,0-20.375-9.121-20.375-20.375V89.106h380.554v375.816C446.277,476.176,437.16,485.297,425.906,485.297z"
+              />
+              <polygon
+                points="158.285,179.422 158.211,179.5 135.262,156.547 121.117,170.691 120.832,170.973 120.832,170.977
+                                120.738,171.07 158.254,208.578 215.516,150.68 200.992,136.152"
+              />
+              <polygon
+                points="285.144,160.965 285.144,161.016 285.144,161.016 285.144,161.152 391.266,161.152 391.266,146.836
+                                285.144,146.836"
+              />
+              <polygon
+                points="285.144,268.73 285.144,268.782 285.144,268.782 285.144,268.918 391.266,268.918 391.266,254.598
+                                285.144,254.598"
+              />
+              <polygon
+                points="158.211,395.027 135.59,372.402 135.36,372.168 135.36,372.168 135.262,372.074 120.868,386.469
+                                120.832,386.504 120.832,386.504 120.738,386.598 158.254,424.11 215.516,366.207 200.992,351.68"
+              />
+              <polygon
+                points="338.203,192.883 285.277,192.75 285.144,206.934 338.07,206.934"
+              />
+              <polygon
+                points="201.086,244.012 201.086,244.012 200.992,243.918 158.723,286.742 158.207,287.262 135.48,264.527
+                                135.36,264.406 135.36,264.406 135.262,264.309 121.012,278.558 120.832,278.738 120.832,278.738 120.738,278.836
+                                158.254,316.348 215.016,258.95 215.422,258.539 215.422,258.539 215.516,258.442 201.121,244.047"
+              />
+              <polygon
+                points="338.203,300.649 285.277,300.516 285.144,314.695 338.07,314.695"
+              />
+              <polygon
+                points="285.277,362.359 285.277,362.363 285.144,362.363 285.144,376.492 285.144,376.543 285.144,376.543
+                                285.144,376.68 391.266,376.68 391.266,362.363 286.043,362.363"
+              />
+              <polygon
+                points="285.144,422.461 338.07,422.461 338.203,408.41 285.277,408.274"
+              />
+            </g>
+          </svg>
+        </span>
+        <span class="title-bar-title">NIPPO</span>
+        <span class="title-bar-divider" aria-hidden="true"></span>
+        <span class="title-bar-context">Daily Operations</span>
+      </div>
+      <div class="title-bar-actions" aria-label="アプリ操作">
+        <span class="current-user-display">
+          <span class="current-user-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21a8 8 0 0 1 16 0" />
+            </svg>
+          </span>
+          <span id="currentUserName" class="current-user">ユーザー</span>
+        </span>
+        <div id="fontSizeControl" class="font-size-control">
+          <button
+            id="fontSizeButton"
+            class="header-icon-button font-size-button"
+            type="button"
+            title="文字サイズを変更"
+            aria-label="文字サイズを変更"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
+            Aa
+          </button>
+          <div
+            id="fontSizeMenu"
+            class="font-size-menu hidden"
+            role="group"
+            aria-label="文字サイズ"
+          >
+            <button type="button" data-font-size="standard" aria-pressed="true">標準</button>
+            <button type="button" data-font-size="large" aria-pressed="false">大</button>
+            <button type="button" data-font-size="xlarge" aria-pressed="false">特大</button>
+          </div>
+        </div>
+        <button
+          id="toggleThemeButton"
+          class="header-icon-button"
+          type="button"
+          title="ダークモードに切替"
+          aria-label="ダークモードに切替"
+          aria-pressed="false"
+        >
+          <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+            <path d="M12 3a6 6 0 0 0 9 7.8A8.5 8.5 0 1 1 12 3z" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside id="sidebar" class="sidebar is-open">
+        <nav class="sidebar-nav" aria-label="メインメニュー">
+          <ul>
+            <li>
+              <button
+                id="dailyViewButton"
+                class="sidebar-item is-active"
+                type="button"
+                title="日報入力"
+              >
+                <span class="sidebar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                </span>
+                <span class="sidebar-text">日報入力</span>
+              </button>
+            </li>
+            <li>
+              <button
+                id="bossViewButton"
+                class="sidebar-item"
+                type="button"
+                title="上司コメント"
+              >
+                <span class="sidebar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" />
+                    <path d="M8 9h8M8 13h5" />
+                  </svg>
+                </span>
+                <span class="sidebar-text">上司コメント</span>
+              </button>
+            </li>
+          </ul>
+        </nav>
+        <nav class="sidebar-secondary-nav" aria-label="アプリ設定">
+          <button
+            id="openSettingsButton"
+            class="sidebar-item"
+            type="button"
+            title="設定"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="img">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.72l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+            <span class="sidebar-text">設定</span>
+          </button>
+        </nav>
+        <div id="sidebar-toggle-container" class="sidebar-footer">
+          <button
+            id="toggleSidebarButton"
+            class="sidebar-utility-button sidebar-toggle"
+            type="button"
+            title="サイドバーを閉じる"
+            aria-label="サイドバー切替"
+          >
+            <span class="sidebar-toggle-icon" aria-hidden="true"></span>
+            <span class="sidebar-utility-text">折りたたむ</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <div id="statusRegion" class="status-region" aria-live="polite">
+          <div id="message" class="message hidden" role="status"></div>
+        </div>
+        <section id="mainPanel" class="content">
+          <div id="reportPanel" class="workspace-card">
+            <div class="toolbar-row">
+              <div class="toolbar-left toolbar-left-wide">
+                <div class="view-label">
+                  <span id="pageTitle">日報入力</span>
+                  <span id="pageDescription" class="page-description">
+                    自分の日報を入力し、コメントを確認
+                  </span>
+                </div>
+                <div class="period-control-container">
+                  <div class="period-control">
+                    <div class="period-field-group">
+                      <input id="startDate" type="date" aria-label="開始日" aria-describedby="periodError" />
+                    </div>
+                    <span class="period-separator">〜</span>
+                    <div class="period-field-group">
+                      <input id="endDate" type="date" aria-label="終了日" aria-describedby="periodError" />
+                    </div>
+                  </div>
+                  <div id="periodError" class="field-error period-error hidden" role="alert"></div>
+                </div>
+                <div class="period-presets" aria-label="表示期間">
+                  <button id="presetTodayButton" class="preset-button" type="button">今日</button>
+                  <button id="presetLast7DaysButton" class="preset-button" type="button">7日間</button>
+                  <button id="presetThisMonthButton" class="preset-button" type="button">今月</button>
+                  <button id="presetDefaultButton" class="preset-button" type="button">標準期間</button>
+                </div>
+                <button
+                  id="showMissingCommentsButton"
+                  class="filter-tag hidden"
+                  type="button"
+                  aria-pressed="false"
+                >
+                  未確認
+                </button>
+
+              </div>
+
+              <div class="toolbar-right">
+                <button
+                  id="refreshButton"
+                  class="toolbar-button"
+                  type="button"
+                  disabled
+                >
+                  <span class="toolbar-button-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v6h-6" /></svg>
+                  </span>
+                  最新データを取得
+                </button>
+                <button
+                  id="saveButton"
+                  class="toolbar-button primary"
+                  type="button"
+                  disabled
+                >
+                  <span class="toolbar-button-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg>
+                  </span>
+                  保存
+                </button>
+              </div>
+            </div>
+            <div class="member-switch-bar hidden" id="bossFilterArea">
+              <span class="member-switch-label">対象メンバー</span>
+              <div id="bossSearchControl" class="member-switch-list">
+                <button
+                  id="showAllSubordinatesButton"
+                  class="member-switch-button is-active"
+                  type="button"
+                  aria-pressed="true"
+                >
+                  全員
+                </button>
+              </div>
+            </div>
+            <div id="tableWrap" class="table-card hidden"></div>
+          </div>
+          <section id="settingsPanel" class="settings-panel hidden">
+            <div class="settings-card">
+              <div class="settings-header">
+                <h2>設定</h2>
+              </div>
+              <p class="settings-description">
+                日報データを読み書きする共有フォルダと、画面の初期値を設定します。
+              </p>
+              <label class="settings-field">
+                <span>ユーザー日報フォルダ</span>
+                <input id="usersDir" type="text" autocomplete="off" aria-describedby="usersDirError" />
+                <span id="usersDirError" class="field-error hidden" role="alert"></span>
+              </label>
+              <label class="settings-field">
+                <span>上司コメントフォルダ</span>
+                <input id="commentsDir" type="text" autocomplete="off" aria-describedby="commentsDirError" />
+                <span id="commentsDirError" class="field-error hidden" role="alert"></span>
+              </label>
+              <label class="settings-field">
+                <span>共通マスターフォルダ</span>
+                <input id="commonDir" type="text" autocomplete="off" aria-describedby="commonDirError" />
+                <span id="commonDirError" class="field-error hidden" role="alert"></span>
+              </label>
+              <section class="default-range-setting" aria-labelledby="defaultRangeTitle">
+                <div class="default-range-heading">
+                  <div>
+                    <h3 id="defaultRangeTitle">標準の表示範囲</h3>
+                    <p>今日を基準に、前後何日分を表示するか設定します。</p>
+                  </div>
+                  <div class="default-range-values" aria-live="polite">
+                    <span id="pastDaysValue">今日より1日前</span>
+                    <span id="futureDaysValue">今日まで</span>
+                  </div>
+                </div>
+                <div class="range-timeline">
+                  <label class="range-half range-past">
+                    <span class="range-side-label">開始</span>
+                    <input
+                      id="defaultStartOffsetDays"
+                      type="range"
+                      min="0"
+                      max="14"
+                      step="1"
+                      value="1"
+                      aria-label="今日より前に表示する日数"
+                    />
+                  </label>
+                  <div class="range-today" aria-hidden="true">
+                    <span>今日</span>
+                    <strong id="rangeTodayDate"></strong>
+                  </div>
+                  <label class="range-half range-future">
+                    <span class="range-side-label">終了</span>
+                    <input
+                      id="defaultEndOffsetDays"
+                      type="range"
+                      min="0"
+                      max="7"
+                      step="1"
+                      value="0"
+                      aria-label="今日より後に表示する日数"
+                    />
+                  </label>
+                </div>
+                <div class="range-scale" aria-hidden="true">
+                  <span>14日前</span>
+                  <span>7日前</span>
+                  <span>今日</span>
+                  <span>7日後</span>
+                </div>
+                <p id="defaultRangePreview" class="default-range-preview"></p>
+              </section>
+              <label>
+                未確認として表示する開始日
+                <input id="missingCommentStartDate" type="date" />
+              </label>
+              <label class="settings-field">
+                <span>サインの文字</span>
+                <input
+                  id="commentSignature"
+                  type="text"
+                  maxlength="100"
+                  autocomplete="off"
+                  placeholder="未設定の場合は上司名を使用"
+                />
+              </label>
+              <div class="actions">
+                <button
+                  id="saveSettingsButton"
+                  class="toolbar-button primary"
+                  type="button"
+                >
+                  設定を保存
+                </button>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

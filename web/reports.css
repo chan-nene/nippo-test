@@ -1,0 +1,1047 @@
+/* Daily report and supervisor report screens. */
+
+/* Command bar */
+
+html body .toolbar-row {
+  display: flex;
+  min-height: var(--toolbar-height);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+html body .toolbar-left,
+html body .toolbar-left-wide,
+html body .toolbar-right,
+html body .period-control {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+html body .toolbar-left-wide {
+  flex: 1 1 auto;
+}
+
+html body .toolbar-right {
+  position: relative;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+html body .view-label {
+  display: inline-flex;
+  min-width: 150px;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 1px;
+  justify-content: center;
+  padding: 0 8px 0 2px;
+}
+
+html body .view-label #pageTitle {
+  color: var(--text-strong);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+html body .page-description {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+html body .toolbar-button,
+html body .filter-tag,
+html body .period-field-group {
+  min-height: var(--control-height);
+  height: var(--control-height);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  box-shadow: none;
+}
+
+html body .toolbar-button,
+html body .filter-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+html body .toolbar-button {
+  position: relative;
+}
+
+html body .toolbar-button:hover,
+html body .filter-tag:hover {
+  border-color: var(--primary-border);
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+html body .toolbar-button.primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+}
+
+html body .toolbar-button.primary:hover {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+  color: #ffffff;
+}
+
+html body .toolbar-button:disabled,
+html body .toolbar-button.primary:disabled {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+html body .toolbar-button-icon {
+  display: inline-flex;
+  width: 14px;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+html body .toolbar-button-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: inline-flex;
+  min-width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--surface);
+  border-radius: 999px;
+  background: #e11d48;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+html body .period-control {
+  gap: 5px;
+}
+
+html body .period-control-container {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+}
+
+html body .period-control input[type="date"] {
+  width: 142px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0 7px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+html body .period-separator {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+html body .period-field-group:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+html body .filter-tag.is-active,
+html body .member-switch-button.is-active,
+html body .member-switch-button[aria-pressed="true"] {
+  border-color: var(--primary-border);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+html body #showMissingCommentsButton.is-active,
+html body #showMissingCommentsButton[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--warning) 48%, var(--border));
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+html body #showMissingCommentsButton.has-overdue:is(
+    .is-active,
+    [aria-pressed="true"]
+  ) {
+  border-color: color-mix(in srgb, var(--error) 48%, var(--border));
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+html body .missing-count-badge {
+  display: inline-flex;
+  min-width: 32px;
+  height: var(--badge-height);
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--warning);
+  color: #ffffff;
+  padding: 0 6px;
+  font-size: var(--font-10);
+  font-weight: 800;
+  line-height: 1;
+}
+
+html body .missing-count-badge.is-overdue {
+  background: var(--error);
+}
+
+html body #showMissingCommentsButton:is(.is-active, [aria-pressed="true"])
+  .missing-count-badge {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.42);
+}
+
+html body .member-switch-bar {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 7px 8px;
+}
+
+html body .member-switch-label {
+  min-width: 88px;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  padding: 5px 4px;
+  font-size: var(--font-12);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+html body .member-switch-list {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+html body .member-switch-button {
+  display: inline-flex;
+  max-width: 120px;
+  min-height: var(--compact-control-height);
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 3px 10px;
+  font-size: var(--font-12);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body .member-switch-button:hover {
+  border-color: var(--primary-border);
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+/* Table */
+
+html body .table-card {
+  display: flex;
+  height: fit-content;
+  min-height: 0;
+  max-height: 100%;
+  flex: 0 1 auto;
+  align-self: stretch;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0;
+  padding: 6px;
+  border: 0;
+  background: var(--surface);
+}
+
+html body .table-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 0 1 auto;
+  overflow: auto;
+  isolation: isolate;
+}
+
+html body table {
+  width: 100%;
+  min-width: 1110px;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--text);
+  table-layout: fixed;
+}
+
+html body.is-boss-view table {
+  min-width: 1240px;
+}
+
+html body th,
+html body td {
+  border-right: 1px solid var(--table-border);
+  border-bottom: 1px solid var(--table-border);
+  text-align: left;
+}
+
+html body th:first-child,
+html body td:first-child {
+  border-left: 1px solid var(--table-border);
+}
+
+html body th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: var(--table-header-height);
+  padding: 0 10px;
+  border-top: 1px solid var(--table-border);
+  border-bottom-color: var(--table-border-strong);
+  background: var(--table-header-bg);
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+html body thead th:first-child {
+  border-top-left-radius: var(--radius-sm);
+}
+
+html body thead th:last-child {
+  border-top-right-radius: var(--radius-sm);
+}
+
+html body td {
+  position: relative;
+  height: var(--table-row-height);
+  min-height: var(--table-row-height);
+  padding: 0;
+  background: var(--table-cell-bg);
+  color: var(--text);
+  font-size: 14px;
+  vertical-align: top;
+  transition: background 0.08s ease;
+}
+
+html body :is(th, td).date-col {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--surface-alt);
+}
+
+html body th.date-col {
+  z-index: 7;
+  background: var(--table-header-bg);
+}
+
+html body :is(th, td).name-col {
+  position: sticky;
+  left: 86px;
+  z-index: 3;
+  background: var(--table-cell-bg);
+  border-right-color: var(--table-border-strong);
+}
+
+html body th.name-col {
+  z-index: 6;
+  background: var(--table-header-bg);
+}
+
+html body.is-boss-view :is(th, td).user-col {
+  position: sticky;
+  left: 86px;
+  z-index: 3;
+  background: var(--table-cell-bg);
+}
+
+html body.is-boss-view th.user-col {
+  z-index: 6;
+  background: var(--table-header-bg);
+}
+
+html body.is-boss-view :is(th, td).name-col {
+  left: 218px;
+  border-right-color: var(--table-border-strong);
+}
+
+html body tbody tr:hover td {
+  background: var(--table-cell-bg);
+}
+
+html body tbody tr:hover td.date-col {
+  background: var(--surface-alt);
+}
+
+html body tbody tr.is-today:hover td.date-col {
+  background: var(--surface-active);
+}
+
+html body tbody tr:hover td :is(.cell-frame, .editing-textarea) {
+  background: transparent;
+}
+
+html body .date-col {
+  width: 86px;
+  min-width: 86px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+html body .user-col {
+  width: 132px;
+  min-width: 132px;
+  white-space: nowrap;
+}
+
+html body .name-col {
+  width: 220px;
+  min-width: 180px;
+}
+
+html body .detail-col {
+  width: 420px;
+  min-width: 320px;
+}
+
+html body .comment-col {
+  width: 300px;
+  min-width: 260px;
+}
+
+html body.is-boss-view .detail-col {
+  width: 380px;
+}
+
+html body .cell-frame,
+html body .editable-content {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--table-row-height) - 1px);
+  padding: var(--cell-padding-y) 10px;
+  color: var(--text);
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+html body .date-content,
+html body .user-content {
+  white-space: nowrap;
+}
+
+html body .date-content {
+  text-align: center;
+}
+
+html body .row-state-badges {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+html body .row-state-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--primary-border);
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  min-height: var(--badge-height);
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: calc(var(--badge-height) - 2px);
+}
+
+html body .row-state-badge.attention {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+html body .date-weekday,
+html body .cell-sub-label,
+html body .boss-reply-icon {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+html body .date-weekday-sat {
+  color: #2563eb;
+}
+
+html body .date-weekday-sun {
+  color: #dc2626;
+}
+
+html body.is-dark-mode .date-weekday-sat {
+  color: #93c5fd;
+}
+
+html body.is-dark-mode .date-weekday-sun {
+  color: #fca5a5;
+}
+
+html body tr.holiday td.date-col {
+  background: var(--surface-alt);
+}
+
+html body tr.is-today td.date-col {
+  border-left-color: var(--primary);
+  background: var(--surface-active);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+html body.is-boss-view tr.boss-date-group-alt td {
+  background: color-mix(in srgb, var(--surface-alt) 72%, var(--surface));
+}
+
+html body.is-boss-view tr.boss-date-group-alt:hover td {
+  background: var(--surface-hover);
+}
+
+html body.is-boss-view th.self-comment-col {
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface-soft));
+  color: var(--primary);
+}
+
+html body .editable-content {
+  cursor: default;
+  background: transparent;
+}
+
+html body .editable-content.is-editable {
+  cursor: text;
+}
+
+html body .editable-content.is-editable:hover {
+  background: transparent;
+  box-shadow: none;
+}
+
+html body td:has(.editable-content.is-editable:hover) {
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+html body td:has(.editable-content.is-editable:not(.is-editing):hover)::after {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--primary) 42%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+html body .editable-content.is-empty {
+  color: transparent;
+}
+
+html body .editable-content.is-editing,
+html body .editable-content.is-editing:hover {
+  position: relative;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html body .editable-content.is-editing::after {
+  position: absolute;
+  z-index: 2;
+  inset: 1px;
+  box-shadow: inset 0 0 0 2px var(--primary);
+  content: "";
+  pointer-events: none;
+}
+
+html body .editing-textarea {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--table-row-height) - 1px);
+  margin: 0;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--cell-padding-y) 10px;
+  outline: none;
+}
+
+html body .editing-textarea:focus,
+html body .editing-textarea:focus-visible {
+  outline: none;
+  outline-width: 0;
+  outline-offset: 0;
+}
+
+html body td.is-dirty-cell,
+html body .editable-content.is-dirty,
+html body .editable-content.is-dirty.is-editing .editing-textarea {
+  background: var(--dirty);
+}
+
+html body td.is-dirty-cell {
+  box-shadow: inset 3px 0 0 var(--dirty-border);
+}
+
+html body td.is-dirty-cell .editable-content,
+html body td.is-dirty-cell .editing-textarea {
+  background: transparent;
+}
+
+html body .comment-stack {
+  display: grid;
+  gap: 5px;
+  min-height: calc(var(--table-row-height) - 1px);
+}
+
+html body .boss-comment-actions {
+  display: flex;
+  min-height: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+html body .boss-comment-link {
+  min-height: var(--compact-control-height);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+html body .boss-comment-link[data-action="sign-comment"],
+html body .reply-toggle-button {
+  border-color: var(--primary-border);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+html body .boss-comment-link:hover {
+  border-color: var(--primary-border);
+  background: var(--surface-hover);
+  color: var(--primary-hover);
+  text-decoration: none;
+}
+
+html body .boss-comment-link[data-action="sign-comment"]:hover,
+html body .reply-toggle-button:hover {
+  border-color: var(--primary);
+  background: var(--surface-active);
+  color: var(--primary-hover);
+}
+
+html body .reply-toggle-button {
+  min-height: var(--compact-control-height);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+html body .reply-toggle-button:hover {
+  text-decoration: none;
+}
+
+html body .reply-section {
+  margin: 0 8px 7px;
+  border-top: 1px dashed var(--border-strong);
+  padding-top: 5px;
+}
+
+html body .boss-reply-preview {
+  display: flex;
+  min-height: var(--compact-control-height);
+  align-items: flex-start;
+  gap: 5px;
+  margin: 0 8px 7px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  padding: 6px 8px;
+}
+
+html body .boss-reply-text {
+  color: var(--text);
+  font-size: var(--font-13);
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+html body .empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+html body .date-expand-band {
+  display: inline-flex;
+  width: 100%;
+  min-height: var(--expand-band-height);
+  height: var(--expand-band-height);
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+html body .date-expand-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+html body .date-expand-band:hover {
+  border-color: var(--primary-border);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+html body .date-expand-band.band-top {
+  margin: 0 0 6px;
+}
+
+html body .date-expand-band.band-bottom {
+  margin: 6px 0 0;
+}
+
+html body .date-expand-icon {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+/* Responsive guardrails. The app is PC-first, but avoid broken narrow windows. */
+
+@media (max-width: 1100px) {
+  html body .toolbar-row {
+    align-items: center;
+    gap: 4px;
+  }
+
+  html body .toolbar-left-wide,
+  html body .toolbar-right {
+    flex-wrap: nowrap;
+  }
+
+  html body .view-label {
+    min-width: 78px;
+    padding-inline: 2px 4px;
+  }
+
+  html body .page-description {
+    display: none;
+  }
+
+  html body .view-label #pageTitle {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  html body .period-control input[type="date"] {
+    width: 116px;
+    padding-inline: 4px;
+  }
+
+  html body .toolbar-button,
+  html body .filter-tag {
+    gap: 4px;
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  html body .period-presets {
+    display: inline-flex;
+    width: auto;
+    height: 32px;
+    flex: 0 0 auto;
+  }
+
+  html body .preset-button {
+    height: 24px;
+    padding-inline: 5px;
+  }
+
+  html body #refreshButton {
+    width: 32px;
+    padding: 0;
+  }
+
+  html body #refreshButton .toolbar-button-label {
+    display: none;
+  }
+
+  html body .toolbar-left-wide {
+    overflow: hidden;
+  }
+
+  html body .member-switch-bar {
+    align-items: center;
+    gap: 6px;
+  }
+
+  html body .member-switch-label {
+    min-width: auto;
+    padding-inline: 2px;
+  }
+
+  html body .member-switch-list {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  html body .member-switch-button {
+    max-width: 104px;
+    flex: 0 0 auto;
+  }
+
+  html body:is([data-font-size="large"], [data-font-size="xlarge"])
+    .toolbar-row
+    :is(button, input, .filter-tag) {
+    font-size: var(--font-13) !important;
+  }
+
+  html body:is([data-font-size="large"], [data-font-size="xlarge"])
+    .toolbar-row
+    .view-label
+    #pageTitle {
+    font-size: var(--font-16) !important;
+  }
+
+  html body:is([data-font-size="large"], [data-font-size="xlarge"])
+    .toolbar-row
+    .period-control
+    input[type="date"] {
+    width: 134px;
+  }
+
+  html body:is([data-font-size="large"], [data-font-size="xlarge"])
+    .toolbar-row
+    .period-presets {
+    height: var(--control-height);
+  }
+
+  html body:is([data-font-size="large"], [data-font-size="xlarge"])
+    .toolbar-row
+    .preset-button {
+    height: calc(var(--control-height) - 6px);
+  }
+}
+
+/* Period presets */
+
+html body .period-presets {
+  display: inline-flex;
+  height: var(--control-height);
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+  padding: 3px;
+}
+
+html body .preset-button {
+  height: calc(var(--control-height) - 6px);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+html body .preset-button:hover {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgb(20 32 28 / 0.12);
+}
+
+html body .preset-button.is-active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 3px rgb(20 32 28 / 0.16);
+}
+
+html body .preset-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+/* Only the table scrolls; date expansion controls stay fixed to the viewport. */
+
+html body .table-content {
+  width: 100%;
+  min-width: var(--table-content-width, 1110px);
+}
+
+html body.is-boss-view .table-content {
+  min-width: var(--table-content-width, 1240px);
+}
+
+html body .table-content table {
+  width: 100%;
+}
+
+html body .table-card > .date-expand-band {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+/* SVG icon system */
+
+html body .toolbar-button-icon svg,
+html body .boss-reply-icon svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+html body .toolbar-button-icon svg.is-spinning {
+  animation: icon-spin 0.8s linear infinite;
+}
+
+@media (max-width: 1180px) {
+  html body .toolbar-left-wide {
+    flex-wrap: nowrap;
+  }
+
+  html body .period-presets {
+    display: inline-flex;
+    width: auto;
+  }
+
+  html body .preset-button {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  html body .toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
+    max-height: none;
+    overflow: visible;
+  }
+
+  html body .toolbar-left-wide {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    width: 100%;
+  }
+
+  html body .view-label {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 2px 0 8px;
+  }
+
+  html body .period-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    width: 100%;
+  }
+
+  html body .period-field-group,
+  html body .period-control input[type="date"] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  html body .toolbar-left-wide > .toolbar-button,
+  html body .toolbar-left-wide > .filter-tag {
+    width: 100%;
+  }
+
+  html body .toolbar-right {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  html body .date-expand-band {
+    justify-content: center;
+  }
+}

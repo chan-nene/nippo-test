@@ -1,0 +1,252 @@
+/* Settings screen. */
+
+html body .settings-card input[type="text"],
+html body .settings-card input[type="date"] {
+  min-height: var(--control-height);
+  height: var(--control-height);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  box-shadow: none;
+}
+
+html body .settings-card input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+html body .settings-panel {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  background: var(--app-bg);
+  padding: 0;
+}
+
+html body .settings-card {
+  max-width: 920px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-bg);
+  padding: var(--settings-padding);
+}
+
+html body .settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+html body .settings-header h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+html body .settings-description {
+  margin: 12px 0 16px;
+  color: var(--text-muted);
+}
+
+html body .settings-card label {
+  display: grid;
+  grid-template-columns: 260px minmax(260px, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--text);
+}
+
+html body .settings-card label:has(input[type="checkbox"]) {
+  display: flex;
+}
+
+html body .settings-card input[type="text"],
+html body .settings-card input[type="date"] {
+  width: 100%;
+  margin: 0;
+  padding: 0 9px;
+  background: var(--input-bg);
+  line-height: 1.2;
+}
+
+html body .field-error {
+  color: var(--error);
+  font-size: var(--font-12);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+html body .settings-field > .field-error {
+  grid-column: 2;
+  margin-top: -6px;
+}
+
+html body :is(input, textarea)[aria-invalid="true"] {
+  border-color: var(--error) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 18%, transparent) !important;
+}
+
+html body .period-error {
+  position: static;
+  min-width: 100%;
+  margin-top: 4px;
+  border: 1px solid color-mix(in srgb, var(--error) 48%, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+  padding: 5px 8px;
+  white-space: normal;
+}
+
+html body .default-range-setting {
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  padding: 16px;
+}
+
+html body .default-range-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+html body .default-range-heading h3,
+html body .default-range-heading p,
+html body .default-range-preview {
+  margin: 0;
+}
+
+html body .default-range-heading h3 {
+  color: var(--text-strong);
+  font-size: var(--font-15);
+}
+
+html body .default-range-heading p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: var(--font-12);
+}
+
+html body .default-range-values {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  color: var(--primary);
+  font-size: var(--font-13);
+  font-weight: 700;
+}
+
+html body .range-timeline {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 84px minmax(100px, 1fr);
+  align-items: end;
+  gap: 0;
+  margin-top: 18px;
+}
+
+html body .default-range-setting .range-half {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+html body .range-side-label {
+  color: var(--text-muted);
+  font-size: var(--font-12);
+  font-weight: 700;
+}
+
+html body .range-future .range-side-label {
+  text-align: right;
+}
+
+html body .range-timeline input[type="range"] {
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+html body .range-past input[type="range"] {
+  direction: rtl;
+}
+
+html body .range-timeline input[type="range"]::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+  cursor: grab;
+}
+
+html body .range-timeline input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  cursor: grab;
+}
+
+html body .range-today {
+  display: flex;
+  min-height: var(--range-today-height);
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--primary-border);
+  border-left: 1px solid var(--primary-border);
+  color: var(--primary);
+  flex-direction: column;
+  font-size: var(--font-13);
+  font-weight: 800;
+}
+
+html body .range-today strong {
+  color: var(--text-muted);
+  font-size: var(--font-10);
+  font-weight: 600;
+}
+
+html body .range-scale {
+  display: grid;
+  grid-template-columns: 1fr 1fr 84px 1fr;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--font-10);
+}
+
+html body .range-scale span:nth-child(2),
+html body .range-scale span:nth-child(3) {
+  text-align: center;
+}
+
+html body .range-scale span:last-child {
+  text-align: right;
+}
+
+html body .default-range-preview {
+  margin-top: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 8px 10px;
+  text-align: center;
+  font-size: var(--font-13);
+  font-weight: 700;
+}
+
+html body .actions {
+  margin-top: 14px;
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  html body .settings-card label {
+    grid-template-columns: 1fr;
+  }
+}

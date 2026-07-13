@@ -2,6 +2,7 @@
 settings.ini
 cache/
 logs/
+test_data/
 
 # Python-generated files
 __pycache__/

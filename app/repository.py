@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import polars as pl
 
-from app.config import AppSettings
+from app.config import AppSettings, validate_settings_paths
 
 JST = ZoneInfo("Asia/Tokyo")
 
@@ -30,6 +30,8 @@ COMMENT_COLUMNS = [
     "comment",
     "updated_at",
 ]
+CSV_ENCODINGS = ("utf8", "cp932")
+DEFAULT_BACKUP_LIMIT = 20
 
 
 class DailyReportRepository:
@@ -37,6 +39,7 @@ class DailyReportRepository:
         self.settings = settings
         self.base_dir = base_dir
         self.load_warnings: list[dict[str, str]] = []
+        self.backup_limit = DEFAULT_BACKUP_LIMIT
 
     @staticmethod
     def now_jst() -> datetime:
@@ -47,42 +50,41 @@ class DailyReportRepository:
         return datetime.now(JST).date()
 
     def validate_paths(self) -> None:
-        for label in ("users_dir", "comments_dir", "common_dir"):
-            raw_path = str(getattr(self.settings, label, "")).strip()
-            path = Path(raw_path)
-            if not path.exists():
-                raise FileNotFoundError(f"{label} が存在しません: {raw_path}")
-            if not path.is_dir():
-                raise NotADirectoryError(
-                    f"{label} はディレクトリではありません: {raw_path}"
-                )
+        errors = validate_settings_paths(self.settings)
+        if errors:
+            raise ValueError(" / ".join(errors.values()))
 
     def load_common(self) -> dict[str, list[dict[str, Any]]]:
         common_dir = Path(self.settings.common_dir)
-        data = {
+        return {
             "superior_config": self._read_csv(common_dir / "superior_config.csv"),
             "superior_master": self._read_csv(common_dir / "superior_master.csv"),
             "user_master": self._read_csv(common_dir / "user_master.csv"),
             "calendar": self._read_csv(common_dir / "calendar.csv"),
         }
-        return data
 
     def _read_csv(self, path: Path) -> list[dict[str, Any]]:
         if not path.exists():
             self._record_load_warning(path, FileNotFoundError("ファイルがありません"))
             return []
+        try:
+            return self._read_csv_frame(path).to_dicts()
+        except Exception as exc:
+            self._record_load_warning(path, exc)
+            return []
+
+    def _read_csv_frame(self, path: Path) -> pl.DataFrame:
         errors: list[str] = []
-        for encoding in ("utf8-lossy", "cp932"):
+        for encoding in CSV_ENCODINGS:
             try:
-                df = pl.read_csv(
-                    path, infer_schema_length=0, encoding=encoding
+                return pl.read_csv(
+                    path,
+                    infer_schema_length=0,
+                    encoding=encoding,
                 ).fill_null("")
-                return [dict(row) for row in df.to_dicts()]
             except Exception as exc:
                 errors.append(f"{encoding}: {exc}")
-                continue
-        self._record_load_warning(path, RuntimeError(" / ".join(errors)))
-        return []
+        raise RuntimeError(" / ".join(errors))
 
     def _record_load_warning(self, path: Path, error: Exception) -> None:
         warning = {"file": path.name, "error": str(error)}
@@ -120,7 +122,7 @@ class DailyReportRepository:
             subordinate_ids.append(employee_id)
 
         users_df = self._load_all_user_rows(
-            employee_id, subordinate_ids if is_superior else [employee_id]
+            subordinate_ids if is_superior else [employee_id]
         )
         comments_df = self._load_all_comment_rows()
         rows, default_start, default_end = self._build_rows(
@@ -138,7 +140,6 @@ class DailyReportRepository:
             "display_name": my_display,
             "is_superior": is_superior,
             "rows": rows,
-            "common": common,
             "my_rank": self._get_my_rank(common, employee_id),
             "start_date": default_start.isoformat() if default_start else None,
             "end_date": default_end.isoformat() if default_end else None,
@@ -160,48 +161,41 @@ class DailyReportRepository:
         user_updates: list[dict[str, Any]],
         comment_updates: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        update_targets = (
+            ("user", user_updates, self._upsert_user_rows),
+            ("comment", comment_updates, self._upsert_comment_rows),
+        )
         result = {
-            "user": {
-                "needed": bool(user_updates),
-                "local_saved": False,
-                "uploaded": False,
-                "error": "",
-            },
-            "comment": {
-                "needed": bool(comment_updates),
-                "local_saved": False,
-                "uploaded": False,
-                "error": "",
-            },
+            name: {"needed": bool(updates), "saved": False, "error": ""}
+            for name, updates, _ in update_targets
         }
-        if user_updates:
+        for name, updates, writer in update_targets:
+            if not updates:
+                continue
             try:
-                self._upsert_user_rows(employee_id, user_updates)
-                result["user"]["local_saved"] = True
-                result["user"]["uploaded"] = True
+                writer(employee_id, updates)
+                result[name]["saved"] = True
             except Exception as exc:
-                result["user"]["error"] = str(exc)
-
-        if comment_updates:
-            try:
-                self._upsert_comment_rows(employee_id, comment_updates)
-                result["comment"]["local_saved"] = True
-                result["comment"]["uploaded"] = True
-            except Exception as exc:
-                result["comment"]["error"] = str(exc)
+                result[name]["error"] = str(exc)
 
         return result
 
-    def _load_all_user_rows(
-        self, current_employee_id: str, allowed_employee_ids: list[str]
-    ) -> pl.DataFrame:
+    def _load_all_user_rows(self, allowed_employee_ids: list[str]) -> pl.DataFrame:
         rows: list[dict[str, Any]] = []
         users_dir = Path(self.settings.users_dir)
-        files = list(users_dir.glob("*.csv")) if users_dir.exists() else []
+        files = [
+            users_dir / f"{employee_id}.csv"
+            for employee_id in dict.fromkeys(allowed_employee_ids)
+            if employee_id
+        ]
         for file in files:
+            if not file.exists():
+                continue
             try:
                 rows.extend(
-                    self._normalize_rows(pl.read_csv(file).to_dicts(), USER_COLUMNS)
+                    self._normalize_rows(
+                        self._read_csv_frame(file).to_dicts(), USER_COLUMNS
+                    )
                 )
             except Exception as exc:
                 self._record_load_warning(file, exc)
@@ -221,7 +215,9 @@ class DailyReportRepository:
         for file in files:
             try:
                 rows.extend(
-                    self._normalize_rows(pl.read_csv(file).to_dicts(), COMMENT_COLUMNS)
+                    self._normalize_rows(
+                        self._read_csv_frame(file).to_dicts(), COMMENT_COLUMNS
+                    )
                 )
             except Exception as exc:
                 self._record_load_warning(file, exc)
@@ -374,37 +370,53 @@ class DailyReportRepository:
         user_path = Path(self.settings.users_dir) / f"{employee_id}.csv"
         rows = self._read_csv_or_empty(user_path, USER_COLUMNS).to_dicts()
         existing = self._dedupe_rows(rows, ["employee_id", "date"])
-        replies_by_date = {
-            self._date_key(row.get("date")): self._parse_replies(
-                row.get("replies", "[]")
-            )
+        rows_by_date = {
+            self._date_key(row.get("date")): dict(row)
             for row in existing
+            if self._date_key(row.get("date"))
         }
         now = self.now_jst()
         for update in updates:
-            date_text = str(update.get("date", ""))
-            replies = replies_by_date.get(date_text, {})
+            report_date = self._to_date(update.get("date"))
+            if report_date is None:
+                raise ValueError("日報の日付が不正です。")
+            date_text = report_date.isoformat()
+            row = rows_by_date.get(
+                date_text,
+                {
+                    "employee_id": employee_id,
+                    "date": report_date,
+                    "business_name": "",
+                    "business_detail": "",
+                    "replies": "[]",
+                    "updated_at": now,
+                },
+            )
+            row["employee_id"] = employee_id
+            row["date"] = report_date
+            if "business_name" in update:
+                row["business_name"] = str(update.get("business_name", ""))
+            if "business_detail" in update:
+                row["business_detail"] = str(update.get("business_detail", ""))
+
+            replies = self._parse_replies(row.get("replies", "[]"))
             for reply_item in update.get("replies", []) or []:
                 sid = str(reply_item.get("superior_employee_id", ""))
                 if sid:
                     replies[sid] = str(reply_item.get("reply", ""))
-            rows.append(
-                {
-                    "employee_id": employee_id,
-                    "date": self._to_date(date_text),
-                    "business_name": str(update.get("business_name", "")),
-                    "business_detail": str(update.get("business_detail", "")),
-                    "replies": json.dumps(
-                        [
-                            {"superior_employee_id": key, "reply": value}
-                            for key, value in replies.items()
-                        ],
-                        ensure_ascii=False,
-                    ),
-                    "updated_at": now,
-                }
+            row["replies"] = json.dumps(
+                [
+                    {"superior_employee_id": key, "reply": value}
+                    for key, value in replies.items()
+                ],
+                ensure_ascii=False,
             )
-        df = self._dedupe_rows_to_df(rows, USER_COLUMNS, ["employee_id", "date"])
+            row["updated_at"] = now
+            rows_by_date[date_text] = row
+
+        df = self._dedupe_rows_to_df(
+            list(rows_by_date.values()), USER_COLUMNS, ["employee_id", "date"]
+        )
         self._write_csv_atomically(df, user_path, "users")
 
     def _upsert_comment_rows(
@@ -412,21 +424,33 @@ class DailyReportRepository:
     ) -> None:
         comment_path = Path(self.settings.comments_dir) / f"{employee_id}.csv"
         rows = self._read_csv_or_empty(comment_path, COMMENT_COLUMNS).to_dicts()
+        existing = self._dedupe_rows(
+            rows, ["superior_employee_id", "subordinate_employee_id", "date"]
+        )
+        rows_by_key = {
+            (
+                str(row.get("superior_employee_id", "")),
+                str(row.get("subordinate_employee_id", "")),
+                self._date_key(row.get("date")),
+            ): dict(row)
+            for row in existing
+        }
         now = self.now_jst()
         for update in updates:
-            rows.append(
-                {
-                    "superior_employee_id": employee_id,
-                    "subordinate_employee_id": str(
-                        update.get("subordinate_employee_id", "")
-                    ),
-                    "date": self._to_date(str(update.get("date", ""))),
-                    "comment": str(update.get("comment", "")),
-                    "updated_at": now,
-                }
-            )
+            subordinate_id = str(update.get("subordinate_employee_id", "")).strip()
+            report_date = self._to_date(update.get("date"))
+            if not subordinate_id or report_date is None:
+                raise ValueError("コメントの対象者または日付が不正です。")
+            key = (employee_id, subordinate_id, report_date.isoformat())
+            rows_by_key[key] = {
+                "superior_employee_id": employee_id,
+                "subordinate_employee_id": subordinate_id,
+                "date": report_date,
+                "comment": str(update.get("comment", "")),
+                "updated_at": now,
+            }
         df = self._dedupe_rows_to_df(
-            rows,
+            list(rows_by_key.values()),
             COMMENT_COLUMNS,
             ["superior_employee_id", "subordinate_employee_id", "date"],
         )
@@ -458,6 +482,7 @@ class DailyReportRepository:
                 timestamp = self.now_jst().strftime("%Y%m%d_%H%M%S_%f")
                 backup_path = backup_dir / f"{target_path.stem}_{timestamp}.csv"
                 shutil.copy2(target_path, backup_path)
+                self._prune_backups(backup_dir, target_path.stem)
 
             os.replace(temp_path, target_path)
             temp_path = None
@@ -465,16 +490,23 @@ class DailyReportRepository:
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
 
+    def _prune_backups(self, backup_dir: Path, target_stem: str) -> None:
+        backups = sorted(
+            backup_dir.glob(f"{target_stem}_*.csv"),
+            key=lambda path: path.name,
+            reverse=True,
+        )
+        for stale_backup in backups[max(0, self.backup_limit) :]:
+            try:
+                stale_backup.unlink()
+            except OSError:
+                # バックアップ整理の失敗で、本体CSVの保存成功を失敗扱いにしない。
+                continue
+
     def _read_csv_or_empty(self, path: Path, columns: list[str]) -> pl.DataFrame:
         if not path.exists():
             return self._empty_df(columns)
-        return self._ensure_columns(pl.read_csv(path), columns)
-
-    def _empty_user_df(self) -> pl.DataFrame:
-        return self._empty_df(USER_COLUMNS)
-
-    def _empty_comment_df(self) -> pl.DataFrame:
-        return self._empty_df(COMMENT_COLUMNS)
+        return self._ensure_columns(self._read_csv_frame(path), columns)
 
     def _empty_df(self, columns: list[str]) -> pl.DataFrame:
         return pl.DataFrame({column: [] for column in columns})
@@ -490,15 +522,13 @@ class DailyReportRepository:
     def _normalize_rows(
         self, rows: list[dict[str, Any]], columns: list[str]
     ) -> list[dict[str, Any]]:
-        normalized = []
-        for row in rows:
-            normalized.append(
-                {
-                    column: row.get(column, "[]" if column == "replies" else "")
-                    for column in columns
-                }
-            )
-        return normalized
+        return [
+            {
+                column: row.get(column, "[]" if column == "replies" else "")
+                for column in columns
+            }
+            for row in rows
+        ]
 
     def _dedupe_rows_to_df(
         self, rows: list[dict[str, Any]], columns: list[str], keys: list[str]
@@ -514,14 +544,9 @@ class DailyReportRepository:
         self, rows: list[dict[str, Any]], keys: list[str]
     ) -> list[dict[str, Any]]:
         latest: dict[tuple[Any, ...], dict[str, Any]] = {}
+        fallback_updated_at = self.now_jst()
         for row in rows:
-            for column in USER_COLUMNS + COMMENT_COLUMNS:
-                if column == "replies":
-                    row.setdefault(column, "[]")
-                elif column not in row:
-                    row[column] = ""
-
-            dt = self._to_datetime(row.get("updated_at")) or self.now_jst()
+            dt = self._to_datetime(row.get("updated_at")) or fallback_updated_at
             row["updated_at"] = dt.isoformat()
             row["date"] = self._date_key(row.get("date"))
 

@@ -6,7 +6,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from app.config import AppSettings, SettingsManager
+from app.config import (
+    SettingsManager,
+    to_bool,
+    to_int,
+    validate_settings_paths,
+)
 from app.repository import DailyReportRepository
 
 
@@ -27,41 +32,35 @@ class DailyReportApi:
         return self._has_unsaved_changes
 
     def set_unsaved_changes(self, value: Any) -> dict[str, bool]:
-        self._has_unsaved_changes = self._to_bool(value, False)
+        self._has_unsaved_changes = to_bool(value, False)
         return {"ok": True}
 
     def get_initial_state(self) -> dict[str, Any]:
         return {
             "employee_id": self._employee_id,
-            "settings": self._settings_dict(),
+            "settings": self._settings.to_dict(),
             "settings_complete": self._settings.is_complete,
         }
 
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
-            candidate = AppSettings(
+            candidate = replace(
+                self._settings,
                 users_dir=str(payload.get("users_dir", "")).strip(),
                 comments_dir=str(payload.get("comments_dir", "")).strip(),
                 common_dir=str(payload.get("common_dir", "")).strip(),
-                default_start_offset_days=self._to_int(
+                default_start_offset_days=to_int(
                     payload.get("default_start_offset_days"), -1
                 ),
-                default_end_offset_days=self._to_int(
+                default_end_offset_days=to_int(
                     payload.get("default_end_offset_days"), 0
                 ),
                 missing_comment_start_date=str(
                     payload.get("missing_comment_start_date", "")
                 ).strip(),
                 comment_signature=str(payload.get("comment_signature", "")).strip(),
-                hide_holidays_default=self._settings.hide_holidays_default,
-                ui_sidebar_open=self._settings.ui_sidebar_open,
-                ui_period_preset=self._settings.ui_period_preset,
-                ui_start_date=self._settings.ui_start_date,
-                ui_end_date=self._settings.ui_end_date,
-                ui_hide_holidays=self._settings.ui_hide_holidays,
-                ui_font_size=self._settings.ui_font_size,
             )
-            field_errors = self._validate_settings_paths(candidate)
+            field_errors = validate_settings_paths(candidate)
             if field_errors:
                 return {
                     "ok": False,
@@ -73,29 +72,10 @@ class DailyReportApi:
             return {
                 "ok": True,
                 "message": "設定を保存しました。",
-                "settings": self._settings_dict(),
+                "settings": self._settings.to_dict(),
             }
         except Exception as exc:
             return {"ok": False, "message": f"設定保存に失敗しました: {exc}"}
-
-    def _validate_settings_paths(self, settings: AppSettings) -> dict[str, str]:
-        labels = {
-            "users_dir": "ユーザー日報フォルダ",
-            "comments_dir": "上司コメントフォルダ",
-            "common_dir": "共通マスターフォルダ",
-        }
-        errors: dict[str, str] = {}
-        for field, label in labels.items():
-            raw_path = str(getattr(settings, field, "")).strip()
-            if not raw_path:
-                errors[field] = f"{label}を入力してください。"
-                continue
-            path = Path(raw_path)
-            if not path.exists():
-                errors[field] = f"{label}が見つかりません。パスを確認してください。"
-            elif not path.is_dir():
-                errors[field] = f"{label}にはフォルダを指定してください。"
-        return errors
 
     def save_ui_state(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -104,15 +84,12 @@ class DailyReportApi:
                 preset = "default"
             self._settings = replace(
                 self._settings,
-                ui_sidebar_open=self._to_bool(
+                ui_sidebar_open=to_bool(
                     payload.get("sidebar_open"), self._settings.ui_sidebar_open
                 ),
                 ui_period_preset=preset,
                 ui_start_date=str(payload.get("start_date", "")).strip(),
                 ui_end_date=str(payload.get("end_date", "")).strip(),
-                ui_hide_holidays=self._to_bool(
-                    payload.get("hide_holidays"), self._settings.ui_hide_holidays
-                ),
                 ui_font_size=self._validated_font_size(payload.get("font_size")),
             )
             self._settings_manager.save(self._settings)
@@ -148,13 +125,10 @@ class DailyReportApi:
             comment_updates = payload.get("comment_updates", []) or []
             repo = DailyReportRepository(self._settings, self._base_dir)
             result = repo.save_updates(self._employee_id, user_updates, comment_updates)
-            message = self._build_save_message(result)
-            ok = self._is_save_ok(result)
-            no_targets = not any(v.get("needed") for v in result.values())
+            targets = [value for value in result.values() if value.get("needed")]
             return {
-                "ok": ok,
-                "no_targets": no_targets,
-                "message": message,
+                "ok": bool(targets) and all(value.get("saved") for value in targets),
+                "no_targets": not targets,
                 "result": result,
             }
         except Exception as exc:
@@ -164,24 +138,6 @@ class DailyReportApi:
                 "message": f"更新処理に失敗しました: {exc}",
             }
 
-    def _settings_dict(self) -> dict[str, Any]:
-        return {
-            "users_dir": self._settings.users_dir,
-            "comments_dir": self._settings.comments_dir,
-            "common_dir": self._settings.common_dir,
-            "default_start_offset_days": self._settings.default_start_offset_days,
-            "default_end_offset_days": self._settings.default_end_offset_days,
-            "missing_comment_start_date": self._settings.missing_comment_start_date,
-            "comment_signature": self._settings.comment_signature,
-            "hide_holidays_default": self._settings.hide_holidays_default,
-            "ui_sidebar_open": self._settings.ui_sidebar_open,
-            "ui_period_preset": self._settings.ui_period_preset,
-            "ui_start_date": self._settings.ui_start_date,
-            "ui_end_date": self._settings.ui_end_date,
-            "ui_hide_holidays": self._settings.ui_hide_holidays,
-            "ui_font_size": self._settings.ui_font_size,
-        }
-
     def _validated_font_size(self, value: Any) -> str:
         font_size = str(value or "standard").strip()
         return (
@@ -189,22 +145,6 @@ class DailyReportApi:
             if font_size in {"standard", "large", "xlarge"}
             else "standard"
         )
-
-    def _to_int(self, value: Any, default: int) -> int:
-        try:
-            return int(str(value).strip())
-        except (TypeError, ValueError):
-            return default
-
-    def _to_bool(self, value: Any, default: bool) -> bool:
-        if isinstance(value, bool):
-            return value
-        text = str(value).strip().lower()
-        if text in {"1", "true", "yes", "on"}:
-            return True
-        if text in {"0", "false", "no", "off"}:
-            return False
-        return default
 
     def _get_employee_id(self) -> str:
         import sys
@@ -237,37 +177,3 @@ class DailyReportApi:
             except Exception:
                 continue
         return "unknown"
-
-    def _is_save_ok(self, result: dict[str, Any]) -> bool:
-        targets = [value for value in result.values() if value.get("needed")]
-        return bool(targets) and all(value.get("uploaded") for value in targets)
-
-    def _build_save_message(self, result: dict[str, Any]) -> str:
-        user = result.get("user", {})
-        comment = result.get("comment", {})
-        user_needed = user.get("needed")
-        comment_needed = comment.get("needed")
-        if not user_needed and not comment_needed:
-            return "更新対象がありません。"
-
-        if user_needed and not comment_needed:
-            return self._single_target_message("日報", user)
-        if comment_needed and not user_needed:
-            return self._single_target_message("コメント", comment)
-
-        user_ok = bool(user.get("uploaded"))
-        comment_ok = bool(comment.get("uploaded"))
-        if user_ok and comment_ok:
-            return "日報とコメントの更新が完了しました。"
-        if user_ok and not comment_ok:
-            return "日報の更新は完了しました。コメントの更新に失敗しました。ネットワーク接続を確認して、再度「更新」を押してください。"
-        if comment_ok and not user_ok:
-            return "コメントの更新は完了しました。日報の更新に失敗しました。ネットワーク接続を確認して、再度「更新」を押してください。"
-        return "日報とコメントの更新に失敗しました。ネットワーク接続を確認して、再度「更新」を押してください。"
-
-    def _single_target_message(self, label: str, result: dict[str, Any]) -> str:
-        if result.get("uploaded"):
-            return f"{label}の更新が完了しました。"
-        if result.get("local_saved"):
-            return f"{label}の更新に失敗しました。ネットワーク接続を確認して、再度「更新」を押してください。"
-        return f"{label}の更新に失敗しました。ログを確認してください。"

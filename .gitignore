@@ -3,6 +3,7 @@ settings.ini
 cache/
 logs/
 test_data/
+.agent/
 
 # Python-generated files
 __pycache__/

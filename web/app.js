@@ -20,9 +20,14 @@ const state = {
   busyAction: "",
   showMissingCommentsOnly: false,
   missingCommentStartDate: "",
+  includeTodayInMissingComments: false,
+  missingCommentDates: null,
+  missingCommentRangeStart: "",
+  missingCommentRangeEnd: "",
   commentSignature: "",
   darkMode: false,
   fontSize: "standard",
+  colorTheme: "green",
 };
 
 let currentEditingElement = null;
@@ -33,6 +38,7 @@ const toastState = {
   fadeTimer: null,
 };
 const actionButtonSignatures = new Map();
+const COLOR_THEMES = ["green", "blue", "orange"];
 
 const $ = (id) => document.getElementById(id);
 
@@ -47,27 +53,30 @@ function bindEvents() {
     const button = event.target.closest("[data-font-size]");
     if (button) setFontSize(button.dataset.fontSize);
   });
+  $("colorThemeOptions")?.addEventListener("click", (event) => {
+    const button = event.target.closest(".color-theme-option[data-color-theme]");
+    if (button) setColorTheme(button.dataset.colorTheme);
+  });
   $("defaultStartOffsetDays").addEventListener("input", updateDefaultRangePreview);
   $("defaultEndOffsetDays").addEventListener("input", updateDefaultRangePreview);
   $("startDate").addEventListener("change", handleDateChange);
   $("endDate").addEventListener("change", handleDateChange);
 
-  const btnDefault = $("presetDefaultButton");
-  if (btnDefault)
-    btnDefault.addEventListener("click", () => applyPreset("default"));
-  const btnToday = $("presetTodayButton");
-  if (btnToday)
-    btnToday.addEventListener("click", () => applyPreset("today"));
-  const btnLast7 = $("presetLast7DaysButton");
-  if (btnLast7)
-    btnLast7.addEventListener("click", () => applyPreset("last7days"));
-  const btnThisMonth = $("presetThisMonthButton");
-  if (btnThisMonth)
-    btnThisMonth.addEventListener("click", () => applyPreset("thisMonth"));
+  [
+    ["presetDefaultButton", "default"],
+    ["presetPreviousWorkdayButton", "previousWorkday"],
+    ["presetTodayButton", "today"],
+    ["presetPreviousWeekButton", "previousWeek"],
+    ["presetThisWeekButton", "thisWeek"],
+    ["presetPreviousMonthButton", "previousMonth"],
+    ["presetThisMonthButton", "thisMonth"],
+  ].forEach(([buttonId, presetName]) => {
+    $(buttonId)?.addEventListener("click", () => applyPreset(presetName));
+  });
 
   const btnMissingComments = $("showMissingCommentsButton");
   if (btnMissingComments) {
-    btnMissingComments.addEventListener("click", toggleMissingCommentsFilter);
+    btnMissingComments.addEventListener("click", () => applyPreset("missing"));
   }
 
   $("showAllSubordinatesButton").addEventListener(
@@ -110,13 +119,26 @@ function bindEvents() {
 }
 
 function restoreUiState(settings) {
-  const preset = ["default", "today", "last7days", "thisMonth", ""].includes(
-    settings.ui_period_preset,
-  )
-    ? settings.ui_period_preset
+  const savedPreset =
+    settings.ui_period_preset === "last7days"
+      ? "default"
+      : settings.ui_period_preset;
+  const preset = [
+    "default",
+    "previousWorkday",
+    "today",
+    "previousWeek",
+    "thisWeek",
+    "previousMonth",
+    "thisMonth",
+    "missing",
+    "",
+  ].includes(savedPreset)
+    ? savedPreset
     : "default";
   const range = getPresetRange(preset);
   state.activePeriodPreset = preset;
+  state.showMissingCommentsOnly = preset === "missing";
   state.startDate = preset
     ? range.startDate
     : String(settings.ui_start_date || "");
@@ -126,6 +148,7 @@ function restoreUiState(settings) {
   )
     ? settings.ui_font_size
     : "standard";
+  state.colorTheme = normalizeColorTheme(settings.ui_color_theme);
 
   const sidebar = $("sidebar");
   const isSidebarOpen = settings.ui_sidebar_open !== false;
@@ -133,6 +156,7 @@ function restoreUiState(settings) {
   updateSidebarToggleButton(isSidebarOpen);
   syncPeriodPresets();
   applyFontSize();
+  applyTheme();
 }
 
 function persistUiState() {
@@ -195,6 +219,25 @@ function setFontSize(fontSize) {
   persistUiState();
 }
 
+function normalizeColorTheme(colorTheme) {
+  return COLOR_THEMES.includes(colorTheme) ? colorTheme : "green";
+}
+
+function setColorTheme(colorTheme) {
+  state.colorTheme = normalizeColorTheme(colorTheme);
+  applyTheme();
+}
+
+function syncColorThemeOptions() {
+  $("colorThemeOptions")
+    ?.querySelectorAll("[data-color-theme]")
+    .forEach((button) => {
+      const isSelected = button.dataset.colorTheme === state.colorTheme;
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-pressed", String(isSelected));
+    });
+}
+
 function applyFontSize() {
   document.body.dataset.fontSize = state.fontSize;
   $("fontSizeButton").classList.toggle("is-active", state.fontSize !== "standard");
@@ -209,10 +252,12 @@ function applyFontSize() {
 
 function applyTheme() {
   document.body.classList.add("is-theme-switching");
+  document.body.dataset.colorTheme = normalizeColorTheme(state.colorTheme);
   document.body.classList.toggle("is-dark-mode", state.darkMode);
   document.documentElement.classList.toggle("dark", state.darkMode);
   document.documentElement.classList.toggle("light", !state.darkMode);
   document.documentElement.style.colorScheme = state.darkMode ? "dark" : "light";
+  syncColorThemeOptions();
   updateThemeToggleButton();
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {

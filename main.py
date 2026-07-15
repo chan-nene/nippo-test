@@ -87,7 +87,7 @@ def main() -> None:
             min_size=(960, 600),
         )
         window.events.closing += build_closing_handler(api)
-        webview.start(debug=True)
+        webview.start(debug=False)
     finally:
         instance_lock.release()
 

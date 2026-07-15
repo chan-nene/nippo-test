@@ -2,17 +2,36 @@
 
 /* Command bar */
 
+html body .report-toolbar {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  border-bottom: 0;
+  background: transparent;
+}
+
 html body .toolbar-row {
   display: flex;
-  min-height: var(--toolbar-height);
+  min-width: 0;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 16px;
   margin: 0;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-alt);
+}
+
+html body .toolbar-heading-row {
+  min-height: 60px;
+  padding: 12px 14px 8px;
+  background: transparent;
+}
+
+html body .toolbar-filter-row {
+  min-height: 60px;
+  padding: 8px 14px 14px;
+  border-top: 0;
+  background: transparent;
 }
 
 html body .toolbar-left,
@@ -22,64 +41,66 @@ html body .period-control {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   flex-wrap: nowrap;
 }
 
-html body .toolbar-left-wide {
+html body .toolbar-filter-row .toolbar-left-wide {
+  width: 100%;
   flex: 1 1 auto;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 html body .toolbar-right {
   position: relative;
   flex: 0 0 auto;
+  gap: 10px;
   margin-left: auto;
 }
 
 html body .view-label {
   display: inline-flex;
-  min-width: 150px;
-  flex: 0 0 auto;
+  min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   justify-content: center;
-  padding: 0 8px 0 2px;
+  padding: 0;
 }
 
 html body .view-label #pageTitle {
   color: var(--text-strong);
-  font-size: 16px;
+  font-size: var(--font-18);
   font-weight: 700;
   line-height: 1.15;
 }
 
 html body .page-description {
   color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.15;
+  font-size: var(--font-12);
+  line-height: 1.25;
 }
 
 html body .toolbar-button,
-html body .filter-tag,
 html body .period-field-group {
-  min-height: var(--control-height);
-  height: var(--control-height);
-  border: 1px solid var(--border-strong);
+  min-height: calc(var(--control-height) + 4px);
+  height: calc(var(--control-height) + 4px);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--input-bg);
   color: var(--text);
   box-shadow: none;
 }
 
-html body .toolbar-button,
-html body .filter-tag {
+html body .toolbar-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 10px;
+  gap: 8px;
+  padding: 0 12px;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--font-13);
   font-weight: 500;
 }
 
@@ -87,8 +108,12 @@ html body .toolbar-button {
   position: relative;
 }
 
-html body .toolbar-button:hover,
-html body .filter-tag:hover {
+html body .toolbar-heading-row .toolbar-button:not(.primary) {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+html body .toolbar-button:hover {
   border-color: var(--primary-border);
   background: var(--surface-hover);
   color: var(--primary);
@@ -141,7 +166,26 @@ html body .toolbar-button-badge {
 }
 
 html body .period-control {
-  gap: 5px;
+  gap: 8px;
+}
+
+html body .period-main-controls,
+html body .period-shortcuts {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+}
+
+html body .period-main-controls {
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+html body .period-shortcuts {
+  gap: 16px;
+  flex: 0 0 auto;
+  padding-left: 6px;
+  border-left: 0;
 }
 
 html body .period-control-container {
@@ -152,12 +196,13 @@ html body .period-control-container {
 }
 
 html body .period-control input[type="date"] {
-  width: 142px;
+  width: 148px;
   height: 100%;
   border: 0;
   background: transparent;
   color: var(--text);
-  padding: 0 7px;
+  padding: 0 10px;
+  font-size: var(--font-14);
   line-height: 1.2;
   text-align: center;
 }
@@ -172,7 +217,6 @@ html body .period-field-group:focus-within {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
-html body .filter-tag.is-active,
 html body .member-switch-button.is-active,
 html body .member-switch-button[aria-pressed="true"] {
   border-color: var(--primary-border);
@@ -185,6 +229,13 @@ html body #showMissingCommentsButton[aria-pressed="true"] {
   border-color: color-mix(in srgb, var(--warning) 48%, var(--border));
   background: var(--warning-bg);
   color: var(--warning);
+}
+
+html body #showMissingCommentsButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 html body #showMissingCommentsButton.has-overdue:is(
@@ -215,6 +266,11 @@ html body .missing-count-badge.is-overdue {
   background: var(--error);
 }
 
+html body .missing-count-badge.is-empty {
+  background: var(--missing-empty-badge-bg);
+  color: var(--missing-empty-badge-text);
+}
+
 html body #showMissingCommentsButton:is(.is-active, [aria-pressed="true"])
   .missing-count-badge {
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.42);
@@ -225,19 +281,20 @@ html body .member-switch-bar {
   min-width: 0;
   flex: 0 0 auto;
   align-items: flex-start;
-  gap: 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  padding: 7px 8px;
+  gap: 14px;
+  border-bottom: 0;
+  background: transparent;
+  padding: 4px 14px 14px;
 }
 
 html body .member-switch-label {
-  min-width: 88px;
+  min-width: 100px;
   flex: 0 0 auto;
   color: var(--text-muted);
-  padding: 5px 4px;
+  padding: 8px 0;
   font-size: var(--font-12);
   font-weight: 700;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
@@ -246,27 +303,31 @@ html body .member-switch-list {
   min-width: 0;
   flex: 1 1 auto;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 html body .member-switch-button {
   display: inline-flex;
-  max-width: 120px;
-  min-height: var(--compact-control-height);
+  max-width: 128px;
+  min-height: calc(var(--compact-control-height) + 4px);
   align-items: center;
   justify-content: center;
   overflow: hidden;
   flex: 0 0 auto;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
-  padding: 3px 10px;
+  padding: 4px 12px;
   font-size: var(--font-12);
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+html body .member-switch-button:is(.is-active, [aria-pressed="true"]) {
+  font-weight: 700;
 }
 
 html body .member-switch-button:hover {
@@ -287,9 +348,9 @@ html body .table-card {
   flex-direction: column;
   overflow: hidden;
   margin: 0;
-  padding: 6px;
+  padding: 0 10px 10px;
   border: 0;
-  background: var(--surface);
+  background: transparent;
 }
 
 html body .table-scroll {
@@ -318,6 +379,23 @@ html body td {
   border-right: 1px solid var(--table-border);
   border-bottom: 1px solid var(--table-border);
   text-align: left;
+}
+
+html body th::before,
+html body td::before {
+  position: absolute;
+  z-index: 9;
+  top: 0;
+  right: 0;
+  bottom: -1px;
+  width: 1px;
+  background: var(--table-border);
+  content: "";
+  pointer-events: none;
+}
+
+html body :is(th, td).detail-col::before {
+  background: var(--table-border-strong);
 }
 
 html body th:first-child,
@@ -378,7 +456,6 @@ html body :is(th, td).name-col {
   left: 86px;
   z-index: 3;
   background: var(--table-cell-bg);
-  border-right-color: var(--table-border-strong);
 }
 
 html body th.name-col {
@@ -400,23 +477,23 @@ html body.is-boss-view th.user-col {
 
 html body.is-boss-view :is(th, td).name-col {
   left: 218px;
+}
+
+html body :is(th, td).detail-col {
+  position: sticky;
+  left: 306px;
+  z-index: 2;
+  background: var(--table-cell-bg);
   border-right-color: var(--table-border-strong);
 }
 
-html body tbody tr:hover td {
-  background: var(--table-cell-bg);
+html body th.detail-col {
+  z-index: 6;
+  background: var(--table-header-bg);
 }
 
-html body tbody tr:hover td.date-col {
-  background: var(--surface-alt);
-}
-
-html body tbody tr.is-today:hover td.date-col {
-  background: var(--surface-active);
-}
-
-html body tbody tr:hover td :is(.cell-frame, .editing-textarea) {
-  background: transparent;
+html body.is-boss-view :is(th, td).detail-col {
+  left: 438px;
 }
 
 html body .date-col {
@@ -443,7 +520,7 @@ html body .detail-col {
 }
 
 html body .comment-col {
-  width: 300px;
+  width: auto;
   min-width: 260px;
 }
 
@@ -471,34 +548,6 @@ html body .date-content {
   text-align: center;
 }
 
-html body .row-state-badges {
-  display: flex;
-  justify-content: center;
-  gap: 3px;
-  margin-top: 3px;
-  flex-wrap: wrap;
-}
-
-html body .row-state-badge {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--primary-border);
-  border-radius: 999px;
-  background: var(--primary-soft);
-  color: var(--primary);
-  min-height: var(--badge-height);
-  padding: 0 6px;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: calc(var(--badge-height) - 2px);
-}
-
-html body .row-state-badge.attention {
-  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
 html body .date-weekday,
 html body .cell-sub-label,
 html body .boss-reply-icon {
@@ -522,8 +571,12 @@ html body.is-dark-mode .date-weekday-sun {
   color: #fca5a5;
 }
 
-html body tr.holiday td.date-col {
-  background: var(--surface-alt);
+html body tr.holiday td:not(.date-col) {
+  background: var(--holiday-row-bg);
+}
+
+html body tr.holiday td::before {
+  background: var(--table-border-strong);
 }
 
 html body tr.is-today td.date-col {
@@ -532,12 +585,8 @@ html body tr.is-today td.date-col {
   box-shadow: inset 3px 0 0 var(--primary);
 }
 
-html body.is-boss-view tr.boss-date-group-alt td {
-  background: color-mix(in srgb, var(--surface-alt) 72%, var(--surface));
-}
-
-html body.is-boss-view tr.boss-date-group-alt:hover td {
-  background: var(--surface-hover);
+html body.is-boss-view tr.boss-date-group-start td {
+  border-top: 2px solid var(--table-border-strong);
 }
 
 html body.is-boss-view th.self-comment-col {
@@ -734,11 +783,11 @@ html body .empty {
   font-size: 13px;
 }
 
-html body .date-expand-band {
+html body .date-shift-band {
   display: inline-flex;
   width: 100%;
-  min-height: var(--expand-band-height);
-  height: var(--expand-band-height);
+  min-height: var(--date-navigation-height);
+  height: var(--date-navigation-height);
   align-items: center;
   justify-content: center;
   gap: 5px;
@@ -752,28 +801,28 @@ html body .date-expand-band {
   text-align: center;
 }
 
-html body .date-expand-label {
+html body .date-shift-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
 }
 
-html body .date-expand-band:hover {
+html body .date-shift-band:hover {
   border-color: var(--primary-border);
   background: var(--primary-soft);
   color: var(--primary);
 }
 
-html body .date-expand-band.band-top {
+html body .date-shift-band.band-top {
   margin: 0 0 6px;
 }
 
-html body .date-expand-band.band-bottom {
+html body .date-shift-band.band-bottom {
   margin: 6px 0 0;
 }
 
-html body .date-expand-icon {
+html body .date-shift-icon {
   width: 13px;
   height: 13px;
   fill: none;
@@ -783,135 +832,22 @@ html body .date-expand-icon {
   stroke-width: 2;
 }
 
-/* Responsive guardrails. The app is PC-first, but avoid broken narrow windows. */
+/* Period presets and shortcuts */
 
-@media (max-width: 1100px) {
-  html body .toolbar-row {
-    align-items: center;
-    gap: 4px;
-  }
-
-  html body .toolbar-left-wide,
-  html body .toolbar-right {
-    flex-wrap: nowrap;
-  }
-
-  html body .view-label {
-    min-width: 78px;
-    padding-inline: 2px 4px;
-  }
-
-  html body .page-description {
-    display: none;
-  }
-
-  html body .view-label #pageTitle {
-    font-size: 14px;
-    white-space: nowrap;
-  }
-
-  html body .period-control input[type="date"] {
-    width: 116px;
-    padding-inline: 4px;
-  }
-
-  html body .toolbar-button,
-  html body .filter-tag {
-    gap: 4px;
-    padding-inline: 7px;
-    font-size: 12px;
-  }
-
-  html body .period-presets {
-    display: inline-flex;
-    width: auto;
-    height: 32px;
-    flex: 0 0 auto;
-  }
-
-  html body .preset-button {
-    height: 24px;
-    padding-inline: 5px;
-  }
-
-  html body #refreshButton {
-    width: 32px;
-    padding: 0;
-  }
-
-  html body #refreshButton .toolbar-button-label {
-    display: none;
-  }
-
-  html body .toolbar-left-wide {
-    overflow: hidden;
-  }
-
-  html body .member-switch-bar {
-    align-items: center;
-    gap: 6px;
-  }
-
-  html body .member-switch-label {
-    min-width: auto;
-    padding-inline: 2px;
-  }
-
-  html body .member-switch-list {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-  }
-
-  html body .member-switch-button {
-    max-width: 104px;
-    flex: 0 0 auto;
-  }
-
-  html body:is([data-font-size="large"], [data-font-size="xlarge"])
-    .toolbar-row
-    :is(button, input, .filter-tag) {
-    font-size: var(--font-13) !important;
-  }
-
-  html body:is([data-font-size="large"], [data-font-size="xlarge"])
-    .toolbar-row
-    .view-label
-    #pageTitle {
-    font-size: var(--font-16) !important;
-  }
-
-  html body:is([data-font-size="large"], [data-font-size="xlarge"])
-    .toolbar-row
-    .period-control
-    input[type="date"] {
-    width: 134px;
-  }
-
-  html body:is([data-font-size="large"], [data-font-size="xlarge"])
-    .toolbar-row
-    .period-presets {
-    height: var(--control-height);
-  }
-
-  html body:is([data-font-size="large"], [data-font-size="xlarge"])
-    .toolbar-row
-    .preset-button {
-    height: calc(var(--control-height) - 6px);
-  }
-}
-
-/* Period presets */
-
-html body .period-presets {
+html body .period-presets,
+html body .period-shortcut-group {
   display: inline-flex;
-  height: var(--control-height);
+  height: calc(var(--control-height) + 4px);
   align-items: center;
+  flex: 0 0 auto;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-alt);
-  padding: 3px;
+  padding: 4px;
+}
+
+html body .period-shortcut-group {
+  background: var(--surface);
 }
 
 html body .preset-button {
@@ -920,8 +856,8 @@ html body .preset-button {
   border-radius: 4px;
   background: transparent;
   color: var(--text-muted);
-  padding: 0 8px;
-  font-size: 12px;
+  padding: 0 10px;
+  font-size: var(--font-12);
   font-weight: 700;
   line-height: 1;
 }
@@ -943,7 +879,7 @@ html body .preset-button:disabled {
   opacity: 0.58;
 }
 
-/* Only the table scrolls; date expansion controls stay fixed to the viewport. */
+/* Only the table scrolls; date navigation controls stay fixed to the viewport. */
 
 html body .table-content {
   width: 100%;
@@ -958,7 +894,7 @@ html body .table-content table {
   width: 100%;
 }
 
-html body .table-card > .date-expand-band {
+html body .table-card > .date-shift-band {
   width: 100%;
   flex: 0 0 auto;
 }
@@ -981,41 +917,86 @@ html body .toolbar-button-icon svg.is-spinning {
   animation: icon-spin 0.8s linear infinite;
 }
 
-@media (max-width: 1180px) {
-  html body .toolbar-left-wide {
+/* Responsive guardrails. Preserve breathing room and stack groups when needed. */
+
+@media (max-width: 1100px) {
+  html body .toolbar-heading-row {
+    padding: 10px 12px;
+  }
+
+  html body .toolbar-filter-row {
+    padding: 10px 12px 12px;
+  }
+
+  html body .toolbar-filter-row .toolbar-left-wide {
+    column-gap: 14px;
+    row-gap: 10px;
+    overflow: visible;
+    flex-wrap: wrap;
+  }
+
+  html body .period-shortcuts {
+    width: 100%;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 10px 0 0;
+    border-top: 0;
+    border-left: 0;
+  }
+
+  html body .member-switch-bar {
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px 12px;
+  }
+
+  html body .member-switch-label {
+    min-width: auto;
+    padding-inline: 0;
+  }
+
+  html body .member-switch-list {
+    overflow-x: auto;
     flex-wrap: nowrap;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
   }
 
-  html body .period-presets {
-    display: inline-flex;
-    width: auto;
-  }
-
-  html body .preset-button {
-    min-width: 0;
+  html body .member-switch-button {
+    max-width: 118px;
+    flex: 0 0 auto;
   }
 }
 
 @media (max-width: 760px) {
-  html body .toolbar-row {
+  html body .toolbar-heading-row {
     flex-direction: column;
     align-items: stretch;
-    max-height: none;
-    overflow: visible;
+    gap: 12px;
   }
 
-  html body .toolbar-left-wide {
+  html body .toolbar-filter-row .toolbar-left-wide {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
     width: 100%;
+    gap: 12px;
   }
 
   html body .view-label {
     width: 100%;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 2px 0 8px;
+    padding: 0;
+  }
+
+  html body .period-control-container,
+  html body .period-presets {
+    width: 100%;
+  }
+
+  html body .period-main-controls {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
   }
 
   html body .period-control {
@@ -1030,18 +1011,31 @@ html body .toolbar-button-icon svg.is-spinning {
     min-width: 0;
   }
 
-  html body .toolbar-left-wide > .toolbar-button,
-  html body .toolbar-left-wide > .filter-tag {
-    width: 100%;
+  html body .period-presets .preset-button {
+    min-width: 0;
+    flex: 1 1 0;
+    padding-inline: 4px;
+  }
+
+  html body .period-shortcut-group {
+    min-width: 144px;
+    flex: 1 1 144px;
+  }
+
+  html body .period-shortcut-group .preset-button {
+    min-width: 0;
+    flex: 1 1 0;
+    padding-inline: 6px;
   }
 
   html body .toolbar-right {
     display: grid;
     grid-template-columns: 1fr 1fr;
     width: 100%;
+    margin-left: 0;
   }
 
-  html body .date-expand-band {
+  html body .date-shift-band {
     justify-content: center;
   }
 }

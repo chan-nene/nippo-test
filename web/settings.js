@@ -10,8 +10,14 @@ function fillSettings(settings) {
   );
   $("defaultEndOffsetDays").value = String(clampNumber(endOffset, 0, 7));
   $("missingCommentStartDate").value = settings.missing_comment_start_date || "";
+  $("includeTodayInMissingComments").checked = Boolean(
+    settings.include_today_in_missing_comments,
+  );
   $("commentSignature").value = settings.comment_signature || "";
   state.missingCommentStartDate = settings.missing_comment_start_date || "";
+  state.includeTodayInMissingComments = Boolean(
+    settings.include_today_in_missing_comments,
+  );
   state.commentSignature = settings.comment_signature || "";
   updateDefaultRangePreview();
 }
@@ -107,6 +113,20 @@ function validateSettingsInputs() {
   return errors;
 }
 
+function getSettingsPayload() {
+  return {
+    users_dir: $("usersDir").value,
+    comments_dir: $("commentsDir").value,
+    common_dir: $("commonDir").value,
+    default_start_offset_days: -Number($("defaultStartOffsetDays").value),
+    default_end_offset_days: Number($("defaultEndOffsetDays").value),
+    missing_comment_start_date: $("missingCommentStartDate").value,
+    include_today_in_missing_comments: $("includeTodayInMissingComments").checked,
+    comment_signature: $("commentSignature").value,
+    ui_color_theme: state.colorTheme,
+  };
+}
+
 async function saveSettings() {
   clearSettingsErrors();
   const clientErrorCount = showSettingsErrors(validateSettingsInputs());
@@ -117,15 +137,7 @@ async function saveSettings() {
     });
     return;
   }
-  const payload = {
-    users_dir: $("usersDir").value,
-    comments_dir: $("commentsDir").value,
-    common_dir: $("commonDir").value,
-    default_start_offset_days: -Number($("defaultStartOffsetDays").value),
-    default_end_offset_days: Number($("defaultEndOffsetDays").value),
-    missing_comment_start_date: $("missingCommentStartDate").value,
-    comment_signature: $("commentSignature").value,
-  };
+  const payload = getSettingsPayload();
   setBusy(true, "settings");
   const result = await window.pywebview.api.save_settings(payload);
   setBusy(false);
@@ -136,9 +148,17 @@ async function saveSettings() {
     state.startDate = "";
     state.endDate = "";
     state.activePeriodPreset = "default";
+    state.showMissingCommentsOnly = false;
     state.missingCommentStartDate =
       result.settings?.missing_comment_start_date || "";
+    state.includeTodayInMissingComments = Boolean(
+      result.settings?.include_today_in_missing_comments ??
+        payload.include_today_in_missing_comments,
+    );
     state.commentSignature = result.settings?.comment_signature || "";
+    setColorTheme(
+      result.settings?.ui_color_theme ?? payload.ui_color_theme,
+    );
     showSettings(false);
     await loadData();
     persistUiState();

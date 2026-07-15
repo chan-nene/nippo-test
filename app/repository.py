@@ -104,8 +104,13 @@ class DailyReportRepository:
         employee_id: str,
         start_date: str | None = None,
         end_date: str | None = None,
+        period_preset: str | None = None,
     ) -> dict[str, Any]:
         common = self.load_common()
+        if period_preset == "previousWorkday":
+            previous_working_date = self._previous_working_date(common["calendar"])
+            start_date = previous_working_date.isoformat()
+            end_date = start_date
         user_master = {row.get("employee_id", ""): row for row in common["user_master"]}
         my_display = user_master.get(employee_id, {}).get("display_name") or employee_id
 
@@ -135,16 +140,40 @@ class DailyReportRepository:
             start_date,
             end_date,
         )
+        missing_comment_summary = self._build_missing_comment_summary(
+            users_df,
+            comments_df,
+            common,
+            employee_id,
+            subordinate_ids if is_superior else [],
+        )
         return {
             "employee_id": employee_id,
             "display_name": my_display,
             "is_superior": is_superior,
             "rows": rows,
+            "missing_comment_summary": missing_comment_summary,
             "my_rank": self._get_my_rank(common, employee_id),
             "start_date": default_start.isoformat() if default_start else None,
             "end_date": default_end.isoformat() if default_end else None,
             "load_warning_count": len(self.load_warnings),
         }
+
+    def _previous_working_date(
+        self,
+        calendar_rows: list[dict[str, Any]],
+        reference_date: date | None = None,
+    ) -> date:
+        holiday_dates = {
+            calendar_date
+            for row in calendar_rows
+            if str(row.get("is_holiday", "0")) == "1"
+            and (calendar_date := self._to_date(row.get("date"))) is not None
+        }
+        candidate = (reference_date or self.today_jst()) - timedelta(days=1)
+        while candidate in holiday_dates:
+            candidate -= timedelta(days=1)
+        return candidate
 
     def _get_my_rank(self, common: dict[str, Any], employee_id: str) -> int:
         for row in common["superior_master"]:
@@ -154,6 +183,91 @@ class DailyReportRepository:
                 except ValueError:
                     return 9999
         return 0
+
+    def _build_missing_comment_summary(
+        self,
+        users_df: pl.DataFrame,
+        comments_df: pl.DataFrame,
+        common: dict[str, list[dict[str, Any]]],
+        employee_id: str,
+        target_employee_ids: list[str],
+    ) -> dict[str, Any]:
+        today = self.today_jst()
+        range_end = (
+            today
+            if self.settings.include_today_in_missing_comments
+            else today - timedelta(days=1)
+        )
+        range_start = self._to_date(self.settings.missing_comment_start_date)
+        if range_start is None:
+            range_start = today + timedelta(
+                days=min(0, self.settings.default_start_offset_days)
+            )
+
+        summary = {
+            "start_date": range_start.isoformat(),
+            "end_date": range_end.isoformat(),
+            "dates": [],
+        }
+        if range_start > range_end:
+            return summary
+
+        subordinate_ids = [
+            target_id
+            for target_id in dict.fromkeys(target_employee_ids)
+            if target_id and target_id != employee_id
+        ]
+        if not subordinate_ids:
+            return summary
+
+        holiday_dates = {
+            calendar_date
+            for row in common["calendar"]
+            if str(row.get("is_holiday", "0")) == "1"
+            and (calendar_date := self._to_date(row.get("date"))) is not None
+        }
+        report_keys: set[tuple[str, date]] = set()
+        for row in users_df.to_dicts():
+            target_id = str(row.get("employee_id", ""))
+            report_date = self._to_date(row.get("date"))
+            if (
+                target_id in subordinate_ids
+                and report_date is not None
+                and range_start <= report_date <= range_end
+                and self._row_has_report_data(row)
+            ):
+                report_keys.add((target_id, report_date))
+
+        comments = {
+            (str(row.get("subordinate_employee_id", "")), comment_date): str(
+                row.get("comment") or ""
+            ).strip()
+            for row in comments_df.to_dicts()
+            if str(row.get("superior_employee_id", "")) == employee_id
+            and (comment_date := self._to_date(row.get("date"))) is not None
+            and range_start <= comment_date <= range_end
+        }
+
+        missing_dates: list[str] = []
+        for offset in range((range_end - range_start).days + 1):
+            target_date = range_start + timedelta(days=offset)
+            for subordinate_id in subordinate_ids:
+                report_key = (subordinate_id, target_date)
+                if target_date in holiday_dates and report_key not in report_keys:
+                    continue
+                if not comments.get(report_key, ""):
+                    missing_dates.append(target_date.isoformat())
+                    break
+
+        summary["dates"] = missing_dates
+        return summary
+
+    @staticmethod
+    def _row_has_report_data(row: dict[str, Any]) -> bool:
+        return bool(
+            str(row.get("business_name") or "").strip()
+            or str(row.get("business_detail") or "").strip()
+        )
 
     def save_updates(
         self,

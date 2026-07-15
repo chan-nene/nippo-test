@@ -13,13 +13,6 @@ function toggleSubordinateFilter(employeeId) {
   renderTable();
 }
 
-function toggleMissingCommentsFilter() {
-  state.selectedSubordinateId = "";
-  state.showMissingCommentsOnly = !state.showMissingCommentsOnly;
-  updateSubordinateFilterUi();
-  renderTable();
-}
-
 function updateSubordinateFilterUi() {
   const container = $("bossSearchControl");
   if (!container) return;
@@ -34,11 +27,6 @@ function updateSubordinateFilterUi() {
   const missingButton = $("showMissingCommentsButton");
   if (missingButton) {
     syncMissingCommentCount();
-    missingButton.classList.toggle("is-active", state.showMissingCommentsOnly);
-    missingButton.setAttribute(
-      "aria-pressed",
-      String(state.showMissingCommentsOnly),
-    );
   }
 
   container.querySelectorAll(".member-switch-button[data-id]").forEach((btn) => {
@@ -81,19 +69,31 @@ function syncMissingCommentCount() {
   const label = document.createElement("span");
   label.className = "missing-filter-label";
   label.textContent = "未確認";
-  const children = [label];
-  if (summary.count > 0) {
-    const badge = document.createElement("span");
-    badge.className = `missing-count-badge${summary.hasOverdue ? " is-overdue" : ""}`;
-    badge.textContent = `${summary.count}日`;
-    badge.setAttribute("aria-hidden", "true");
-    children.push(badge);
-  }
-  button.replaceChildren(...children);
-  const description =
+  const badge = document.createElement("span");
+  badge.className = [
+    "missing-count-badge",
+    summary.hasOverdue ? "is-overdue" : "",
+    summary.count === 0 ? "is-empty" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  badge.textContent = summary.count > 0 ? `${summary.count}日` : "なし";
+  badge.setAttribute("aria-hidden", "true");
+  button.replaceChildren(label, badge);
+  const statusDescription =
     summary.count > 0
       ? `未確認が残っている日を表示 ${summary.count}日${summary.hasOverdue ? "、過去日の未確認あり" : ""}`
       : "未確認が残っている日はありません";
+  const todayScopeDescription = state.includeTodayInMissingComments
+    ? "今日分を含む"
+    : "今日分は対象外";
+  const rangeDescription =
+    summary.rangeStart &&
+    summary.rangeEnd &&
+    summary.rangeStart <= summary.rangeEnd
+      ? `、${formatNavigationDate(summary.rangeStart, true)}から${formatNavigationDate(summary.rangeEnd, true)}までを集計（${todayScopeDescription}）`
+      : `、${todayScopeDescription}`;
+  const description = `${statusDescription}${rangeDescription}`;
   button.setAttribute("aria-label", description);
   button.title = description;
   button.classList.toggle("has-overdue", summary.hasOverdue);
@@ -101,10 +101,14 @@ function syncMissingCommentCount() {
 
 function syncPeriodPresets() {
   const presets = {
-    today: $("presetTodayButton"),
-    last7days: $("presetLast7DaysButton"),
-    thisMonth: $("presetThisMonthButton"),
     default: $("presetDefaultButton"),
+    missing: $("showMissingCommentsButton"),
+    previousWorkday: $("presetPreviousWorkdayButton"),
+    today: $("presetTodayButton"),
+    previousWeek: $("presetPreviousWeekButton"),
+    thisWeek: $("presetThisWeekButton"),
+    previousMonth: $("presetPreviousMonthButton"),
+    thisMonth: $("presetThisMonthButton"),
   };
   Object.entries(presets).forEach(([name, button]) => {
     if (!button) return;
@@ -169,7 +173,12 @@ function renderActionButton(id, model) {
   const button = $(id);
   if (!button) return;
   const signature = JSON.stringify(model);
-  if (actionButtonSignatures.get(id) === signature) return;
+  if (
+    actionButtonSignatures.get(id) === signature &&
+    button.disabled === Boolean(model.disabled)
+  ) {
+    return;
+  }
   actionButtonSignatures.set(id, signature);
   button.disabled = model.disabled;
 
@@ -219,12 +228,17 @@ function discardDirtyEdits() {
   syncChrome();
 }
 
-async function loadData({ silent = false, preserveDirty = true } = {}) {
+async function loadData({
+  silent = false,
+  preserveDirty = true,
+  preserveTableScroll = false,
+} = {}) {
   finishEditing();
   setBusy(true, "load");
   const result = await window.pywebview.api.load_data({
     start_date: state.startDate || null,
     end_date: state.endDate || null,
+    period_preset: state.activePeriodPreset || null,
   });
   setBusy(false);
   if (!result.ok) {
@@ -245,6 +259,12 @@ async function loadData({ silent = false, preserveDirty = true } = {}) {
     ? result.data.my_rank
     : 9999;
   state.rows = Array.isArray(result.data.rows) ? result.data.rows : [];
+  const missingCommentSummary = result.data.missing_comment_summary;
+  state.missingCommentDates = Array.isArray(missingCommentSummary?.dates)
+    ? missingCommentSummary.dates
+    : null;
+  state.missingCommentRangeStart = missingCommentSummary?.start_date || "";
+  state.missingCommentRangeEnd = missingCommentSummary?.end_date || "";
   state.startDate = result.data.start_date || state.startDate;
   state.endDate = result.data.end_date || state.endDate;
   $("startDate").value = state.startDate;
@@ -308,7 +328,7 @@ async function loadData({ silent = false, preserveDirty = true } = {}) {
   updateViewAvailability();
   updateViewChrome();
   syncChrome();
-  renderTable();
+  renderTable({ preserveScroll: preserveTableScroll });
   showMain(true);
   showSettings(false);
   const warningCount = Number(result.data.load_warning_count || 0);
@@ -396,35 +416,32 @@ async function handleDateChange() {
   state.startDate = startDate;
   state.endDate = endDate;
   state.activePeriodPreset = "";
+  state.showMissingCommentsOnly = false;
   await loadData();
   persistUiState();
 }
 
-async function shiftDateBoundary(boundary, deltaDays) {
+async function shiftDateRange(deltaDays) {
   finishEditing();
+  setFieldError("periodError", "", ["startDate", "endDate"]);
   const startInput = $("startDate");
   const endInput = $("endDate");
-  let startDate = startInput.value || state.startDate;
-  let endDate = endInput.value || state.endDate;
+  const currentStartDate = startInput.value || state.startDate;
+  const currentEndDate = endInput.value || state.endDate;
+  if (!currentStartDate || !currentEndDate) return;
+
+  const startDate = offsetDateStr(currentStartDate, deltaDays);
+  const endDate = offsetDateStr(currentEndDate, deltaDays);
   if (!startDate || !endDate) return;
 
-  if (boundary === "start") {
-    const nextStart = offsetDateStr(startDate, deltaDays);
-    if (nextStart > endDate) return;
-    startDate = nextStart;
-  } else {
-    const nextEnd = offsetDateStr(endDate, deltaDays);
-    if (nextEnd < startDate) return;
-    endDate = nextEnd;
-  }
-
-  if (!confirmDiscardUnsaved("表示する日付範囲を広げますか？")) return;
+  if (!confirmDiscardUnsaved("表示する日付範囲を移動しますか？")) return;
   discardDirtyEdits();
   startInput.value = startDate;
   endInput.value = endDate;
   state.startDate = startDate;
   state.endDate = endDate;
   state.activePeriodPreset = "";
+  state.showMissingCommentsOnly = false;
   await loadData();
   persistUiState();
 }
@@ -449,39 +466,90 @@ async function applyPreset(presetName) {
   if (!confirmDiscardUnsaved("日付範囲を変更しますか？")) return;
   discardDirtyEdits();
   const range = getPresetRange(presetName);
+  const isMissingPreset = presetName === "missing";
   state.startDate = range.startDate;
   state.endDate = range.endDate;
   state.activePeriodPreset = presetName;
+  state.showMissingCommentsOnly = isMissingPreset;
+  if (isMissingPreset) state.selectedSubordinateId = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
   await loadData();
   persistUiState();
 }
 
-function getPresetRange(presetName) {
-  const today = getTodayJST();
+function getPresetRange(presetName, today = getTodayJST()) {
+  if (presetName === "previousWorkday") {
+    // 休日設定を含む判定はバックエンドで行い、loadData の応答で日付を確定する。
+    return { startDate: "", endDate: "" };
+  }
   if (presetName === "today") {
     return { startDate: today, endDate: today };
   }
-  if (presetName === "last7days") {
-    return { startDate: offsetDateStr(today, -6), endDate: today };
+  if (presetName === "previousWeek") {
+    return getMondayBasedWeekRange(today, -1);
+  }
+  if (presetName === "thisWeek") {
+    return getMondayBasedWeekRange(today);
+  }
+  if (presetName === "previousMonth") {
+    return getCalendarMonthRange(today, -1);
   }
   if (presetName === "thisMonth") {
-    const d = new Date(today + "T00:00:00Z");
-    const year = d.getUTCFullYear();
-    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-    const nextMonth = new Date(Date.UTC(year, d.getUTCMonth() + 1, 1));
-    nextMonth.setUTCDate(0);
+    return getCalendarMonthRange(today);
+  }
+  if (presetName === "missing") {
+    const configuredStart =
+      state.missingCommentRangeStart || state.missingCommentStartDate;
+    const defaultPastDays = Math.max(
+      0,
+      Number.parseInt($("defaultStartOffsetDays")?.value || "0", 10) || 0,
+    );
+    const startDate = configuredStart || offsetDateStr(today, -defaultPastDays);
+    const endDate =
+      state.missingCommentRangeEnd ||
+      (state.includeTodayInMissingComments ? today : offsetDateStr(today, -1));
     return {
-      startDate: `${year}-${month}-01`,
-      endDate: nextMonth.toISOString().slice(0, 10),
+      startDate: startDate <= endDate ? startDate : endDate,
+      endDate,
     };
   }
   return { startDate: "", endDate: "" };
 }
 
-function renderTable() {
+function getMondayBasedWeekRange(referenceDate, weekOffset = 0) {
+  const reference = new Date(`${referenceDate}T00:00:00Z`);
+  const daysFromMonday = (reference.getUTCDay() + 6) % 7;
+  const startDate = offsetDateStr(
+    referenceDate,
+    weekOffset * 7 - daysFromMonday,
+  );
+  return { startDate, endDate: offsetDateStr(startDate, 6) };
+}
+
+function getCalendarMonthRange(referenceDate, monthOffset = 0) {
+  const reference = new Date(`${referenceDate}T00:00:00Z`);
+  const start = new Date(
+    Date.UTC(
+      reference.getUTCFullYear(),
+      reference.getUTCMonth() + monthOffset,
+      1,
+    ),
+  );
+  const nextMonth = new Date(
+    Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1),
+  );
+  nextMonth.setUTCDate(0);
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: nextMonth.toISOString().slice(0, 10),
+  };
+}
+
+function renderTable({ preserveScroll = false } = {}) {
+  syncMissingCommentCount();
   const wrap = $("tableWrap");
+  const scrollState = preserveScroll ? captureTableScrollState(wrap) : null;
   const rows = getFilteredRows();
   if (!rows.length) {
     wrap.innerHTML = `<div class="empty">${escapeHtml(getEmptyMessage())}</div>`;
@@ -492,11 +560,68 @@ function renderTable() {
   wrap.innerHTML = renderTableShell({
     header: renderTableHeader(context),
     body: renderReportRows(rows, context),
-    prevBand: renderDateExpandBand("prev"),
-    nextBand: renderDateExpandBand("next"),
+    prevBand: renderDateShiftBand("prev"),
+    nextBand: renderDateShiftBand("next"),
     minWidth: getTableContentWidth(context),
   });
+  restoreTableScrollState(wrap, scrollState);
   focusPendingReplyEditor();
+}
+
+function captureTableScrollState(wrap) {
+  const scroll = wrap.querySelector(".table-scroll");
+  if (!(scroll instanceof HTMLElement)) return null;
+
+  const viewport = scroll.getBoundingClientRect();
+  const header = scroll.querySelector("thead");
+  const contentTop = header
+    ? header.getBoundingClientRect().bottom
+    : viewport.top;
+  const anchors = [...scroll.querySelectorAll("tbody tr[data-scroll-key]")]
+    .map((row) => {
+      const rect = row.getBoundingClientRect();
+      return {
+        key: row.dataset.scrollKey || "",
+        offsetTop: rect.top - contentTop,
+        rect,
+      };
+    })
+    .filter(
+      ({ key, rect }) =>
+        key && rect.bottom > contentTop + 1 && rect.top < viewport.bottom - 1,
+    )
+    .slice(0, 12)
+    .map(({ key, offsetTop }) => ({ key, offsetTop }));
+
+  return {
+    scrollTop: scroll.scrollTop,
+    scrollLeft: scroll.scrollLeft,
+    anchors,
+  };
+}
+
+function restoreTableScrollState(wrap, scrollState) {
+  if (!scrollState) return;
+  const scroll = wrap.querySelector(".table-scroll");
+  if (!(scroll instanceof HTMLElement)) return;
+
+  scroll.scrollTop = scrollState.scrollTop;
+  scroll.scrollLeft = scrollState.scrollLeft;
+
+  for (const anchor of scrollState.anchors) {
+    const target = [...scroll.querySelectorAll("tbody tr[data-scroll-key]")].find(
+      (row) => row.dataset.scrollKey === anchor.key,
+    );
+    if (!target) continue;
+    const header = scroll.querySelector("thead");
+    const contentTop = header
+      ? header.getBoundingClientRect().bottom
+      : scroll.getBoundingClientRect().top;
+    const offsetDelta =
+      target.getBoundingClientRect().top - contentTop - anchor.offsetTop;
+    scroll.scrollTop += offsetDelta;
+    break;
+  }
 }
 
 function createTableRenderContext(rows) {
@@ -555,7 +680,7 @@ function getVisibleComments(comments = []) {
 }
 
 function buildDateRowMetadata(rows, showUserColumn) {
-  // 上司コメント画面では同じ日付のセルを結合し、日付単位で背景を切り替える
+  // 上司コメント画面では同じ日付のセルを結合し、全員表示では日付ごとに罫線で区切る
   const dateRowSpans = new Map();
   const dateGroupClasses = new Map();
 
@@ -565,19 +690,14 @@ function buildDateRowMetadata(rows, showUserColumn) {
 
   let i = 0;
   let groupIndex = 0;
-  const useStripedDateGroups = !state.selectedSubordinateId;
+  const showDateGroupDividers = !state.selectedSubordinateId;
   while (i < rows.length) {
     const d = rows[i].date;
     let span = 1;
     while (i + span < rows.length && rows[i + span].date === d) span++;
     dateRowSpans.set(i, span);
-    const groupClass = useStripedDateGroups
-      ? groupIndex % 2 === 0
-        ? "boss-date-group-even"
-        : "boss-date-group-alt"
-      : "";
-    for (let offset = 0; offset < span; offset += 1) {
-      dateGroupClasses.set(i + offset, groupClass);
+    if (showDateGroupDividers && groupIndex > 0) {
+      dateGroupClasses.set(i, "boss-date-group-start");
     }
     i += span;
     groupIndex += 1;
@@ -591,18 +711,32 @@ function renderReportRows(rows, context) {
 }
 
 function renderReportRow(row, idx, context) {
-  return `<tr class="${renderReportRowClass(row, idx, context)}">
-    ${renderDateCell(row, idx, context)}
-    ${renderUserCell(row, context)}
+  const contentCells = row.__holidayPlaceholder
+    ? renderHolidayPlaceholderCells(context)
+    : `${renderUserCell(row, context)}
     ${renderReportNameCell(row)}
     ${renderReportDetailCell(row)}
-    ${renderCommentCells(row)}
+    ${renderCommentCells(row)}`;
+  return `<tr class="${renderReportRowClass(row, idx, context)}" data-scroll-key="${escapeHtml(getReportRowKey(row))}">
+    ${renderDateCell(row, idx, context)}
+    ${contentCells}
   </tr>`;
+}
+
+function renderHolidayPlaceholderCells(context) {
+  const commentCells = context.sampleComments
+    .map(() => '<td class="comment-col holiday-placeholder-cell"></td>')
+    .join("");
+  return `<td class="user-col holiday-placeholder-cell" aria-label="休日のため日報なし"></td>
+    <td class="name-col holiday-placeholder-cell"></td>
+    <td class="detail-col holiday-placeholder-cell"></td>
+    ${commentCells}`;
 }
 
 function renderReportRowClass(row, idx, context) {
   return [
     row.is_holiday ? "holiday" : "",
+    row.__holidayPlaceholder ? "holiday-placeholder" : "",
     row.is_today ? "is-today" : "",
     rowHasReportData(row) ? "has-report-data" : "is-report-empty",
     rowHasVisibleBossComment(row) ? "has-boss-comment" : "",
@@ -615,7 +749,7 @@ function renderReportRowClass(row, idx, context) {
 
 function renderDateCell(row, idx, context) {
   const content = renderCellFrame(
-    `${formatDisplayDateHTML(row.date)}${renderRowStateBadges(row)}${renderHolidayLabel(row)}`,
+    `${formatDisplayDateHTML(row.date)}${renderHolidayLabel(row)}`,
     "cell-frame-static date-content",
   );
   if (!context.showUserColumn) {
@@ -638,17 +772,6 @@ function rowHasVisibleBossComment(row) {
   return getVisibleComments(row.comments || []).some((cell) =>
     normalizeCellValue(cell.comment),
   );
-}
-
-function renderRowStateBadges(row) {
-  const badges = [];
-  if (row.is_today) badges.push('<span class="row-state-badge today">今日</span>');
-  if (rowNeedsBossComment(row)) {
-    badges.push('<span class="row-state-badge attention">未確認</span>');
-  }
-  return badges.length
-    ? `<div class="row-state-badges">${badges.join("")}</div>`
-    : "";
 }
 
 function renderUserCell(row, context) {
@@ -694,27 +817,71 @@ function renderCommentCells(row) {
     .join("");
 }
 
-function renderDateExpandBand(direction) {
+function renderDateShiftBand(direction) {
+  if (!shouldShowDateShiftBands()) return "";
+
   const isPrev = direction === "prev";
-  const dateStr = isPrev
-    ? state.startDate && offsetDateStr(state.startDate, -1)
-    : state.endDate && offsetDateStr(state.endDate, 1);
-  if (!dateStr) return "";
+  const deltaDays = isPrev ? -1 : 1;
+  const targetStartDate =
+    state.startDate && offsetDateStr(state.startDate, deltaDays);
+  const targetEndDate = state.endDate && offsetDateStr(state.endDate, deltaDays);
+  if (!targetStartDate || !targetEndDate) return "";
 
   const className = isPrev
-    ? "date-expand-band band-top"
-    : "date-expand-band band-bottom";
-  const action = isPrev ? "expand-prev" : "expand-next";
-  const label = `${dateStr.replaceAll("-", "/")}を表示`;
-  const icon = isPrev ? renderInsertDirectionIcon("up") : renderInsertDirectionIcon("down");
-  return `<button class="${className}" type="button" data-action="${action}"><span class="date-expand-label">${icon}<span>${label}</span></span></button>`;
+    ? "date-shift-band band-top"
+    : "date-shift-band band-bottom";
+  const action = isPrev ? "shift-prev" : "shift-next";
+  const label = formatNavigationDateRange(targetStartDate, targetEndDate);
+  const accessibleLabel = `${isPrev ? "前" : "次"}の期間、${formatNavigationDateRangeDescription(
+    targetStartDate,
+    targetEndDate,
+  )}`;
+  const icon = isPrev
+    ? renderDateShiftIcon("up")
+    : renderDateShiftIcon("down");
+  return `<button class="${className}" type="button" data-action="${action}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}"><span class="date-shift-label">${icon}<span>${escapeHtml(label)}</span></span></button>`;
 }
 
-function renderInsertDirectionIcon(direction) {
+function shouldShowDateShiftBands() {
+  if (state.showMissingCommentsOnly) return false;
+  return ![
+    "previousWeek",
+    "thisWeek",
+    "previousMonth",
+    "thisMonth",
+  ].includes(state.activePeriodPreset);
+}
+
+function formatNavigationDateRange(startDate, endDate) {
+  const formattedStart = formatNavigationDate(startDate, false);
+  if (startDate === endDate) return formattedStart;
+  return `${formattedStart}〜${formatNavigationDate(endDate, false)}`;
+}
+
+function formatNavigationDateRangeDescription(startDate, endDate) {
+  const formattedStart = formatNavigationDate(startDate, true);
+  if (startDate === endDate) return `${formattedStart}の表示へ移動`;
+  return `${formattedStart}から${formatNavigationDate(
+    endDate,
+    true,
+  )}の表示へ移動`;
+}
+
+function formatNavigationDate(value, includeYearAndMonth) {
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  const weekday = weekdays[date.getUTCDay()];
+  const dayAndWeekday = `${date.getUTCDate()}(${weekday})`;
+  if (!includeYearAndMonth) return dayAndWeekday;
+  return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月${date.getUTCDate()}日（${weekday}）`;
+}
+
+function renderDateShiftIcon(direction) {
   const isUp = direction === "up";
   const chevron = isUp ? "M8 13l4-4 4 4" : "M8 11l4 4 4-4";
   const lineY = isUp ? "6" : "18";
-  return `<svg class="date-expand-icon" viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M6 ${lineY}h12" /><path d="${chevron}" /></svg>`;
+  return `<svg class="date-shift-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 ${lineY}h12" /><path d="${chevron}" /></svg>`;
 }
 
 function focusPendingReplyEditor() {
@@ -724,7 +891,7 @@ function focusPendingReplyEditor() {
   );
   state.pendingReplyFocusKey = "";
   if (target instanceof HTMLElement) {
-    startEditingTarget(target);
+    startEditingTarget(target, { preventScroll: true });
   }
 }
 
@@ -742,6 +909,7 @@ function renderCommentCell(row, cell, rowIndex, commentIndex) {
 function createCommentRenderContext(row, cell, rowIndex, commentIndex) {
   const canEditComment =
     state.activeView === "boss" ? Boolean(cell.editable) : false;
+  const canAddBossComment = canEditComment && rowCanReceiveBossComment(row);
   const hasBossComment = Boolean(String(cell.comment || "").trim());
   const hasReply = Boolean(String(cell.reply || "").trim());
   const canEditReply =
@@ -753,6 +921,7 @@ function createCommentRenderContext(row, cell, rowIndex, commentIndex) {
     rowIndex,
     commentIndex,
     canEditComment,
+    canAddBossComment,
     hasBossComment,
     hasReply,
     canEditReply,
@@ -765,7 +934,7 @@ function renderBossCommentCell(context) {
 }
 
 function renderBossCommentActions(context) {
-  if (!context.canEditComment) return "";
+  if (!context.canAddBossComment) return "";
 
   return `<div class="cell-frame boss-comment-actions${context.hasBossComment ? " hidden" : ""}" data-boss-comment-actions="true">
     <button class="boss-comment-link" type="button" data-action="sign-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}">サイン</button>
@@ -940,14 +1109,14 @@ function isEmpty(value) {
 }
 
 function handleTableClick(event) {
-  const expandPrev = event.target.closest('[data-action="expand-prev"]');
-  if (expandPrev) {
-    shiftDateBoundary("start", -1);
+  const shiftPrev = event.target.closest('[data-action="shift-prev"]');
+  if (shiftPrev) {
+    shiftDateRange(-1);
     return;
   }
-  const expandNext = event.target.closest('[data-action="expand-next"]');
-  if (expandNext) {
-    shiftDateBoundary("end", 1);
+  const shiftNext = event.target.closest('[data-action="shift-next"]');
+  if (shiftNext) {
+    shiftDateRange(1);
     return;
   }
   const signComment = event.target.closest('[data-action="sign-comment"]');
@@ -993,7 +1162,7 @@ function toggleReplyEditor(button) {
   const replyKey = getReplyKey(row, cell);
   state.expandedReplies.add(replyKey);
   state.pendingReplyFocusKey = replyKey;
-  renderTable();
+  renderTable({ preserveScroll: true });
 }
 
 function openBossCommentEditor(button) {
@@ -1004,7 +1173,7 @@ function openBossCommentEditor(button) {
   if (actions) actions.classList.add("hidden");
 
   target.classList.remove("hidden");
-  startEditingTarget(target);
+  startEditingTarget(target, { preventScroll: true });
 }
 
 function applyBossCommentSignature(button) {
@@ -1022,7 +1191,7 @@ function applyBossCommentSignature(button) {
   recordCommentChange(row, cell, signature);
 
   syncChrome();
-  renderTable();
+  renderTable({ preserveScroll: true });
 }
 
 function getBossCommentTarget(button) {
@@ -1039,7 +1208,7 @@ function getBossCommentTarget(button) {
 function beginCellEditing(event) {
   const target = getEditableTargetFromEvent(event);
   if (!(target instanceof HTMLElement)) return;
-  startEditingTarget(target);
+  startEditingTarget(target, { preventScroll: true });
 }
 
 function getEditableTargetFromEvent(event) {
@@ -1053,7 +1222,7 @@ function getEditableTargetFromEvent(event) {
   return cellTarget instanceof HTMLElement ? cellTarget : null;
 }
 
-function startEditingTarget(target) {
+function startEditingTarget(target, { preventScroll = false } = {}) {
   if (target.dataset.editable !== "true") return;
   if (target === currentEditingElement) return;
 
@@ -1095,7 +1264,7 @@ function startEditingTarget(target) {
 
   target.innerHTML = "";
   target.appendChild(textarea);
-  textarea.focus();
+  textarea.focus({ preventScroll });
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   // DOM に追加後に高さをコンテンツに合わせる
   autoResizeTextarea(textarea);
@@ -1230,9 +1399,24 @@ function rowHasReportData(row) {
   );
 }
 
+function rowCanReceiveBossComment(row) {
+  if (!row) return false;
+  if (row.date > getTodayJST()) return false;
+  return !row.is_holiday || rowHasReportData(row);
+}
+
 function rowNeedsBossComment(row) {
   if (!row || row.employee_id === state.employeeId) return false;
-  if (state.missingCommentStartDate && row.date < state.missingCommentStartDate) {
+  if (!rowCanReceiveBossComment(row)) return false;
+  if (
+    row.date === getTodayJST() &&
+    !state.includeTodayInMissingComments
+  ) {
+    return false;
+  }
+  const missingStartDate =
+    state.missingCommentRangeStart || state.missingCommentStartDate;
+  if (missingStartDate && row.date < missingStartDate) {
     return false;
   }
   return (row.comments || []).some(
@@ -1244,24 +1428,40 @@ function rowNeedsBossComment(row) {
 }
 
 function getMissingCommentSummary() {
-  if (!state.isSuperior) return { count: 0, hasOverdue: false, dates: [] };
+  const today = getTodayJST();
+  const rangeEnd =
+    state.missingCommentRangeEnd ||
+    (state.includeTodayInMissingComments ? today : offsetDateStr(today, -1));
+  const emptySummary = {
+    count: 0,
+    hasOverdue: false,
+    dates: [],
+    rangeStart: state.missingCommentRangeStart || "",
+    rangeEnd,
+  };
+  if (!state.isSuperior) return emptySummary;
+
+  const rangeStart =
+    state.missingCommentRangeStart || state.missingCommentStartDate || "";
+  const sourceDates = Array.isArray(state.missingCommentDates)
+    ? state.missingCommentDates
+    : state.rows.filter(rowNeedsBossComment).map((row) => row.date);
   const dates = [
     ...new Set(
-      state.rows
-        .filter((row) => {
-          if (row.employee_id === state.employeeId) return false;
-          if (state.startDate && row.date < state.startDate) return false;
-          if (state.endDate && row.date > state.endDate) return false;
-          return rowNeedsBossComment(row);
-        })
-        .map((row) => row.date),
+      sourceDates.filter(
+        (date) =>
+          date &&
+          date <= rangeEnd &&
+          (!rangeStart || date >= rangeStart),
+      ),
     ),
   ].sort();
-  const today = getTodayJST();
   return {
     count: dates.length,
     hasOverdue: dates.some((date) => date < today),
     dates,
+    rangeStart,
+    rangeEnd,
   };
 }
 
@@ -1279,21 +1479,44 @@ function getFilteredRows() {
 
   if (state.activeView === "boss" && state.isSuperior) {
     const selectedId = state.selectedSubordinateId;
-    return filteredByDate.filter((row) => {
+    const bossRows = filteredByDate.filter((row) => {
       if (row.employee_id === state.employeeId) return false;
       if (selectedId && row.employee_id !== selectedId) {
         return false;
       }
-      if (state.showMissingCommentsOnly && !rowNeedsBossComment(row)) {
-        return false;
-      }
       return true;
     });
+    if (state.showMissingCommentsOnly) {
+      return bossRows.filter(rowNeedsBossComment);
+    }
+    return collapseEmptyHolidayRows(bossRows);
   }
 
   return filteredByDate.filter(
     (row) => row.employee_id === state.employeeId,
   );
+}
+
+function collapseEmptyHolidayRows(rows) {
+  const holidayDatesWithReports = new Set(
+    rows
+      .filter((row) => row.is_holiday && rowHasReportData(row))
+      .map((row) => row.date),
+  );
+  const placeholderDates = new Set();
+
+  return rows.flatMap((row) => {
+    if (!row.is_holiday) return [row];
+    if (rowHasReportData(row)) return [row];
+    if (
+      holidayDatesWithReports.has(row.date) ||
+      placeholderDates.has(row.date)
+    ) {
+      return [];
+    }
+    placeholderDates.add(row.date);
+    return [{ ...row, __holidayPlaceholder: true }];
+  });
 }
 
 function getEmptyMessage() {
@@ -1389,6 +1612,10 @@ function buildSaveResultMessage(result, userCount, commentCount) {
 
 async function saveUpdates() {
   finishEditing();
+  if (state.isBusy || getDirtyCounts().total === 0) {
+    syncChrome();
+    return;
+  }
   const userUpdates = Array.from(state.reportChanges.values()).map((change) => {
     const update = { date: change.date, ...change.fields };
     const replies = Object.entries(change.replies).map(
@@ -1427,7 +1654,7 @@ async function saveUpdates() {
   }
   if (userSaved || commentSaved) {
     syncChrome();
-    await loadData({ silent: true });
+    await loadData({ silent: true, preserveTableScroll: true });
   } else {
     syncChrome();
   }

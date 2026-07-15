@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any
 
 
+COLOR_THEMES = frozenset({"green", "blue", "orange"})
+
+
 def to_int(value: Any, default: int) -> int:
     try:
         return int(str(value).strip())
@@ -25,6 +28,12 @@ def to_bool(value: Any, default: bool) -> bool:
     return default
 
 
+def normalize_color_theme(value: Any, default: str = "green") -> str:
+    fallback = default if default in COLOR_THEMES else "green"
+    color_theme = str(value or "").strip().lower()
+    return color_theme if color_theme in COLOR_THEMES else fallback
+
+
 @dataclass
 class AppSettings:
     users_dir: str = ""
@@ -33,12 +42,14 @@ class AppSettings:
     default_start_offset_days: int = -1
     default_end_offset_days: int = 0
     missing_comment_start_date: str = ""
+    include_today_in_missing_comments: bool = False
     comment_signature: str = ""
     ui_sidebar_open: bool = True
     ui_period_preset: str = "default"
     ui_start_date: str = ""
     ui_end_date: str = ""
     ui_font_size: str = "standard"
+    ui_color_theme: str = "green"
 
     @property
     def is_complete(self) -> bool:
@@ -51,7 +62,9 @@ class AppSettings:
         for field in fields(cls):
             default = getattr(defaults, field.name)
             raw_value = source.get(field.name, default)
-            if isinstance(default, bool):
+            if field.name == "ui_color_theme":
+                values[field.name] = normalize_color_theme(raw_value, default)
+            elif isinstance(default, bool):
                 values[field.name] = to_bool(raw_value, default)
             elif isinstance(default, int):
                 values[field.name] = to_int(raw_value, default)

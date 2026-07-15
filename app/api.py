@@ -8,6 +8,7 @@ from typing import Any
 
 from app.config import (
     SettingsManager,
+    normalize_color_theme,
     to_bool,
     to_int,
     validate_settings_paths,
@@ -58,7 +59,15 @@ class DailyReportApi:
                 missing_comment_start_date=str(
                     payload.get("missing_comment_start_date", "")
                 ).strip(),
+                include_today_in_missing_comments=to_bool(
+                    payload.get("include_today_in_missing_comments"),
+                    self._settings.include_today_in_missing_comments,
+                ),
                 comment_signature=str(payload.get("comment_signature", "")).strip(),
+                ui_color_theme=normalize_color_theme(
+                    payload.get("ui_color_theme"),
+                    self._settings.ui_color_theme,
+                ),
             )
             field_errors = validate_settings_paths(candidate)
             if field_errors:
@@ -80,7 +89,19 @@ class DailyReportApi:
     def save_ui_state(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             preset = str(payload.get("period_preset", "")).strip()
-            if preset not in {"default", "today", "last7days", "thisMonth", ""}:
+            if preset == "last7days":
+                preset = "default"
+            if preset not in {
+                "default",
+                "previousWorkday",
+                "today",
+                "previousWeek",
+                "thisWeek",
+                "previousMonth",
+                "thisMonth",
+                "missing",
+                "",
+            }:
                 preset = "default"
             self._settings = replace(
                 self._settings,
@@ -112,6 +133,7 @@ class DailyReportApi:
                 self._employee_id,
                 start_date=payload.get("start_date"),
                 end_date=payload.get("end_date"),
+                period_preset=payload.get("period_preset"),
             )
             return {"ok": True, "data": data}
         except Exception as exc:

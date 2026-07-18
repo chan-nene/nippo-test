@@ -15,6 +15,8 @@ const state = {
   commentChanges: new Map(),
   startDate: "",
   activePeriodPreset: "default",
+  periodBeforeMissing: null,
+  legacyLoadPreset: "",
   myRank: 9999,
   isBusy: false,
   busyAction: "",
@@ -39,6 +41,16 @@ const toastState = {
 };
 const actionButtonSignatures = new Map();
 const COLOR_THEMES = ["green", "blue", "orange"];
+const PERIOD_MODES = ["month", "week", "day", "default"];
+const LEGACY_PERIOD_MODE_MAP = Object.freeze({
+  last7days: "default",
+  previousWorkday: "day",
+  today: "day",
+  previousWeek: "week",
+  thisWeek: "week",
+  previousMonth: "month",
+  thisMonth: "month",
+});
 
 const $ = (id) => document.getElementById(id);
 
@@ -63,13 +75,10 @@ function bindEvents() {
   $("endDate").addEventListener("change", handleDateChange);
 
   [
+    ["presetMonthButton", "month"],
+    ["presetWeekButton", "week"],
+    ["presetDayButton", "day"],
     ["presetDefaultButton", "default"],
-    ["presetPreviousWorkdayButton", "previousWorkday"],
-    ["presetTodayButton", "today"],
-    ["presetPreviousWeekButton", "previousWeek"],
-    ["presetThisWeekButton", "thisWeek"],
-    ["presetPreviousMonthButton", "previousMonth"],
-    ["presetThisMonthButton", "thisMonth"],
   ].forEach(([buttonId, presetName]) => {
     $(buttonId)?.addEventListener("click", () => applyPreset(presetName));
   });
@@ -119,30 +128,43 @@ function bindEvents() {
 }
 
 function restoreUiState(settings) {
-  const savedPreset =
-    settings.ui_period_preset === "last7days"
-      ? "default"
-      : settings.ui_period_preset;
-  const preset = [
-    "default",
-    "previousWorkday",
-    "today",
-    "previousWeek",
-    "thisWeek",
-    "previousMonth",
-    "thisMonth",
+  const requestedPreset = String(settings.ui_period_preset ?? "default").trim();
+  const supportedPresets = new Set([
+    ...PERIOD_MODES,
+    ...Object.keys(LEGACY_PERIOD_MODE_MAP),
     "missing",
     "",
-  ].includes(savedPreset)
-    ? savedPreset
+  ]);
+  const savedPreset = supportedPresets.has(requestedPreset)
+    ? requestedPreset
     : "default";
-  const range = getPresetRange(preset);
-  state.activePeriodPreset = preset;
-  state.showMissingCommentsOnly = preset === "missing";
-  state.startDate = preset
-    ? range.startDate
-    : String(settings.ui_start_date || "");
-  state.endDate = preset ? range.endDate : String(settings.ui_end_date || "");
+  const savedStartDate = String(settings.ui_start_date || "").trim();
+  const savedEndDate = String(settings.ui_end_date || "").trim();
+
+  state.periodBeforeMissing = null;
+  state.legacyLoadPreset = "";
+  if (savedPreset === "missing") {
+    const range = getPresetRange("missing");
+    state.activePeriodPreset = "default";
+    state.showMissingCommentsOnly = true;
+    state.startDate = range.startDate;
+    state.endDate = range.endDate;
+  } else {
+    const periodMode = LEGACY_PERIOD_MODE_MAP[savedPreset] ?? savedPreset;
+    const restoredRange = getRestorablePeriodRange(
+      periodMode,
+      savedStartDate,
+      savedEndDate,
+    );
+    const range = restoredRange || getPresetRange(savedPreset);
+    const hasUsableCustomRange = periodMode !== "" || Boolean(restoredRange);
+    state.activePeriodPreset = hasUsableCustomRange ? periodMode : "default";
+    state.showMissingCommentsOnly = false;
+    state.legacyLoadPreset =
+      savedPreset === "previousWorkday" ? "previousWorkday" : "";
+    state.startDate = hasUsableCustomRange ? range.startDate : "";
+    state.endDate = hasUsableCustomRange ? range.endDate : "";
+  }
   state.fontSize = ["standard", "large", "xlarge"].includes(
     settings.ui_font_size,
   )
@@ -162,17 +184,64 @@ function restoreUiState(settings) {
 function persistUiState() {
   const api = window.pywebview?.api;
   if (typeof api?.save_ui_state !== "function") return;
+  const periodPreset = state.showMissingCommentsOnly
+    ? "missing"
+    : state.activePeriodPreset;
+  const shouldPersistDates =
+    !state.showMissingCommentsOnly &&
+    ["month", "week", "day", ""].includes(state.activePeriodPreset);
   const payload = {
     sidebar_open: $("sidebar").classList.contains("is-open"),
-    period_preset: state.activePeriodPreset,
-    start_date: state.activePeriodPreset ? "" : state.startDate,
-    end_date: state.activePeriodPreset ? "" : state.endDate,
+    period_preset: periodPreset,
+    start_date: shouldPersistDates ? state.startDate : "",
+    end_date: shouldPersistDates ? state.endDate : "",
     font_size: state.fontSize,
   };
   uiStateSaveQueue = uiStateSaveQueue
     .catch(() => {})
     .then(() => api.save_ui_state(payload))
     .catch(() => {});
+}
+
+function getRestorablePeriodRange(periodMode, startDate, endDate) {
+  if (
+    !isValidIsoDate(startDate) ||
+    !isValidIsoDate(endDate) ||
+    startDate > endDate
+  ) {
+    return null;
+  }
+  const range = { startDate, endDate };
+  if (periodMode === "month") {
+    const expected = getCalendarMonthRange(startDate);
+    return expected.startDate === startDate && expected.endDate === endDate
+      ? range
+      : null;
+  }
+  if (periodMode === "week") {
+    const expected = getMondayBasedWeekRange(startDate);
+    return expected.startDate === startDate && expected.endDate === endDate
+      ? range
+      : null;
+  }
+  if (periodMode === "day") return startDate === endDate ? range : null;
+  if (periodMode !== "") return null;
+  const inclusiveDays =
+    Math.round(
+      (Date.parse(`${endDate}T00:00:00Z`) -
+        Date.parse(`${startDate}T00:00:00Z`)) /
+        86400000,
+    ) + 1;
+  return inclusiveDays <= 366 ? range : null;
+}
+
+function isValidIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
 }
 
 // UTC+9（JST）の今日の日付を "YYYY-MM-DD" で返す
@@ -477,9 +546,9 @@ function updateViewChrome() {
   if (bossFilterArea) {
     bossFilterArea.classList.toggle("hidden", !isBossView || isSettingsView);
   }
-  const missingCommentsButton = $("showMissingCommentsButton");
-  if (missingCommentsButton) {
-    missingCommentsButton.classList.toggle(
+  const missingCommentsFilterGroup = $("missingCommentsFilterGroup");
+  if (missingCommentsFilterGroup) {
+    missingCommentsFilterGroup.classList.toggle(
       "hidden",
       !isBossView || isSettingsView,
     );

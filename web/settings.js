@@ -149,6 +149,8 @@ async function saveSettings() {
     state.endDate = "";
     state.activePeriodPreset = "default";
     state.showMissingCommentsOnly = false;
+    state.periodBeforeMissing = null;
+    state.legacyLoadPreset = "";
     state.missingCommentStartDate =
       result.settings?.missing_comment_start_date || "";
     state.includeTodayInMissingComments = Boolean(

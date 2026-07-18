@@ -31,13 +31,15 @@
   --primary-soft: #e2f4ed;
   --primary-border: #83cbb4;
   --dirty: #fff7d6;
-  --dirty-border: #e4a72d;
   --success: #087f5b;
   --success-bg: #e9f8f2;
   --warning: #a45a13;
   --warning-bg: #fff5e7;
-  --missing-empty-badge-bg: #4f5b56;
-  --missing-empty-badge-text: #ffffff;
+  --missing-badge-pending-bg: #9b5b17;
+  --missing-badge-overdue-bg: #b6384b;
+  --missing-badge-clear-bg: #48675d;
+  --missing-badge-loading-bg: #5c6864;
+  --missing-badge-text: #ffffff;
   --error: #bd3b48;
   --error-bg: #fff0f1;
   --title-bar-bg: #17241f;
@@ -62,7 +64,7 @@
   --compact-control-height: 28px;
   --cell-padding-y: 9px;
   --badge-height: 17px;
-  --date-navigation-height: 26px;
+  --date-navigation-height: 34px;
   --range-today-height: 58px;
   --settings-padding: 18px;
   --shadow-popover: 0 10px 28px rgb(15 23 42 / 0.16);
@@ -75,6 +77,7 @@ html body[data-color-theme="blue"] {
   --primary-hover: #1e4f85;
   --primary-soft: #e7f0fb;
   --primary-border: #91b9e0;
+  --missing-badge-clear-bg: #3f675d;
   --title-bar-bg: #18263a;
   --title-bar-border: #2b3b52;
   --title-bar-divider: #465a73;
@@ -91,6 +94,8 @@ html body[data-color-theme="orange"] {
   --primary-hover: #9a3412;
   --primary-soft: #fff0e8;
   --primary-border: #f0a37d;
+  --missing-badge-pending-bg: #2d6594;
+  --missing-badge-clear-bg: #3f675d;
   --title-bar-bg: #2d211b;
   --title-bar-border: #493329;
   --title-bar-divider: #655044;
@@ -114,7 +119,7 @@ html body[data-font-size="large"] {
   --compact-control-height: 34px;
   --cell-padding-y: 10px;
   --badge-height: 20px;
-  --date-navigation-height: 32px;
+  --date-navigation-height: 40px;
   --range-today-height: 64px;
   --settings-padding: 20px;
 }
@@ -133,7 +138,7 @@ html body[data-font-size="xlarge"] {
   --compact-control-height: 38px;
   --cell-padding-y: 11px;
   --badge-height: 23px;
-  --date-navigation-height: 36px;
+  --date-navigation-height: 44px;
   --range-today-height: 70px;
   --settings-padding: 22px;
 }
@@ -162,11 +167,13 @@ html body.is-dark-mode {
   --primary-soft: #1c382d;
   --primary-border: #39745d;
   --dirty: #3d3217;
-  --dirty-border: #d19a2b;
   --success-bg: #18362b;
   --warning-bg: #392b1b;
-  --missing-empty-badge-bg: #46504b;
-  --missing-empty-badge-text: #f5f7f6;
+  --missing-badge-pending-bg: #94591f;
+  --missing-badge-overdue-bg: #a53649;
+  --missing-badge-clear-bg: #435c53;
+  --missing-badge-loading-bg: #4d5954;
+  --missing-badge-text: #ffffff;
   --error-bg: #402126;
   --title-bar-bg: #111613;
   --title-bar-border: #353d39;
@@ -229,6 +236,7 @@ html body.is-dark-mode[data-color-theme="orange"] {
   --primary-hover: #a94715;
   --primary-soft: #3a241b;
   --primary-border: #82452d;
+  --missing-badge-pending-bg: #2d638e;
   --title-bar-bg: #241811;
   --title-bar-border: #483126;
   --title-bar-divider: #684b3d;
@@ -555,10 +563,10 @@ html body .sidebar-utility-button {
 
 html body .sidebar-item,
 html body .sidebar-utility-button {
-  width: 36px;
+  width: 40px;
   justify-content: center;
   gap: 0;
-  margin-inline: 2px 0;
+  margin-inline: 0;
   padding: 0;
 }
 

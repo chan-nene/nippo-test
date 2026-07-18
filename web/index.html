@@ -3,6 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; media-src 'none'; worker-src 'none'"
+    />
     <title>NIPPO | Daily Report</title>
 
     <link rel="stylesheet" href="./styles.css" />
@@ -231,6 +235,58 @@
               <div class="toolbar-row toolbar-filter-row">
                 <div class="toolbar-left toolbar-left-wide">
                   <div class="period-main-controls">
+                    <div class="period-mode-control">
+                      <span class="period-mode-label">表示期間</span>
+                      <div class="period-presets" role="group" aria-label="表示期間">
+                        <button
+                          id="presetMonthButton"
+                          class="preset-button"
+                          type="button"
+                          aria-pressed="false"
+                        >
+                          月
+                        </button>
+                        <button
+                          id="presetWeekButton"
+                          class="preset-button"
+                          type="button"
+                          aria-pressed="false"
+                        >
+                          週
+                        </button>
+                        <button
+                          id="presetDayButton"
+                          class="preset-button"
+                          type="button"
+                          aria-pressed="false"
+                        >
+                          日
+                        </button>
+                        <button
+                          id="presetDefaultButton"
+                          class="preset-button"
+                          type="button"
+                          aria-pressed="false"
+                        >
+                          設定範囲
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      id="missingCommentsFilterGroup"
+                      class="missing-filter-group hidden"
+                    >
+                      <span class="period-filter-divider" aria-hidden="true"></span>
+                      <button
+                        id="showMissingCommentsButton"
+                        class="preset-button missing-filter-button"
+                        type="button"
+                        aria-pressed="false"
+                      >
+                        <span class="missing-filter-label">未コメントのみ</span>
+                        <span class="missing-count-badge is-empty" aria-hidden="true">0日</span>
+                      </button>
+                    </div>
                     <div class="period-control-container">
                       <div class="period-control">
                         <div class="period-field-group">
@@ -242,38 +298,6 @@
                         </div>
                       </div>
                       <div id="periodError" class="field-error period-error hidden" role="alert"></div>
-                    </div>
-                    <div class="period-presets" aria-label="設定した表示範囲">
-                      <button id="presetDefaultButton" class="preset-button" type="button">標準範囲</button>
-                      <button
-                        id="showMissingCommentsButton"
-                        class="preset-button hidden"
-                        type="button"
-                        aria-pressed="false"
-                      >
-                        未確認
-                      </button>
-                    </div>
-                  </div>
-                  <div class="period-shortcuts" aria-label="補助の表示範囲">
-                    <div class="period-shortcut-group" role="group" aria-label="日単位">
-                      <button
-                        id="presetPreviousWorkdayButton"
-                        class="preset-button"
-                        type="button"
-                        title="休日設定日を除いた直近の前日を表示"
-                      >
-                        1稼働日前
-                      </button>
-                      <button id="presetTodayButton" class="preset-button" type="button">本日</button>
-                    </div>
-                    <div class="period-shortcut-group" role="group" aria-label="週単位（月曜始まり）">
-                      <button id="presetPreviousWeekButton" class="preset-button" type="button">先週</button>
-                      <button id="presetThisWeekButton" class="preset-button" type="button">今週</button>
-                    </div>
-                    <div class="period-shortcut-group" role="group" aria-label="月単位">
-                      <button id="presetPreviousMonthButton" class="preset-button" type="button">先月</button>
-                      <button id="presetThisMonthButton" class="preset-button" type="button">今月</button>
                     </div>
                   </div>
                 </div>
@@ -424,8 +448,8 @@
               </section>
               <section class="missing-comment-setting" aria-labelledby="missingCommentSettingTitle">
                 <div class="settings-section-heading">
-                  <h3 id="missingCommentSettingTitle">未確認の集計</h3>
-                  <p>未確認ボタンの集計期間と、当日分の扱いを設定します。</p>
+                  <h3 id="missingCommentSettingTitle">未コメントの集計</h3>
+                  <p>「未コメントのみ」の集計期間と、当日分の扱いを設定します。</p>
                 </div>
                 <label class="settings-field">
                   <span>集計を開始する日</span>
@@ -434,8 +458,8 @@
                 <label class="settings-check-option">
                   <input id="includeTodayInMissingComments" type="checkbox" />
                   <span class="settings-check-copy">
-                    <strong>当日分を未確認数に含める</strong>
-                    <small>今日の日報も未確認バッジと未確認一覧の対象にします。</small>
+                    <strong>当日分を未コメント日数に含める</strong>
+                    <small>今日の日報も未コメントバッジと絞り込みの対象にします。</small>
                   </span>
                 </label>
               </section>

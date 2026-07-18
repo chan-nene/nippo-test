@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-import sys
+import logging
 import os
+import sys
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 import webview
 
 from app.api import DailyReportApi
 from app.instance_lock import SingleInstanceLock
+
+
+logger = logging.getLogger(__name__)
 
 # アプリケーションのベースディレクトリを取得する
 def get_base_dir() -> Path:
@@ -67,6 +73,72 @@ def show_already_running_message() -> None:
     print(message)
 
 
+def configure_webview_security(settings: Any) -> None:
+    # A target="_blank" navigation must never be handed to the OS browser.
+    # pywebview will redirect it into this WebView, where the native guard cancels it.
+    settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = False
+    settings["ALLOW_DOWNLOADS"] = False
+
+
+def is_allowed_app_navigation(candidate_url: Any, app_url: str) -> bool:
+    candidate_path = _canonical_file_url_path(candidate_url)
+    allowed_path = _canonical_file_url_path(app_url)
+    return candidate_path is not None and candidate_path == allowed_path
+
+
+def install_webview_navigation_guard(window: Any, app_url: str) -> bool:
+    if getattr(window, "_nippo_navigation_guard_installed", False):
+        return True
+    native = getattr(window, "native", None)
+    native_webview = getattr(native, "webview", None)
+    core_webview = getattr(native_webview, "CoreWebView2", None)
+    navigation_event = getattr(native_webview, "NavigationStarting", None)
+    new_window_event = getattr(core_webview, "NewWindowRequested", None)
+    if navigation_event is None or new_window_event is None:
+        return False
+
+    def on_navigation_starting(_: Any, args: Any) -> None:
+        uri = getattr(args, "Uri", None)
+        if uri is None and hasattr(args, "get_Uri"):
+            uri = args.get_Uri()
+        if is_allowed_app_navigation(uri, app_url):
+            return
+        try:
+            args.Cancel = True
+        except Exception:
+            args.set_Cancel(True)
+
+    def on_new_window_requested(_: Any, args: Any) -> None:
+        try:
+            args.set_Handled(True)
+        except Exception:
+            args.Handled = True
+
+    native_webview.NavigationStarting += on_navigation_starting
+    core_webview.NewWindowRequested += on_new_window_requested
+    # Keep Python delegates alive for the lifetime of the native WebView.
+    window._nippo_navigation_guard_handlers = (
+        on_navigation_starting,
+        on_new_window_requested,
+    )
+    window._nippo_navigation_guard_installed = True
+    return True
+
+
+def _canonical_file_url_path(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = urlsplit(value)
+        if parsed.scheme.lower() != "file" or parsed.query:
+            return None
+        if parsed.netloc.lower() not in {"", "localhost"}:
+            return None
+        return os.path.normcase(str(Path(url2pathname(parsed.path)).resolve()))
+    except (OSError, ValueError):
+        return None
+
+
 # アプリケーションのメイン処理
 def main() -> None:
     base_dir = get_base_dir()
@@ -77,16 +149,28 @@ def main() -> None:
         show_already_running_message()
         return
     html_path = get_asset_dir(base_dir) / "index.html"
+    app_url = html_path.as_uri()
     try:
+        configure_webview_security(webview.settings)
         window = webview.create_window(
             "日報",
-            html_path.as_uri(),
+            app_url,
             js_api=api,
             width=1280,
             height=800,
             min_size=(960, 600),
         )
         window.events.closing += build_closing_handler(api)
+
+        def install_navigation_guard() -> None:
+            if install_webview_navigation_guard(window, app_url):
+                return
+            logger.critical("WebView navigation guard could not be installed")
+            window.destroy()
+
+        # before_load runs after the trusted document is loaded but before the
+        # JavaScript bridge (and therefore untrusted CSV content) is exposed.
+        window.events.before_load += install_navigation_guard
         webview.start(debug=False)
     finally:
         instance_lock.release()

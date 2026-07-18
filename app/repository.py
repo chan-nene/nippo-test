@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -12,6 +13,10 @@ from zoneinfo import ZoneInfo
 import polars as pl
 
 from app.config import AppSettings, validate_settings_paths
+from app.security import safe_employee_csv_path, validate_employee_id
+
+
+logger = logging.getLogger(__name__)
 
 JST = ZoneInfo("Asia/Tokyo")
 
@@ -275,6 +280,8 @@ class DailyReportRepository:
         user_updates: list[dict[str, Any]],
         comment_updates: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        employee_id = validate_employee_id(employee_id)
+        self._authorize_updates(employee_id, user_updates, comment_updates)
         update_targets = (
             ("user", user_updates, self._upsert_user_rows),
             ("comment", comment_updates, self._upsert_comment_rows),
@@ -289,16 +296,68 @@ class DailyReportRepository:
             try:
                 writer(employee_id, updates)
                 result[name]["saved"] = True
-            except Exception as exc:
-                result[name]["error"] = str(exc)
+            except Exception:
+                logger.exception("Failed to save %s updates", name)
+                result[name]["error"] = "保存先への書き込みに失敗しました。"
 
         return result
+
+    def _authorize_updates(
+        self,
+        employee_id: str,
+        user_updates: list[dict[str, Any]],
+        comment_updates: list[dict[str, Any]],
+    ) -> None:
+        if comment_updates:
+            common = self.load_common()
+            allowed_subordinates = {
+                str(row.get("subordinate_employee_id", ""))
+                for row in common["superior_config"]
+                if str(row.get("superior_employee_id", "")) == employee_id
+            }
+            for update in comment_updates:
+                subordinate_id = validate_employee_id(
+                    update.get("subordinate_employee_id"), "コメント対象者ID"
+                )
+                if subordinate_id not in allowed_subordinates:
+                    raise PermissionError("担当外の利用者へのコメント更新です。")
+
+        requested_replies: set[tuple[str, str]] = set()
+        for update in user_updates:
+            report_date = self._date_key(update.get("date"))
+            if not report_date:
+                raise ValueError("日報の日付が不正です。")
+            replies = update.get("replies", []) or []
+            if not isinstance(replies, list):
+                raise ValueError("返信の形式が不正です。")
+            for reply in replies:
+                if not isinstance(reply, dict):
+                    raise ValueError("返信の形式が不正です。")
+                superior_id = validate_employee_id(
+                    reply.get("superior_employee_id"), "返信先の上司ID"
+                )
+                requested_replies.add((superior_id, report_date))
+
+        if requested_replies:
+            existing_comments = self._load_all_comment_rows().to_dicts()
+            authorized_replies = {
+                (
+                    str(row.get("superior_employee_id", "")),
+                    self._date_key(row.get("date")),
+                )
+                for row in existing_comments
+                if str(row.get("subordinate_employee_id", "")) == employee_id
+                and str(row.get("comment") or "").strip()
+                and self._date_key(row.get("date"))
+            }
+            if not requested_replies.issubset(authorized_replies):
+                raise PermissionError("存在しない上司コメントへの返信更新です。")
 
     def _load_all_user_rows(self, allowed_employee_ids: list[str]) -> pl.DataFrame:
         rows: list[dict[str, Any]] = []
         users_dir = Path(self.settings.users_dir)
         files = [
-            users_dir / f"{employee_id}.csv"
+            safe_employee_csv_path(users_dir, employee_id)
             for employee_id in dict.fromkeys(allowed_employee_ids)
             if employee_id
         ]
@@ -481,7 +540,7 @@ class DailyReportRepository:
     def _upsert_user_rows(
         self, employee_id: str, updates: list[dict[str, Any]]
     ) -> None:
-        user_path = Path(self.settings.users_dir) / f"{employee_id}.csv"
+        user_path = safe_employee_csv_path(self.settings.users_dir, employee_id)
         rows = self._read_csv_or_empty(user_path, USER_COLUMNS).to_dicts()
         existing = self._dedupe_rows(rows, ["employee_id", "date"])
         rows_by_date = {
@@ -536,7 +595,7 @@ class DailyReportRepository:
     def _upsert_comment_rows(
         self, employee_id: str, updates: list[dict[str, Any]]
     ) -> None:
-        comment_path = Path(self.settings.comments_dir) / f"{employee_id}.csv"
+        comment_path = safe_employee_csv_path(self.settings.comments_dir, employee_id)
         rows = self._read_csv_or_empty(comment_path, COMMENT_COLUMNS).to_dicts()
         existing = self._dedupe_rows(
             rows, ["superior_employee_id", "subordinate_employee_id", "date"]

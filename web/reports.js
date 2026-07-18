@@ -1,4 +1,225 @@
 // Daily report and supervisor report screens.
+const imeEditorStates = new WeakMap();
+const imeDiagnosticState = {
+  startedAt: performance.now(),
+  nextSequence: 1,
+  nextEditorId: 1,
+  events: [],
+  droppedCount: 0,
+  flushTimer: null,
+  flushQueue: Promise.resolve(),
+};
+const IME_DIAGNOSTIC_FLUSH_DELAY_MS = 1500;
+const IME_DIAGNOSTIC_BATCH_SIZE = 200;
+const IME_DIAGNOSTIC_MAX_BUFFERED_EVENTS = 1000;
+
+function createImeEditorState(textarea) {
+  const editorState = {
+    editorId: imeDiagnosticState.nextEditorId++,
+    compositionId: 0,
+    composing: false,
+    pendingInput: false,
+    hasAppliedInput: false,
+    lastAppliedValue: "",
+  };
+  imeEditorStates.set(textarea, editorState);
+  return editorState;
+}
+
+function getImeEditorState(textarea) {
+  return imeEditorStates.get(textarea) || null;
+}
+
+function isImeCompositionActive(textarea, event = null) {
+  const editorState = getImeEditorState(textarea);
+  return Boolean(
+    editorState?.composing || event?.isComposing || event?.keyCode === 229,
+  );
+}
+
+function getImeDiagnosticKey(event) {
+  if (!event) return "";
+  if (["Enter", "Escape", "Tab", "Process", "Unidentified"].includes(event.key)) {
+    return event.key;
+  }
+  return event.isComposing || event.keyCode === 229 ? "IME" : "";
+}
+
+function queueImeDiagnostic(name, textarea = null, event = null, extra = {}) {
+  const editorState = textarea ? getImeEditorState(textarea) : null;
+  const selectionStart = Number.isInteger(textarea?.selectionStart)
+    ? textarea.selectionStart
+    : -1;
+  const selectionEnd = Number.isInteger(textarea?.selectionEnd)
+    ? textarea.selectionEnd
+    : -1;
+  const record = {
+    sequence: imeDiagnosticState.nextSequence++,
+    elapsed_ms: Math.max(
+      0,
+      Math.round(performance.now() - imeDiagnosticState.startedAt),
+    ),
+    name,
+    editor_id: editorState?.editorId || 0,
+    composition_id: editorState?.compositionId || 0,
+    editor_kind: textarea?.dataset.kind || "",
+    input_type: typeof event?.inputType === "string" ? event.inputType : "",
+    key: getImeDiagnosticKey(event),
+    reason: extra.reason || "",
+    composing: Boolean(editorState?.composing),
+    event_composing: Boolean(event?.isComposing),
+    focused: Boolean(textarea && document.activeElement === textarea),
+    connected: Boolean(textarea?.isConnected),
+    deferred: Boolean(extra.deferred),
+    default_prevented: Boolean(event?.defaultPrevented),
+    value_length: textarea?.value.length || 0,
+    data_length: typeof event?.data === "string" ? event.data.length : 0,
+    selection_start: selectionStart,
+    selection_end: selectionEnd,
+  };
+  if (Number.isInteger(extra.heightPx)) record.height_px = extra.heightPx;
+  if (Number.isInteger(extra.droppedCount)) {
+    record.dropped_count = extra.droppedCount;
+  }
+  if (
+    imeDiagnosticState.events.length >= IME_DIAGNOSTIC_MAX_BUFFERED_EVENTS
+  ) {
+    imeDiagnosticState.events.shift();
+    imeDiagnosticState.droppedCount += 1;
+  }
+  imeDiagnosticState.events.push(record);
+  if (name !== "editor_open" && name !== "focus") {
+    scheduleImeDiagnosticFlush();
+  }
+}
+
+function scheduleImeDiagnosticFlush(delay = IME_DIAGNOSTIC_FLUSH_DELAY_MS) {
+  if (imeDiagnosticState.flushTimer) {
+    clearTimeout(imeDiagnosticState.flushTimer);
+  }
+  imeDiagnosticState.flushTimer = setTimeout(() => {
+    imeDiagnosticState.flushTimer = null;
+    flushImeDiagnostics();
+  }, delay);
+}
+
+function flushImeDiagnostics({ force = false } = {}) {
+  if (imeDiagnosticState.flushTimer) {
+    clearTimeout(imeDiagnosticState.flushTimer);
+    imeDiagnosticState.flushTimer = null;
+  }
+  const textarea = currentEditingElement?.querySelector("textarea");
+  if (!force && textarea && isImeCompositionActive(textarea)) {
+    scheduleImeDiagnosticFlush();
+    return imeDiagnosticState.flushQueue;
+  }
+
+  if (imeDiagnosticState.droppedCount > 0) {
+    const droppedCount = imeDiagnosticState.droppedCount;
+    imeDiagnosticState.droppedCount = 0;
+    queueImeDiagnostic("buffer_dropped", null, null, { droppedCount });
+    if (imeDiagnosticState.flushTimer) {
+      clearTimeout(imeDiagnosticState.flushTimer);
+      imeDiagnosticState.flushTimer = null;
+    }
+  }
+  if (!imeDiagnosticState.events.length) return imeDiagnosticState.flushQueue;
+
+  const recorder = window.pywebview?.api?.record_ime_diagnostics;
+  const events = imeDiagnosticState.events.splice(0);
+  if (typeof recorder !== "function") return imeDiagnosticState.flushQueue;
+  const client = {
+    user_agent: String(navigator.userAgent || "").slice(0, 512),
+    language: String(navigator.language || "").slice(0, 32),
+  };
+  imeDiagnosticState.flushQueue = imeDiagnosticState.flushQueue
+    .catch(() => undefined)
+    .then(async () => {
+      for (let index = 0; index < events.length; index += IME_DIAGNOSTIC_BATCH_SIZE) {
+        const batch = events.slice(index, index + IME_DIAGNOSTIC_BATCH_SIZE);
+        try {
+          await recorder({ client, events: batch });
+        } catch {
+          // Diagnostics must never interfere with editing.
+        }
+      }
+    });
+  return imeDiagnosticState.flushQueue;
+}
+
+function applyCellEditorInput(textarea, reason, event = null) {
+  const editorState = getImeEditorState(textarea);
+  if (!editorState) return;
+  if (
+    !editorState.pendingInput &&
+    editorState.hasAppliedInput &&
+    editorState.lastAppliedValue === textarea.value
+  ) {
+    return;
+  }
+  editorState.pendingInput = false;
+  editorState.hasAppliedInput = true;
+  editorState.lastAppliedValue = textarea.value;
+  const heightPx = autoResizeTextarea(textarea);
+  queueImeDiagnostic("input_applied", textarea, event, { reason, heightPx });
+  onCellInput({ target: textarea });
+}
+
+function installImeProtectedEditor(textarea) {
+  const editorState = createImeEditorState(textarea);
+
+  textarea.addEventListener("compositionstart", (event) => {
+    editorState.compositionId += 1;
+    editorState.composing = true;
+    queueImeDiagnostic("composition_start", textarea, event);
+  });
+  textarea.addEventListener("compositionupdate", (event) => {
+    queueImeDiagnostic("composition_update", textarea, event);
+  });
+  textarea.addEventListener("compositionend", (event) => {
+    editorState.composing = false;
+    queueImeDiagnostic("composition_end", textarea, event);
+    queueMicrotask(() => {
+      if (textarea.isConnected && editorState.pendingInput) {
+        applyCellEditorInput(textarea, "composition_end", event);
+      }
+    });
+  });
+  textarea.addEventListener("beforeinput", (event) => {
+    queueImeDiagnostic("before_input", textarea, event, {
+      deferred: isImeCompositionActive(textarea, event),
+    });
+  });
+  textarea.addEventListener("input", (event) => {
+    if (isImeCompositionActive(textarea, event)) {
+      editorState.pendingInput = true;
+      queueImeDiagnostic("input_deferred", textarea, event, {
+        deferred: true,
+      });
+      return;
+    }
+    const wasDeferred = editorState.pendingInput;
+    if (
+      !wasDeferred &&
+      editorState.hasAppliedInput &&
+      editorState.lastAppliedValue === textarea.value
+    ) {
+      return;
+    }
+    editorState.pendingInput = true;
+    applyCellEditorInput(
+      textarea,
+      wasDeferred ? "composition_end" : "input",
+      event,
+    );
+  });
+  textarea.addEventListener("focus", (event) => {
+    queueImeDiagnostic("focus", textarea, event);
+  });
+  textarea.addEventListener("blur", (event) => {
+    queueImeDiagnostic("blur", textarea, event);
+  });
+}
 function clearSubordinateFilters() {
   state.selectedSubordinateId = "";
   updateSubordinateFilterUi();
@@ -47,6 +268,8 @@ function getDirtyCounts() {
 }
 
 function syncChrome() {
+  const textarea = currentEditingElement?.querySelector("textarea");
+  if (textarea) queueImeDiagnostic("chrome_sync", textarea);
   const model = getChromeModel();
   renderActionButtons(model.actions);
   syncNativeUnsavedState(model.dirty.total > 0);
@@ -57,6 +280,8 @@ function syncNativeUnsavedState(hasUnsavedChanges) {
   lastNativeUnsavedState = hasUnsavedChanges;
   const setter = window.pywebview?.api?.set_unsaved_changes;
   if (typeof setter !== "function") return;
+  const textarea = currentEditingElement?.querySelector("textarea");
+  if (textarea) queueImeDiagnostic("native_unsaved_sync", textarea);
   Promise.resolve(setter(hasUnsavedChanges)).catch(() => {
     lastNativeUnsavedState = null;
   });
@@ -66,24 +291,31 @@ function syncMissingCommentCount() {
   const button = $("showMissingCommentsButton");
   if (!button) return;
   const summary = getMissingCommentSummary();
+  const isLoading = state.busyAction === "load";
   const label = document.createElement("span");
   label.className = "missing-filter-label";
-  label.textContent = "未確認";
+  label.textContent = "未コメントのみ";
   const badge = document.createElement("span");
   badge.className = [
     "missing-count-badge",
-    summary.hasOverdue ? "is-overdue" : "",
-    summary.count === 0 ? "is-empty" : "",
+    isLoading ? "is-loading" : "",
+    !isLoading && summary.hasOverdue ? "is-overdue" : "",
+    !isLoading && summary.count === 0 ? "is-empty" : "",
   ]
     .filter(Boolean)
     .join(" ");
-  badge.textContent = summary.count > 0 ? `${summary.count}日` : "なし";
+  badge.textContent = isLoading ? "…" : `${summary.count}日`;
   badge.setAttribute("aria-hidden", "true");
   button.replaceChildren(label, badge);
-  const statusDescription =
-    summary.count > 0
-      ? `未確認が残っている日を表示 ${summary.count}日${summary.hasOverdue ? "、過去日の未確認あり" : ""}`
-      : "未確認が残っている日はありません";
+  let statusDescription = "未コメントの日報だけを表示、対象0日";
+  if (isLoading) {
+    statusDescription = "未コメントの日数を確認中";
+  } else if (summary.count > 0) {
+    const overdueDescription = summary.hasOverdue
+      ? "、過去日の未コメントあり"
+      : "";
+    statusDescription = `未コメントの日報だけを表示、対象${summary.count}日${overdueDescription}`;
+  }
   const todayScopeDescription = state.includeTodayInMissingComments
     ? "今日分を含む"
     : "今日分は対象外";
@@ -96,27 +328,36 @@ function syncMissingCommentCount() {
   const description = `${statusDescription}${rangeDescription}`;
   button.setAttribute("aria-label", description);
   button.title = description;
-  button.classList.toggle("has-overdue", summary.hasOverdue);
 }
 
 function syncPeriodPresets() {
   const presets = {
+    month: $("presetMonthButton"),
+    week: $("presetWeekButton"),
+    day: $("presetDayButton"),
     default: $("presetDefaultButton"),
-    missing: $("showMissingCommentsButton"),
-    previousWorkday: $("presetPreviousWorkdayButton"),
-    today: $("presetTodayButton"),
-    previousWeek: $("presetPreviousWeekButton"),
-    thisWeek: $("presetThisWeekButton"),
-    previousMonth: $("presetPreviousMonthButton"),
-    thisMonth: $("presetThisMonthButton"),
   };
   Object.entries(presets).forEach(([name, button]) => {
     if (!button) return;
-    const isActive = state.activePeriodPreset === name;
+    const isActive =
+      !state.showMissingCommentsOnly && state.activePeriodPreset === name;
     button.disabled = state.isBusy;
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
+  const missingButton = $("showMissingCommentsButton");
+  if (missingButton) {
+    missingButton.disabled = state.isBusy;
+    missingButton.classList.toggle(
+      "is-active",
+      state.showMissingCommentsOnly,
+    );
+    missingButton.setAttribute(
+      "aria-pressed",
+      String(state.showMissingCommentsOnly),
+    );
+    syncMissingCommentCount();
+  }
 }
 
 function getChromeModel() {
@@ -238,7 +479,9 @@ async function loadData({
   const result = await window.pywebview.api.load_data({
     start_date: state.startDate || null,
     end_date: state.endDate || null,
-    period_preset: state.activePeriodPreset || null,
+    period_preset: state.showMissingCommentsOnly
+      ? "missing"
+      : state.legacyLoadPreset || state.activePeriodPreset || null,
   });
   setBusy(false);
   if (!result.ok) {
@@ -267,6 +510,7 @@ async function loadData({
   state.missingCommentRangeEnd = missingCommentSummary?.end_date || "";
   state.startDate = result.data.start_date || state.startDate;
   state.endDate = result.data.end_date || state.endDate;
+  state.legacyLoadPreset = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
   if (preserveDirty) {
@@ -417,11 +661,13 @@ async function handleDateChange() {
   state.endDate = endDate;
   state.activePeriodPreset = "";
   state.showMissingCommentsOnly = false;
+  state.periodBeforeMissing = null;
+  state.legacyLoadPreset = "";
   await loadData();
   persistUiState();
 }
 
-async function shiftDateRange(deltaDays) {
+async function shiftDateRange(direction) {
   finishEditing();
   setFieldError("periodError", "", ["startDate", "endDate"]);
   const startInput = $("startDate");
@@ -430,8 +676,11 @@ async function shiftDateRange(deltaDays) {
   const currentEndDate = endInput.value || state.endDate;
   if (!currentStartDate || !currentEndDate) return;
 
-  const startDate = offsetDateStr(currentStartDate, deltaDays);
-  const endDate = offsetDateStr(currentEndDate, deltaDays);
+  const { startDate, endDate } = getShiftedPeriodRange(
+    direction,
+    currentStartDate,
+    currentEndDate,
+  );
   if (!startDate || !endDate) return;
 
   if (!confirmDiscardUnsaved("表示する日付範囲を移動しますか？")) return;
@@ -440,10 +689,28 @@ async function shiftDateRange(deltaDays) {
   endInput.value = endDate;
   state.startDate = startDate;
   state.endDate = endDate;
-  state.activePeriodPreset = "";
   state.showMissingCommentsOnly = false;
+  state.periodBeforeMissing = null;
+  state.legacyLoadPreset = "";
   await loadData();
   persistUiState();
+}
+
+function getShiftedPeriodRange(
+  direction,
+  startDate = state.startDate,
+  endDate = state.endDate,
+) {
+  const step = direction < 0 ? -1 : 1;
+  if (!startDate || !endDate) return { startDate: "", endDate: "" };
+  if (state.activePeriodPreset === "month") {
+    return getCalendarMonthRange(startDate, step);
+  }
+  const deltaDays = state.activePeriodPreset === "week" ? step * 7 : step;
+  return {
+    startDate: offsetDateStr(startDate, deltaDays),
+    endDate: offsetDateStr(endDate, deltaDays),
+  };
 }
 
 function formatDisplayDateHTML(value) {
@@ -461,17 +728,43 @@ function formatDisplayDateHTML(value) {
 }
 
 async function applyPreset(presetName) {
+  if (presetName !== "missing" && !PERIOD_MODES.includes(presetName)) return;
   finishEditing();
   setFieldError("periodError", "", ["startDate", "endDate"]);
   if (!confirmDiscardUnsaved("日付範囲を変更しますか？")) return;
   discardDirtyEdits();
-  const range = getPresetRange(presetName);
-  const isMissingPreset = presetName === "missing";
-  state.startDate = range.startDate;
-  state.endDate = range.endDate;
-  state.activePeriodPreset = presetName;
-  state.showMissingCommentsOnly = isMissingPreset;
-  if (isMissingPreset) state.selectedSubordinateId = "";
+
+  if (presetName === "missing" && state.showMissingCommentsOnly) {
+    const previous = state.periodBeforeMissing || {
+      preset: "default",
+      startDate: "",
+      endDate: "",
+    };
+    state.activePeriodPreset = previous.preset;
+    state.startDate = previous.startDate;
+    state.endDate = previous.endDate;
+    state.showMissingCommentsOnly = false;
+    state.periodBeforeMissing = null;
+  } else if (presetName === "missing") {
+    state.periodBeforeMissing = {
+      preset: state.activePeriodPreset,
+      startDate: state.startDate,
+      endDate: state.endDate,
+    };
+    const range = getPresetRange("missing");
+    state.startDate = range.startDate;
+    state.endDate = range.endDate;
+    state.showMissingCommentsOnly = true;
+    state.selectedSubordinateId = "";
+  } else {
+    const range = getPresetRange(presetName);
+    state.activePeriodPreset = presetName;
+    state.startDate = range.startDate;
+    state.endDate = range.endDate;
+    state.showMissingCommentsOnly = false;
+    state.periodBeforeMissing = null;
+  }
+  state.legacyLoadPreset = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
   await loadData();
@@ -479,6 +772,15 @@ async function applyPreset(presetName) {
 }
 
 function getPresetRange(presetName, today = getTodayJST()) {
+  if (presetName === "month") {
+    return getCalendarMonthRange(today);
+  }
+  if (presetName === "week") {
+    return getMondayBasedWeekRange(today);
+  }
+  if (presetName === "day") {
+    return { startDate: today, endDate: today };
+  }
   if (presetName === "previousWorkday") {
     // 休日設定を含む判定はバックエンドで行い、loadData の応答で日付を確定する。
     return { startDate: "", endDate: "" };
@@ -821,35 +1123,64 @@ function renderDateShiftBand(direction) {
   if (!shouldShowDateShiftBands()) return "";
 
   const isPrev = direction === "prev";
-  const deltaDays = isPrev ? -1 : 1;
-  const targetStartDate =
-    state.startDate && offsetDateStr(state.startDate, deltaDays);
-  const targetEndDate = state.endDate && offsetDateStr(state.endDate, deltaDays);
+  const { startDate: targetStartDate, endDate: targetEndDate } =
+    getShiftedPeriodRange(isPrev ? -1 : 1);
   if (!targetStartDate || !targetEndDate) return "";
 
   const className = isPrev
     ? "date-shift-band band-top"
     : "date-shift-band band-bottom";
   const action = isPrev ? "shift-prev" : "shift-next";
-  const label = formatNavigationDateRange(targetStartDate, targetEndDate);
-  const accessibleLabel = `${isPrev ? "前" : "次"}の期間、${formatNavigationDateRangeDescription(
+  const directionLabel = getDateShiftDirectionLabel(isPrev);
+  const targetLabel = formatDateShiftTarget(targetStartDate, targetEndDate);
+  const accessibleLabel = `${directionLabel}、${formatNavigationDateRangeDescription(
     targetStartDate,
     targetEndDate,
   )}`;
   const icon = isPrev
     ? renderDateShiftIcon("up")
     : renderDateShiftIcon("down");
-  return `<button class="${className}" type="button" data-action="${action}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}"><span class="date-shift-label">${icon}<span>${escapeHtml(label)}</span></span></button>`;
+  return `<button class="${className}" type="button" data-action="${action}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}"><span class="date-shift-label">${icon}<span class="date-shift-text"><span class="date-shift-direction">${escapeHtml(directionLabel)}</span> <span class="date-shift-target">${escapeHtml(targetLabel)}</span><span class="date-shift-action">を表示</span></span></span></button>`;
 }
 
 function shouldShowDateShiftBands() {
-  if (state.showMissingCommentsOnly) return false;
-  return ![
-    "previousWeek",
-    "thisWeek",
-    "previousMonth",
-    "thisMonth",
-  ].includes(state.activePeriodPreset);
+  return (
+    !state.showMissingCommentsOnly && Boolean(state.startDate && state.endDate)
+  );
+}
+
+function getDateShiftDirectionLabel(isPrevious) {
+  if (state.activePeriodPreset === "month") {
+    return isPrevious ? "前月" : "翌月";
+  }
+  if (state.activePeriodPreset === "week") {
+    return isPrevious ? "前の週" : "次の週";
+  }
+  if (state.activePeriodPreset === "day") {
+    return isPrevious ? "前日" : "翌日";
+  }
+  return isPrevious ? "前の期間" : "次の期間";
+}
+
+function formatDateShiftTarget(startDate, endDate) {
+  if (state.activePeriodPreset === "month") {
+    const target = new Date(`${startDate}T00:00:00Z`);
+    const current = new Date(`${state.startDate}T00:00:00Z`);
+    const includeYear = target.getUTCFullYear() !== current.getUTCFullYear();
+    const yearLabel = includeYear ? `${target.getUTCFullYear()}年` : "";
+    return `${yearLabel}${target.getUTCMonth() + 1}月`;
+  }
+  const formattedStart = formatNavigationDateWithMonth(startDate);
+  if (startDate === endDate) return formattedStart;
+  return `${formattedStart}〜${formatNavigationDateWithMonth(endDate)}`;
+}
+
+function formatNavigationDateWithMonth(value) {
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  const weekday = weekdays[date.getUTCDay()];
+  return `${date.getUTCMonth() + 1}/${date.getUTCDate()}(${weekday})`;
 }
 
 function formatNavigationDateRange(startDate, endDate) {
@@ -886,9 +1217,12 @@ function renderDateShiftIcon(direction) {
 
 function focusPendingReplyEditor() {
   if (!state.pendingReplyFocusKey) return;
-  const target = document.querySelector(
-    `.editable-content.reply-content[data-reply-key="${state.pendingReplyFocusKey}"]`,
-  );
+  const replyKey = state.pendingReplyFocusKey;
+  const target = Array.from(
+    document.querySelectorAll(
+      ".editable-content.reply-content[data-reply-key]",
+    ),
+  ).find((element) => element.dataset.replyKey === replyKey);
   state.pendingReplyFocusKey = "";
   if (target instanceof HTMLElement) {
     startEditingTarget(target, { preventScroll: true });
@@ -930,7 +1264,10 @@ function createCommentRenderContext(row, cell, rowIndex, commentIndex) {
 }
 
 function renderBossCommentCell(context) {
-  return `<td class="comment-col"><div class="comment-stack">${renderBossCommentActions(context)}${renderBossCommentDisplay(context)}${renderBossReplyPreview(context)}</div></td>`;
+  const dirtyClass = isBossCommentDirty(context.row, context.cell)
+    ? " is-dirty-cell"
+    : "";
+  return `<td class="comment-col${dirtyClass}"><div class="comment-stack">${renderBossCommentActions(context)}${renderBossCommentDisplay(context)}${renderBossReplyPreview(context)}</div></td>`;
 }
 
 function renderBossCommentActions(context) {
@@ -1001,7 +1338,7 @@ function renderReplyEditor(context) {
     value: context.cell.reply || "",
     editable: context.canEditReply,
     dirty: isReplyDirty(context.row, context.cell),
-    extraAttributes: ` data-reply-key="${context.replyKey}"`,
+    dataAttributes: { "reply-key": context.replyKey },
   });
 }
 
@@ -1070,7 +1407,7 @@ function renderEditableCell({
   value,
   editable,
   dirty = false,
-  extraAttributes = "",
+  dataAttributes = {},
 }) {
   const display = displayText(value);
   const empty = isEmpty(value);
@@ -1087,7 +1424,13 @@ function renderEditableCell({
   const accessibilityAttributes = editable
     ? ' role="button" tabindex="0" title="クリックまたはEnterで編集"'
     : "";
-  return `<div class="${classes}" data-kind="${kind}" data-type="${type}" data-row="${rowIndex}" data-field="${field}" data-comment="${commentIndex}" data-editable="${editable ? "true" : "false"}"${accessibilityAttributes}${extraAttributes}>${escapeHtml(display)}</div>`;
+  const serializedDataAttributes = Object.entries(dataAttributes)
+    .map(([name, attributeValue]) => {
+      if (!/^[a-z][a-z0-9-]*$/.test(name)) return "";
+      return ` data-${name}="${escapeHtml(attributeValue)}"`;
+    })
+    .join("");
+  return `<div class="${classes}" data-kind="${kind}" data-type="${type}" data-row="${rowIndex}" data-field="${field}" data-comment="${commentIndex}" data-editable="${editable ? "true" : "false"}"${accessibilityAttributes}${serializedDataAttributes}>${escapeHtml(display)}</div>`;
 }
 
 function renderCellFrame(content, extraClass = "") {
@@ -1237,37 +1580,51 @@ function startEditingTarget(target, { preventScroll = false } = {}) {
   const pureHeight = getEditingBaseHeight(target);
   textarea.dataset.baseHeight = String(pureHeight);
   copyDataset(target, textarea);
-
-  textarea.addEventListener("input", (e) => {
-    autoResizeTextarea(textarea);
-    onCellInput(e);
-  });
+  installImeProtectedEditor(textarea);
   textarea.addEventListener("click", (innerEvent) =>
     innerEvent.stopPropagation(),
   );
   textarea.addEventListener("keydown", (keyEvent) => {
+    if (isImeCompositionActive(textarea, keyEvent)) {
+      queueImeDiagnostic("keydown_ignored", textarea, keyEvent, {
+        deferred: true,
+      });
+      return;
+    }
     if (keyEvent.key === "Escape") {
       keyEvent.preventDefault();
+      queueImeDiagnostic("keydown_handled", textarea, keyEvent, {
+        reason: "escape",
+      });
       finishEditing();
       return;
     }
     if (keyEvent.key === "Tab") {
       keyEvent.preventDefault();
+      queueImeDiagnostic("keydown_handled", textarea, keyEvent, {
+        reason: "tab",
+      });
       moveEditingFocus(keyEvent.shiftKey ? -1 : 1, "horizontal");
       return;
     }
     if (keyEvent.key === "Enter" && !(keyEvent.ctrlKey || keyEvent.metaKey)) {
       keyEvent.preventDefault();
+      queueImeDiagnostic("keydown_handled", textarea, keyEvent, {
+        reason: "enter",
+      });
       moveEditingFocus(1, "enter");
     }
   });
 
   target.innerHTML = "";
   target.appendChild(textarea);
+  const initialHeight = autoResizeTextarea(textarea);
+  queueImeDiagnostic("editor_open", textarea, null, {
+    reason: "initial",
+    heightPx: initialHeight,
+  });
   textarea.focus({ preventScroll });
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-  // DOM に追加後に高さをコンテンツに合わせる
-  autoResizeTextarea(textarea);
 }
 
 function moveEditingFocus(direction, axis) {
@@ -1327,8 +1684,10 @@ function getVisibleEditableTargets() {
 
 function autoResizeTextarea(textarea) {
   const baseHeight = Number(textarea.dataset.baseHeight || "40") || 40;
-  textarea.style.height = "0px";
-  textarea.style.height = `${Math.max(textarea.scrollHeight, baseHeight)}px`;
+  textarea.style.height = "auto";
+  const height = Math.max(textarea.scrollHeight, baseHeight);
+  textarea.style.height = `${height}px`;
+  return Math.round(height);
 }
 
 function getEditingBaseHeight(target) {
@@ -1363,6 +1722,17 @@ function finishEditing() {
   const editingElement = currentEditingElement;
   const textarea = editingElement.querySelector("textarea");
   if (textarea) {
+    const editorState = getImeEditorState(textarea);
+    const wasComposing = Boolean(editorState?.composing);
+    if (editorState && (editorState.pendingInput || wasComposing)) {
+      editorState.composing = false;
+      editorState.pendingInput = true;
+      applyCellEditorInput(textarea, "finish");
+    }
+    queueImeDiagnostic("editor_finish", textarea, null, {
+      reason: "finish",
+      deferred: wasComposing,
+    });
     const normalized = normalizeCellValue(textarea.value);
     editingElement.textContent = displayText(normalized);
     editingElement.classList.toggle("is-empty", isEmpty(normalized));
@@ -1390,6 +1760,7 @@ function finishEditing() {
     }
   }
   currentEditingElement = null;
+  scheduleImeDiagnosticFlush();
 }
 
 function rowHasReportData(row) {
@@ -1522,7 +1893,7 @@ function collapseEmptyHolidayRows(rows) {
 function getEmptyMessage() {
   if (state.activeView === "boss" && state.isSuperior) {
     if (state.showMissingCommentsOnly) {
-      return "条件に一致する未確認の日報はありません。";
+      return "未コメントの日報はありません。";
     }
     return "条件に一致する部下の日報はありません。";
   }
@@ -1564,6 +1935,9 @@ function markReportFieldDirtyUi(rowIndex, field) {
 
 function markCurrentEditingDirtyUi() {
   currentEditingElement?.classList.add("is-dirty");
+  if (currentEditingElement?.dataset.kind === "comment") {
+    currentEditingElement.closest("td")?.classList.add("is-dirty-cell");
+  }
 }
 
 function buildSaveResultMessage(result, userCount, commentCount) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import getpass
+import logging
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -13,7 +14,20 @@ from app.config import (
     to_int,
     validate_settings_paths,
 )
+from app.ime_diagnostics import ImeDiagnosticRecorder
 from app.repository import DailyReportRepository
+from app.security import (
+    PERIOD_PRESETS,
+    RequestValidationError,
+    validate_load_request,
+    validate_ime_diagnostic_request,
+    validate_save_request,
+    validate_settings_request,
+    validate_ui_state_request,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class DailyReportApi:
@@ -23,6 +37,7 @@ class DailyReportApi:
         self._settings = self._settings_manager.load()
         self._employee_id = self._get_employee_id()
         self._has_unsaved_changes = False
+        self._ime_diagnostic_recorder = ImeDiagnosticRecorder(base_dir)
 
     @property
     def employee_id(self) -> str:
@@ -36,6 +51,21 @@ class DailyReportApi:
         self._has_unsaved_changes = to_bool(value, False)
         return {"ok": True}
 
+    def record_ime_diagnostics(self, payload: Any) -> dict[str, Any]:
+        try:
+            validated = validate_ime_diagnostic_request(payload)
+            recorder = getattr(self, "_ime_diagnostic_recorder", None)
+            if recorder is None:
+                recorder = ImeDiagnosticRecorder(self._base_dir)
+                self._ime_diagnostic_recorder = recorder
+            recorded = recorder.append(validated["client"], validated["events"])
+            return {"ok": True, "recorded": recorded}
+        except RequestValidationError as exc:
+            return self._invalid_request(exc)
+        except Exception:
+            logger.exception("Failed to write IME diagnostics")
+            return {"ok": False, "message": "IME診断ログの保存に失敗しました。"}
+
     def get_initial_state(self) -> dict[str, Any]:
         return {
             "employee_id": self._employee_id,
@@ -43,8 +73,9 @@ class DailyReportApi:
             "settings_complete": self._settings.is_complete,
         }
 
-    def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def save_settings(self, payload: Any) -> dict[str, Any]:
         try:
+            payload = validate_settings_request(payload)
             candidate = replace(
                 self._settings,
                 users_dir=str(payload.get("users_dir", "")).strip(),
@@ -83,25 +114,19 @@ class DailyReportApi:
                 "message": "設定を保存しました。",
                 "settings": self._settings.to_dict(),
             }
-        except Exception as exc:
-            return {"ok": False, "message": f"設定保存に失敗しました: {exc}"}
+        except RequestValidationError as exc:
+            return self._invalid_request(exc)
+        except Exception:
+            logger.exception("Failed to save settings")
+            return {"ok": False, "message": "設定の保存に失敗しました。"}
 
-    def save_ui_state(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def save_ui_state(self, payload: Any) -> dict[str, Any]:
         try:
+            payload = validate_ui_state_request(payload)
             preset = str(payload.get("period_preset", "")).strip()
             if preset == "last7days":
                 preset = "default"
-            if preset not in {
-                "default",
-                "previousWorkday",
-                "today",
-                "previousWeek",
-                "thisWeek",
-                "previousMonth",
-                "thisMonth",
-                "missing",
-                "",
-            }:
+            if preset not in PERIOD_PRESETS:
                 preset = "default"
             self._settings = replace(
                 self._settings,
@@ -115,18 +140,21 @@ class DailyReportApi:
             )
             self._settings_manager.save(self._settings)
             return {"ok": True}
-        except Exception as exc:
-            return {"ok": False, "message": f"表示状態の保存に失敗しました: {exc}"}
+        except RequestValidationError as exc:
+            return self._invalid_request(exc)
+        except Exception:
+            logger.exception("Failed to save UI state")
+            return {"ok": False, "message": "表示状態の保存に失敗しました。"}
 
-    def load_data(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        if not self._settings.is_complete:
-            return {
-                "ok": False,
-                "message": "ネットワークFSパスが未設定です。",
-                "needs_settings": True,
-            }
+    def load_data(self, payload: Any = None) -> dict[str, Any]:
         try:
+            payload = validate_load_request(payload)
+            if not self._settings.is_complete:
+                return {
+                    "ok": False,
+                    "message": "ネットワークFSパスが未設定です。",
+                    "needs_settings": True,
+                }
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
             data = repo.load_view_data(
@@ -136,16 +164,19 @@ class DailyReportApi:
                 period_preset=payload.get("period_preset"),
             )
             return {"ok": True, "data": data}
-        except Exception as exc:
-            return {"ok": False, "message": f"現在利用できません: {exc}"}
+        except RequestValidationError as exc:
+            return self._invalid_request(exc)
+        except Exception:
+            logger.exception("Failed to load daily report data")
+            return {"ok": False, "message": "現在利用できません。"}
 
-    def save_updates(self, payload: dict[str, Any]) -> dict[str, Any]:
-        if not self._settings.is_complete:
-            return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
+    def save_updates(self, payload: Any) -> dict[str, Any]:
         try:
-            user_updates = payload.get("user_updates", []) or []
-            comment_updates = payload.get("comment_updates", []) or []
+            user_updates, comment_updates = validate_save_request(payload)
+            if not self._settings.is_complete:
+                return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
             repo = DailyReportRepository(self._settings, self._base_dir)
+            repo.validate_paths()
             result = repo.save_updates(self._employee_id, user_updates, comment_updates)
             targets = [value for value in result.values() if value.get("needed")]
             return {
@@ -153,12 +184,32 @@ class DailyReportApi:
                 "no_targets": not targets,
                 "result": result,
             }
-        except Exception as exc:
+        except RequestValidationError as exc:
+            return {
+                **self._invalid_request(exc),
+                "no_targets": False,
+            }
+        except PermissionError:
+            logger.warning("Rejected an unauthorized save request", exc_info=True)
             return {
                 "ok": False,
                 "no_targets": False,
-                "message": f"更新処理に失敗しました: {exc}",
+                "message": "この更新を保存する権限がありません。",
             }
+        except Exception:
+            logger.exception("Failed to save daily report updates")
+            return {
+                "ok": False,
+                "no_targets": False,
+                "message": "更新処理に失敗しました。",
+            }
+
+    @staticmethod
+    def _invalid_request(exc: RequestValidationError) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "message": f"入力内容を確認してください。{exc}",
+        }
 
     def _validated_font_size(self, value: Any) -> str:
         font_size = str(value or "standard").strip()

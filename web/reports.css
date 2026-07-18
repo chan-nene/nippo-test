@@ -241,16 +241,16 @@ html body .period-field-group:focus-within {
 
 html body .member-switch-button.is-active,
 html body .member-switch-button[aria-pressed="true"] {
-  border-color: var(--primary-border);
-  background: var(--primary-soft);
-  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
 }
 
 html body #showMissingCommentsButton.is-active,
 html body #showMissingCommentsButton[aria-pressed="true"] {
-  border-color: var(--primary-border);
-  background: var(--primary-soft);
-  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
 }
 
 html body #showMissingCommentsButton {
@@ -273,7 +273,9 @@ html body #showMissingCommentsButton:hover {
 }
 
 html body #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]):hover {
-  background: var(--primary-soft);
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
 }
 
 html body .missing-filter-label {
@@ -373,6 +375,12 @@ html body .member-switch-button:hover {
   border-color: var(--primary-border);
   background: var(--surface-hover);
   color: var(--primary);
+}
+
+html body .member-switch-button:is(.is-active, [aria-pressed="true"]):hover {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
 }
 
 /* Table */
@@ -600,8 +608,9 @@ html body.is-boss-view tr.boss-date-group-start td {
 }
 
 html body.is-boss-view th.self-comment-col {
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface-soft));
-  color: var(--primary);
+  background: var(--surface-active);
+  color: var(--text);
+  box-shadow: none;
 }
 
 html body .editable-content {
@@ -790,26 +799,20 @@ html body .empty {
 }
 
 html body .date-shift-band {
-  position: relative;
   display: inline-flex;
-  overflow: hidden;
   width: 100%;
   min-height: var(--date-navigation-height);
   height: var(--date-navigation-height);
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--primary-border) 72%, var(--border));
+  border: 1px solid var(--primary-border);
   border-radius: var(--radius-sm);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--primary-soft) 72%, var(--surface)),
-    color-mix(in srgb, var(--primary-soft) 42%, var(--surface))
-  );
+  background: var(--primary-soft);
   box-shadow: 0 1px 2px rgb(20 32 28 / 0.08);
-  color: var(--primary);
+  color: var(--text);
   padding: 0 14px;
   font-size: var(--font-13);
-  font-weight: 700;
+  font-weight: 400;
   text-align: center;
   cursor: pointer;
   transition:
@@ -817,23 +820,6 @@ html body .date-shift-band {
     background-color 0.14s ease,
     box-shadow 0.14s ease,
     color 0.14s ease;
-}
-
-html body .date-shift-band::after {
-  position: absolute;
-  right: 14px;
-  left: 14px;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--primary) 72%, transparent) 18%,
-    color-mix(in srgb, var(--primary) 72%, transparent) 82%,
-    transparent
-  );
-  content: "";
-  opacity: 0.62;
-  pointer-events: none;
 }
 
 html body .date-shift-label {
@@ -853,31 +839,20 @@ html body .date-shift-text {
   white-space: nowrap;
 }
 
-html body .date-shift-direction {
-  color: var(--primary);
-}
-
 html body .date-shift-target {
-  color: var(--text-strong);
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
 }
 
-html body .date-shift-action {
-  color: var(--text-muted);
-  font-weight: 600;
+html body :is(.date-shift-direction, .date-shift-target, .date-shift-action) {
+  color: inherit;
+  font-weight: inherit;
 }
 
 html body .date-shift-band:hover {
   border-color: var(--primary);
-  background: var(--primary-soft);
+  background: var(--surface-active);
   box-shadow: 0 2px 7px rgb(20 32 28 / 0.14);
-  color: var(--primary-hover);
-}
-
-html body .date-shift-band:hover .date-shift-icon {
-  background: var(--primary);
-  color: #fff;
+  color: var(--text-strong);
 }
 
 html body .date-shift-band:active {
@@ -896,19 +871,11 @@ html body .date-shift-band:focus-visible {
 }
 
 html body .date-shift-band.band-top {
-  margin: 0 0 6px;
-}
-
-html body .date-shift-band.band-top::after {
-  bottom: 0;
+  margin: 0 0 9px;
 }
 
 html body .date-shift-band.band-bottom {
-  margin: 6px 0 0;
-}
-
-html body .date-shift-band.band-bottom::after {
-  top: 0;
+  margin: 9px 0 0;
 }
 
 html body .date-shift-icon {
@@ -916,17 +883,14 @@ html body .date-shift-icon {
   height: 22px;
   flex: 0 0 22px;
   box-sizing: border-box;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  background: transparent;
   fill: none;
   padding: 4px;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2;
-  transition:
-    background-color 0.14s ease,
-    color 0.14s ease;
+  transition: color 0.14s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

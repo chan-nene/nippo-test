@@ -969,10 +969,8 @@ function renderTableHeader(context) {
 
 function renderSuperiorHeader(cell) {
   const isMe = cell.superior_employee_id === state.employeeId;
-  const label =
-    isMe && state.activeView === "boss" ? "自分のコメント" : cell.superior_name;
   const selfClass = isMe && state.activeView === "boss" ? " self-comment-col" : "";
-  return `<th class="comment-col${selfClass}">${escapeHtml(label)}</th>`;
+  return `<th class="comment-col${selfClass}">${escapeHtml(cell.superior_name)}</th>`;
 }
 
 function getVisibleComments(comments = []) {
@@ -1154,7 +1152,7 @@ function getDateShiftDirectionLabel(isPrevious) {
     return isPrevious ? "前月" : "翌月";
   }
   if (state.activePeriodPreset === "week") {
-    return isPrevious ? "前の週" : "次の週";
+    return isPrevious ? "前週" : "翌週";
   }
   if (state.activePeriodPreset === "day") {
     return isPrevious ? "前日" : "翌日";

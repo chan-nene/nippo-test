@@ -800,25 +800,25 @@ html body .empty {
 
 html body .date-shift-band {
   display: inline-flex;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
   min-height: var(--date-navigation-height);
   height: var(--date-navigation-height);
+  align-self: center;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--primary-border);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--primary-soft);
-  box-shadow: 0 1px 2px rgb(20 32 28 / 0.08);
-  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
   padding: 0 14px;
   font-size: var(--font-13);
   font-weight: 400;
   text-align: center;
   cursor: pointer;
   transition:
-    border-color 0.14s ease,
     background-color 0.14s ease,
-    box-shadow 0.14s ease,
     color 0.14s ease;
 }
 
@@ -849,15 +849,12 @@ html body :is(.date-shift-direction, .date-shift-target, .date-shift-action) {
 }
 
 html body .date-shift-band:hover {
-  border-color: var(--primary);
-  background: var(--surface-active);
-  box-shadow: 0 2px 7px rgb(20 32 28 / 0.14);
+  background: var(--surface-hover);
   color: var(--text-strong);
 }
 
 html body .date-shift-band:active {
   background: var(--surface-active);
-  box-shadow: inset 0 1px 2px rgb(20 32 28 / 0.14);
 }
 
 html body .date-shift-band:active .date-shift-label {
@@ -865,7 +862,8 @@ html body .date-shift-band:active .date-shift-label {
 }
 
 html body .date-shift-band:focus-visible {
-  border-color: var(--primary);
+  background: var(--surface-hover);
+  color: var(--text-strong);
   outline: 2px solid color-mix(in srgb, var(--primary) 48%, transparent);
   outline-offset: 1px;
 }
@@ -963,7 +961,6 @@ html body .table-content table {
 }
 
 html body .table-card > .date-shift-band {
-  width: 100%;
   flex: 0 0 auto;
 }
 

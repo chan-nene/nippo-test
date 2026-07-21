@@ -22,8 +22,8 @@ html body .toolbar-row {
 }
 
 html body .toolbar-heading-row {
-  min-height: 60px;
-  padding: 12px 14px 8px;
+  min-height: 48px;
+  padding: 6px 14px 4px;
   background: transparent;
 }
 
@@ -63,9 +63,8 @@ html body .view-label {
   display: inline-flex;
   min-width: 0;
   flex: 1 1 auto;
-  flex-direction: column;
-  gap: 3px;
-  justify-content: center;
+  align-items: center;
+  justify-content: flex-start;
   padding: 0;
 }
 
@@ -74,12 +73,6 @@ html body .view-label #pageTitle {
   font-size: var(--font-18);
   font-weight: 700;
   line-height: 1.15;
-}
-
-html body .page-description {
-  color: var(--text-muted);
-  font-size: var(--font-12);
-  line-height: 1.25;
 }
 
 html body .toolbar-button,
@@ -171,6 +164,7 @@ html body .period-control {
 
 html body .period-main-controls,
 html body .period-mode-control,
+html body .period-navigation,
 html body .missing-filter-group {
   display: flex;
   min-width: 0;
@@ -186,15 +180,63 @@ html body .period-main-controls {
 }
 
 html body .period-mode-control {
-  gap: 8px;
   flex: 0 0 auto;
 }
 
-html body .period-mode-label {
+html body .period-navigation {
+  height: calc(var(--control-height) + 4px);
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+  padding: 4px;
+}
+
+html body .period-shift-button {
+  display: inline-flex;
+  min-width: 94px;
+  height: calc(var(--control-height) - 6px);
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--text-muted);
+  padding: 0 9px;
   font-size: var(--font-12);
   font-weight: 700;
   white-space: nowrap;
+}
+
+html body .period-shift-button:hover {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgb(20 32 28 / 0.12);
+}
+
+html body .period-shift-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid color-mix(in srgb, var(--primary) 48%, transparent);
+  outline-offset: -2px;
+}
+
+html body .period-shift-button:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+html body .period-shift-button svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 html body .missing-filter-group {
@@ -322,21 +364,9 @@ html body .member-switch-bar {
   min-width: 0;
   flex: 0 0 auto;
   align-items: flex-start;
-  gap: 14px;
   border-bottom: 0;
   background: transparent;
   padding: 4px 14px 14px;
-}
-
-html body .member-switch-label {
-  min-width: 100px;
-  flex: 0 0 auto;
-  color: var(--text-muted);
-  padding: 8px 0;
-  font-size: var(--font-12);
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
 }
 
 html body .member-switch-list {
@@ -633,7 +663,7 @@ html body td:has(.editable-content.is-editable:hover) {
 
 html body td:has(.editable-content.is-editable:not(.is-editing):hover)::after {
   position: absolute;
-  z-index: 8;
+  z-index: 10;
   inset: 0;
   border-radius: 1px;
   box-shadow: inset 0 0 0 1px
@@ -675,6 +705,7 @@ html body .editing-textarea {
   background: var(--surface);
   color: var(--text);
   padding: var(--cell-padding-y) 10px;
+  font-weight: inherit;
   outline: none;
 }
 
@@ -694,6 +725,10 @@ html body .editable-content.is-dirty.is-editing .editing-textarea {
 html body td.is-dirty-cell .editable-content,
 html body td.is-dirty-cell .editing-textarea {
   background: transparent;
+}
+
+html body tr.holiday td.is-dirty-cell:not(.date-col) {
+  background: var(--dirty);
 }
 
 html body .comment-stack {
@@ -798,111 +833,6 @@ html body .empty {
   font-size: 13px;
 }
 
-html body .date-shift-band {
-  display: inline-flex;
-  width: fit-content;
-  max-width: 100%;
-  min-height: var(--date-navigation-height);
-  height: var(--date-navigation-height);
-  align-self: center;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-muted);
-  padding: 0 14px;
-  font-size: var(--font-13);
-  font-weight: 400;
-  text-align: center;
-  cursor: pointer;
-  transition:
-    background-color 0.14s ease,
-    color 0.14s ease;
-}
-
-html body .date-shift-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-width: 0;
-  line-height: 1;
-  transition: transform 0.08s ease;
-}
-
-html body .date-shift-text {
-  display: inline-flex;
-  min-width: 0;
-  align-items: baseline;
-  white-space: nowrap;
-}
-
-html body .date-shift-target {
-  font-variant-numeric: tabular-nums;
-}
-
-html body :is(.date-shift-direction, .date-shift-target, .date-shift-action) {
-  color: inherit;
-  font-weight: inherit;
-}
-
-html body .date-shift-band:hover {
-  background: var(--surface-hover);
-  color: var(--text-strong);
-}
-
-html body .date-shift-band:active {
-  background: var(--surface-active);
-}
-
-html body .date-shift-band:active .date-shift-label {
-  transform: translateY(1px);
-}
-
-html body .date-shift-band:focus-visible {
-  background: var(--surface-hover);
-  color: var(--text-strong);
-  outline: 2px solid color-mix(in srgb, var(--primary) 48%, transparent);
-  outline-offset: 1px;
-}
-
-html body .date-shift-band.band-top {
-  margin: 0 0 9px;
-}
-
-html body .date-shift-band.band-bottom {
-  margin: 9px 0 0;
-}
-
-html body .date-shift-icon {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  box-sizing: border-box;
-  background: transparent;
-  fill: none;
-  padding: 4px;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-  transition: color 0.14s ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html body .date-shift-band,
-  html body .date-shift-label,
-  html body .date-shift-icon {
-    transition: none;
-  }
-
-  html body .date-shift-band:active .date-shift-label {
-    transform: none;
-  }
-}
-
 /* Period modes */
 
 html body .period-presets {
@@ -945,7 +875,7 @@ html body .preset-button:disabled {
   opacity: 0.58;
 }
 
-/* Only the table scrolls; date navigation controls stay fixed to the viewport. */
+/* Only the table scrolls; filters and navigation stay fixed to the viewport. */
 
 html body .table-content {
   width: 100%;
@@ -958,10 +888,6 @@ html body.is-boss-view .table-content {
 
 html body .table-content table {
   width: 100%;
-}
-
-html body .table-card > .date-shift-band {
-  flex: 0 0 auto;
 }
 
 /* SVG icon system */
@@ -1010,11 +936,6 @@ html body .toolbar-button-icon svg.is-spinning {
     padding: 4px 12px 12px;
   }
 
-  html body .member-switch-label {
-    min-width: auto;
-    padding-inline: 0;
-  }
-
   html body .member-switch-list {
     overflow-x: auto;
     flex-wrap: nowrap;
@@ -1049,7 +970,8 @@ html body .toolbar-button-icon svg.is-spinning {
   }
 
   html body .period-control-container,
-  html body .period-mode-control {
+  html body .period-mode-control,
+  html body .period-navigation {
     width: 100%;
   }
 
@@ -1061,6 +983,10 @@ html body .toolbar-button-icon svg.is-spinning {
 
   html body .period-presets {
     flex: 1 1 auto;
+  }
+
+  html body .period-shift-button {
+    flex: 1 1 0;
   }
 
   html body .missing-filter-group {
@@ -1097,7 +1023,4 @@ html body .toolbar-button-icon svg.is-spinning {
     margin-left: 0;
   }
 
-  html body .date-shift-band {
-    justify-content: center;
-  }
 }

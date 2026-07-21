@@ -83,6 +83,9 @@ function bindEvents() {
     $(buttonId)?.addEventListener("click", () => applyPreset(presetName));
   });
 
+  $("periodPrevButton")?.addEventListener("click", () => shiftDateRange(-1));
+  $("periodNextButton")?.addEventListener("click", () => shiftDateRange(1));
+
   const btnMissingComments = $("showMissingCommentsButton");
   if (btnMissingComments) {
     btnMissingComments.addEventListener("click", () => applyPreset("missing"));
@@ -340,7 +343,7 @@ function updateThemeToggleButton() {
   if (!themeButton) return;
   const icon = themeButton.querySelector("svg");
   const title = state.darkMode ? "ライトモードに切替" : "ダークモードに切替";
-  themeButton.title = title;
+  themeButton.removeAttribute("title");
   themeButton.setAttribute("aria-label", title);
   themeButton.setAttribute("aria-pressed", String(state.darkMode));
   themeButton.classList.toggle("is-active", state.darkMode);
@@ -523,15 +526,9 @@ function updateViewChrome() {
   const isBossView = state.activeView === "boss" && state.isSuperior;
   const isSettingsView = state.activeView === "settings";
   const pageTitle = $("pageTitle");
-  const pageDescription = $("pageDescription");
 
   if (pageTitle) {
     pageTitle.textContent = isBossView ? "上司コメント" : "日報入力";
-  }
-  if (pageDescription) {
-    pageDescription.textContent = isBossView
-      ? "部下の日報を確認・コメント"
-      : "自分の日報を入力・確認";
   }
 
   $("dailyViewButton").classList.toggle(

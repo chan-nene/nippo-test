@@ -327,7 +327,7 @@ function syncMissingCommentCount() {
       : `、${todayScopeDescription}`;
   const description = `${statusDescription}${rangeDescription}`;
   button.setAttribute("aria-label", description);
-  button.title = description;
+  button.removeAttribute("title");
 }
 
 function syncPeriodPresets() {
@@ -358,6 +358,29 @@ function syncPeriodPresets() {
     );
     syncMissingCommentCount();
   }
+  syncPeriodShiftButtons();
+}
+
+function syncPeriodShiftButtons() {
+  [
+    ["periodPrevButton", -1],
+    ["periodNextButton", 1],
+  ].forEach(([buttonId, direction]) => {
+    const button = $(buttonId);
+    if (!button) return;
+    const isPrevious = direction < 0;
+    const label = getDateShiftDirectionLabel(isPrevious);
+    const labelElement = button.querySelector(".period-shift-label");
+    if (labelElement) labelElement.textContent = label;
+    const target = getShiftedPeriodRange(direction);
+    const hasTarget = Boolean(target.startDate && target.endDate);
+    const description = hasTarget
+      ? `${label}、${formatNavigationDateRangeDescription(target.startDate, target.endDate)}`
+      : `${label}へ移動`;
+    button.disabled = state.isBusy || state.showMissingCommentsOnly || !hasTarget;
+    button.setAttribute("aria-label", description);
+    button.removeAttribute("title");
+  });
 }
 
 function getChromeModel() {
@@ -513,6 +536,7 @@ async function loadData({
   state.legacyLoadPreset = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
+  syncPeriodPresets();
   if (preserveDirty) {
     reapplyDirtyEditsToRows();
   }
@@ -558,7 +582,7 @@ async function loadData({
       const familyName = getFamilyName(sub.name);
       btn.textContent =
         familyNameCounts.get(familyName) === 1 ? familyName : sub.name;
-      btn.title = sub.name;
+      btn.setAttribute("aria-label", sub.name);
       btn.setAttribute("aria-pressed", "false");
       container.appendChild(btn);
     });
@@ -862,8 +886,6 @@ function renderTable({ preserveScroll = false } = {}) {
   wrap.innerHTML = renderTableShell({
     header: renderTableHeader(context),
     body: renderReportRows(rows, context),
-    prevBand: renderDateShiftBand("prev"),
-    nextBand: renderDateShiftBand("next"),
     minWidth: getTableContentWidth(context),
   });
   restoreTableScrollState(wrap, scrollState);
@@ -939,8 +961,8 @@ function createTableRenderContext(rows) {
   };
 }
 
-function renderTableShell({ header, body, prevBand, nextBand, minWidth }) {
-  return `${prevBand}<div class="table-scroll"><div class="table-content" style="--table-content-width:${minWidth}px"><table>${header}<tbody>${body}</tbody></table></div></div>${nextBand}`;
+function renderTableShell({ header, body, minWidth }) {
+  return `<div class="table-scroll"><div class="table-content" style="--table-content-width:${minWidth}px"><table>${header}<tbody>${body}</tbody></table></div></div>`;
 }
 
 function getTableContentWidth(context) {
@@ -1117,36 +1139,6 @@ function renderCommentCells(row) {
     .join("");
 }
 
-function renderDateShiftBand(direction) {
-  if (!shouldShowDateShiftBands()) return "";
-
-  const isPrev = direction === "prev";
-  const { startDate: targetStartDate, endDate: targetEndDate } =
-    getShiftedPeriodRange(isPrev ? -1 : 1);
-  if (!targetStartDate || !targetEndDate) return "";
-
-  const className = isPrev
-    ? "date-shift-band band-top"
-    : "date-shift-band band-bottom";
-  const action = isPrev ? "shift-prev" : "shift-next";
-  const directionLabel = getDateShiftDirectionLabel(isPrev);
-  const targetLabel = formatDateShiftTarget(targetStartDate, targetEndDate);
-  const accessibleLabel = `${directionLabel}、${formatNavigationDateRangeDescription(
-    targetStartDate,
-    targetEndDate,
-  )}`;
-  const icon = isPrev
-    ? renderDateShiftIcon("up")
-    : renderDateShiftIcon("down");
-  return `<button class="${className}" type="button" data-action="${action}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}"><span class="date-shift-label">${icon}<span class="date-shift-text"><span class="date-shift-direction">${escapeHtml(directionLabel)}</span> <span class="date-shift-target">${escapeHtml(targetLabel)}</span><span class="date-shift-action">を表示</span></span></span></button>`;
-}
-
-function shouldShowDateShiftBands() {
-  return (
-    !state.showMissingCommentsOnly && Boolean(state.startDate && state.endDate)
-  );
-}
-
 function getDateShiftDirectionLabel(isPrevious) {
   if (state.activePeriodPreset === "month") {
     return isPrevious ? "前月" : "翌月";
@@ -1158,27 +1150,6 @@ function getDateShiftDirectionLabel(isPrevious) {
     return isPrevious ? "前日" : "翌日";
   }
   return isPrevious ? "前の期間" : "次の期間";
-}
-
-function formatDateShiftTarget(startDate, endDate) {
-  if (state.activePeriodPreset === "month") {
-    const target = new Date(`${startDate}T00:00:00Z`);
-    const current = new Date(`${state.startDate}T00:00:00Z`);
-    const includeYear = target.getUTCFullYear() !== current.getUTCFullYear();
-    const yearLabel = includeYear ? `${target.getUTCFullYear()}年` : "";
-    return `${yearLabel}${target.getUTCMonth() + 1}月`;
-  }
-  const formattedStart = formatNavigationDateWithMonth(startDate);
-  if (startDate === endDate) return formattedStart;
-  return `${formattedStart}〜${formatNavigationDateWithMonth(endDate)}`;
-}
-
-function formatNavigationDateWithMonth(value) {
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return String(value || "");
-  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-  const weekday = weekdays[date.getUTCDay()];
-  return `${date.getUTCMonth() + 1}/${date.getUTCDate()}(${weekday})`;
 }
 
 function formatNavigationDateRange(startDate, endDate) {
@@ -1204,13 +1175,6 @@ function formatNavigationDate(value, includeYearAndMonth) {
   const dayAndWeekday = `${date.getUTCDate()}(${weekday})`;
   if (!includeYearAndMonth) return dayAndWeekday;
   return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月${date.getUTCDate()}日（${weekday}）`;
-}
-
-function renderDateShiftIcon(direction) {
-  const isUp = direction === "up";
-  const chevron = isUp ? "M8 13l4-4 4 4" : "M8 11l4 4 4-4";
-  const lineY = isUp ? "6" : "18";
-  return `<svg class="date-shift-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 ${lineY}h12" /><path d="${chevron}" /></svg>`;
 }
 
 function focusPendingReplyEditor() {
@@ -1300,7 +1264,7 @@ function renderBossCommentEditor(context, editable) {
 
 function renderBossReplyPreview(context) {
   if (!context.hasReply) return "";
-  return `<div class="cell-frame boss-reply-preview" title="部下返信" aria-label="部下返信"><span class="boss-reply-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg></span><div class="boss-reply-text">${escapeHtml(displayText(context.cell.reply))}</div></div>`;
+  return `<div class="cell-frame boss-reply-preview" aria-label="部下返信"><span class="boss-reply-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg></span><div class="boss-reply-text">${escapeHtml(displayText(context.cell.reply))}</div></div>`;
 }
 
 function renderDailyCommentCell(context) {
@@ -1420,7 +1384,7 @@ function renderEditableCell({
     .filter(Boolean)
     .join(" ");
   const accessibilityAttributes = editable
-    ? ' role="button" tabindex="0" title="クリックまたはEnterで編集"'
+    ? ' role="button" tabindex="0"'
     : "";
   const serializedDataAttributes = Object.entries(dataAttributes)
     .map(([name, attributeValue]) => {
@@ -1450,16 +1414,6 @@ function isEmpty(value) {
 }
 
 function handleTableClick(event) {
-  const shiftPrev = event.target.closest('[data-action="shift-prev"]');
-  if (shiftPrev) {
-    shiftDateRange(-1);
-    return;
-  }
-  const shiftNext = event.target.closest('[data-action="shift-next"]');
-  if (shiftNext) {
-    shiftDateRange(1);
-    return;
-  }
   const signComment = event.target.closest('[data-action="sign-comment"]');
   if (signComment) {
     applyBossCommentSignature(signComment);
@@ -1602,15 +1556,8 @@ function startEditingTarget(target, { preventScroll = false } = {}) {
       queueImeDiagnostic("keydown_handled", textarea, keyEvent, {
         reason: "tab",
       });
-      moveEditingFocus(keyEvent.shiftKey ? -1 : 1, "horizontal");
+      moveEditingFocus(keyEvent.shiftKey ? -1 : 1);
       return;
-    }
-    if (keyEvent.key === "Enter" && !(keyEvent.ctrlKey || keyEvent.metaKey)) {
-      keyEvent.preventDefault();
-      queueImeDiagnostic("keydown_handled", textarea, keyEvent, {
-        reason: "enter",
-      });
-      moveEditingFocus(1, "enter");
     }
   });
 
@@ -1625,45 +1572,13 @@ function startEditingTarget(target, { preventScroll = false } = {}) {
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 }
 
-function moveEditingFocus(direction, axis) {
+function moveEditingFocus(direction) {
   if (!currentEditingElement?.querySelector("textarea")) return;
-  const nextTarget =
-    axis === "enter"
-      ? findEnterEditableTarget()
-      : findHorizontalEditableTarget(direction);
+  const nextTarget = findHorizontalEditableTarget(direction);
   finishEditing();
   if (nextTarget instanceof HTMLElement) {
     startEditingTarget(nextTarget);
   }
-}
-
-function findEnterEditableTarget() {
-  const current = currentEditingElement;
-  if (!(current instanceof HTMLElement)) return null;
-
-  const currentRow = current.closest("tr");
-  if (!(currentRow instanceof HTMLTableRowElement)) return null;
-
-  const sameRowTargets = getEditableTargetsInRow(currentRow);
-  const currentIndex = sameRowTargets.indexOf(current);
-  if (currentIndex >= 0 && sameRowTargets[currentIndex + 1]) {
-    return sameRowTargets[currentIndex + 1];
-  }
-
-  let nextRow = currentRow.nextElementSibling;
-  while (nextRow instanceof HTMLTableRowElement) {
-    const firstTarget = getEditableTargetsInRow(nextRow)[0];
-    if (firstTarget) return firstTarget;
-    nextRow = nextRow.nextElementSibling;
-  }
-
-  return null;
-}
-
-function getEditableTargetsInRow(row) {
-  return Array.from(
-    row.querySelectorAll('.editable-content[data-editable="true"]'),
-  ).filter((element) => element instanceof HTMLElement && element.offsetParent);
 }
 
 function findHorizontalEditableTarget(direction) {

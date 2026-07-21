@@ -47,11 +47,6 @@ html body .settings-header h2 {
   font-weight: 700;
 }
 
-html body .settings-description {
-  margin: 12px 0 16px;
-  color: var(--text-muted);
-}
-
 html body .settings-card label {
   display: grid;
   grid-template-columns: 260px minmax(260px, 1fr);
@@ -222,11 +217,6 @@ html body .color-theme-option-copy strong {
   white-space: nowrap;
 }
 
-html body .color-theme-option-copy small {
-  color: var(--text-muted);
-  font-size: var(--font-10);
-}
-
 html body .color-theme-option-check {
   display: inline-flex;
   width: 19px;
@@ -318,7 +308,6 @@ html body .default-range-heading {
 }
 
 html body .default-range-heading h3,
-html body .default-range-heading p,
 html body .default-range-preview {
   margin: 0;
 }
@@ -326,12 +315,6 @@ html body .default-range-preview {
 html body .default-range-heading h3 {
   color: var(--text-strong);
   font-size: var(--font-15);
-}
-
-html body .default-range-heading p {
-  margin-top: 3px;
-  color: var(--text-muted);
-  font-size: var(--font-12);
 }
 
 html body .default-range-values {

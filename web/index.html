@@ -72,8 +72,6 @@
           </svg>
         </span>
         <span class="title-bar-title">NIPPO</span>
-        <span class="title-bar-divider" aria-hidden="true"></span>
-        <span class="title-bar-context">Daily Operations</span>
       </div>
       <div class="title-bar-actions" aria-label="アプリ操作">
         <span class="current-user-display">
@@ -90,7 +88,6 @@
             id="fontSizeButton"
             class="header-icon-button font-size-button"
             type="button"
-            title="文字サイズを変更"
             aria-label="文字サイズを変更"
             aria-haspopup="true"
             aria-expanded="false"
@@ -112,7 +109,6 @@
           id="toggleThemeButton"
           class="header-icon-button"
           type="button"
-          title="ダークモードに切替"
           aria-label="ダークモードに切替"
           aria-pressed="false"
         >
@@ -201,9 +197,6 @@
               <div class="toolbar-row toolbar-heading-row">
                 <div class="view-label">
                   <span id="pageTitle">日報入力</span>
-                  <span id="pageDescription" class="page-description">
-                    自分の日報を入力し、コメントを確認
-                  </span>
                 </div>
 
                 <div class="toolbar-right">
@@ -235,8 +228,19 @@
               <div class="toolbar-row toolbar-filter-row">
                 <div class="toolbar-left toolbar-left-wide">
                   <div class="period-main-controls">
+                    <div class="period-control-container">
+                      <div class="period-control">
+                        <div class="period-field-group">
+                          <input id="startDate" type="date" aria-label="開始日" aria-describedby="periodError" />
+                        </div>
+                        <span class="period-separator">〜</span>
+                        <div class="period-field-group">
+                          <input id="endDate" type="date" aria-label="終了日" aria-describedby="periodError" />
+                        </div>
+                      </div>
+                      <div id="periodError" class="field-error period-error hidden" role="alert"></div>
+                    </div>
                     <div class="period-mode-control">
-                      <span class="period-mode-label">表示期間</span>
                       <div class="period-presets" role="group" aria-label="表示期間">
                         <button
                           id="presetMonthButton"
@@ -272,6 +276,16 @@
                         </button>
                       </div>
                     </div>
+                    <div class="period-navigation" role="group" aria-label="表示期間を移動">
+                      <button id="periodPrevButton" class="period-shift-button" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+                        <span class="period-shift-label">前の期間</span>
+                      </button>
+                      <button id="periodNextButton" class="period-shift-button" type="button">
+                        <span class="period-shift-label">次の期間</span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+                      </button>
+                    </div>
                     <div
                       id="missingCommentsFilterGroup"
                       class="missing-filter-group hidden"
@@ -287,25 +301,12 @@
                         <span class="missing-count-badge is-empty" aria-hidden="true">0日</span>
                       </button>
                     </div>
-                    <div class="period-control-container">
-                      <div class="period-control">
-                        <div class="period-field-group">
-                          <input id="startDate" type="date" aria-label="開始日" aria-describedby="periodError" />
-                        </div>
-                        <span class="period-separator">〜</span>
-                        <div class="period-field-group">
-                          <input id="endDate" type="date" aria-label="終了日" aria-describedby="periodError" />
-                        </div>
-                      </div>
-                      <div id="periodError" class="field-error period-error hidden" role="alert"></div>
-                    </div>
                   </div>
                 </div>
               </div>
             </div>
             <div class="member-switch-bar hidden" id="bossFilterArea">
-              <span class="member-switch-label">対象メンバー</span>
-              <div id="bossSearchControl" class="member-switch-list">
+              <div id="bossSearchControl" class="member-switch-list" role="group" aria-label="対象メンバー">
                 <button
                   id="showAllSubordinatesButton"
                   class="member-switch-button is-active"
@@ -323,13 +324,9 @@
               <div class="settings-header">
                 <h2>設定</h2>
               </div>
-              <p class="settings-description">
-                画面の表示と、日報データを読み書きする共有フォルダを設定します。
-              </p>
               <section class="appearance-setting" aria-labelledby="appearanceSettingTitle">
                 <div class="settings-section-heading">
                   <h3 id="appearanceSettingTitle">デザインカラー</h3>
-                  <p>ボタンや選択中の項目、ナビゲーションの基調色を選び、設定を保存します。</p>
                 </div>
                 <div id="colorThemeOptions" class="color-theme-options" role="group" aria-label="デザインカラー">
                   <button
@@ -344,7 +341,6 @@
                     </span>
                     <span class="color-theme-option-copy">
                       <strong>グリーン</strong>
-                      <small>標準</small>
                     </span>
                     <span class="color-theme-option-check" aria-hidden="true">✓</span>
                   </button>
@@ -360,7 +356,6 @@
                     </span>
                     <span class="color-theme-option-copy">
                       <strong>ブルー</strong>
-                      <small>青系</small>
                     </span>
                     <span class="color-theme-option-check" aria-hidden="true">✓</span>
                   </button>
@@ -376,7 +371,6 @@
                     </span>
                     <span class="color-theme-option-copy">
                       <strong>オレンジ</strong>
-                      <small>橙系</small>
                     </span>
                     <span class="color-theme-option-check" aria-hidden="true">✓</span>
                   </button>
@@ -401,7 +395,6 @@
                 <div class="default-range-heading">
                   <div>
                     <h3 id="defaultRangeTitle">標準の表示範囲</h3>
-                    <p>今日を基準に、前後何日分を表示するか設定します。</p>
                   </div>
                   <div class="default-range-values" aria-live="polite">
                     <span id="pastDaysValue">今日より1日前</span>

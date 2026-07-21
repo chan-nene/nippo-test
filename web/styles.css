@@ -44,8 +44,6 @@
   --error-bg: #fff0f1;
   --title-bar-bg: #17241f;
   --title-bar-border: #293832;
-  --title-bar-divider: #44564f;
-  --title-bar-context: #9fb1aa;
   --brand-mark-bg: #18a877;
   --sidebar-bg: #17241f;
   --sidebar-bg-deep: #0e1915;
@@ -64,7 +62,6 @@
   --compact-control-height: 28px;
   --cell-padding-y: 9px;
   --badge-height: 17px;
-  --date-navigation-height: 34px;
   --range-today-height: 58px;
   --settings-padding: 18px;
   --shadow-popover: 0 10px 28px rgb(15 23 42 / 0.16);
@@ -80,8 +77,6 @@ html body[data-color-theme="blue"] {
   --missing-badge-clear-bg: #3f675d;
   --title-bar-bg: #18263a;
   --title-bar-border: #2b3b52;
-  --title-bar-divider: #465a73;
-  --title-bar-context: #a8b7c9;
   --brand-mark-bg: #2f7ebf;
   --sidebar-bg: #17263b;
   --sidebar-bg-deep: #0e1929;
@@ -98,8 +93,6 @@ html body[data-color-theme="orange"] {
   --missing-badge-clear-bg: #3f675d;
   --title-bar-bg: #2d211b;
   --title-bar-border: #493329;
-  --title-bar-divider: #655044;
-  --title-bar-context: #c1aea3;
   --brand-mark-bg: #df6427;
   --sidebar-bg: #2c211b;
   --sidebar-bg-deep: #1a130f;
@@ -119,7 +112,6 @@ html body[data-font-size="large"] {
   --compact-control-height: 34px;
   --cell-padding-y: 10px;
   --badge-height: 20px;
-  --date-navigation-height: 40px;
   --range-today-height: 64px;
   --settings-padding: 20px;
 }
@@ -138,7 +130,6 @@ html body[data-font-size="xlarge"] {
   --compact-control-height: 38px;
   --cell-padding-y: 11px;
   --badge-height: 23px;
-  --date-navigation-height: 44px;
   --range-today-height: 70px;
   --settings-padding: 22px;
 }
@@ -177,8 +168,6 @@ html body.is-dark-mode {
   --error-bg: #402126;
   --title-bar-bg: #111613;
   --title-bar-border: #353d39;
-  --title-bar-divider: #394740;
-  --title-bar-context: #a2b0aa;
   --brand-mark-bg: #229a6f;
   --sidebar-bg: #0d110f;
   --sidebar-bg-deep: #080b09;
@@ -209,8 +198,6 @@ html body.is-dark-mode[data-color-theme="blue"] {
   --primary-border: #3d6d96;
   --title-bar-bg: #111a27;
   --title-bar-border: #2f3d50;
-  --title-bar-divider: #3e5068;
-  --title-bar-context: #a9b7c8;
   --brand-mark-bg: #3b82c4;
   --sidebar-bg: #101b2a;
   --sidebar-bg-deep: #0a111c;
@@ -239,8 +226,6 @@ html body.is-dark-mode[data-color-theme="orange"] {
   --missing-badge-pending-bg: #2d638e;
   --title-bar-bg: #241811;
   --title-bar-border: #483126;
-  --title-bar-divider: #684b3d;
-  --title-bar-context: #c5afa4;
   --brand-mark-bg: #d56225;
   --sidebar-bg: #211711;
   --sidebar-bg-deep: #130d09;
@@ -341,18 +326,6 @@ html body .title-bar-title {
   letter-spacing: 0.08em;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-html body .title-bar-divider {
-  width: 1px;
-  height: 18px;
-  background: var(--title-bar-divider);
-}
-
-html body .title-bar-context {
-  color: var(--title-bar-context);
-  font-size: 12px;
-  font-weight: 600;
 }
 
 html body .brand-mark {
@@ -804,10 +777,8 @@ html body:is([data-font-size="large"], [data-font-size="xlarge"])
 
 html body:is([data-font-size="large"], [data-font-size="xlarge"])
   :is(
-    .title-bar-context,
-    .page-description,
     .date-weekday,
-    .date-shift-band,
+    .period-shift-button,
     .preset-button,
     .boss-reply-icon
   ) {
@@ -886,8 +857,4 @@ html body :is(
     padding: 8px;
   }
 
-  html body .title-bar-context,
-  html body .title-bar-divider {
-    display: none;
-  }
 }

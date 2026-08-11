@@ -15,15 +15,18 @@ from app.config import (
     validate_settings_paths,
 )
 from app.ime_diagnostics import ImeDiagnosticRecorder
-from app.repository import DailyReportRepository
+from app.repository import CommonMasterConflictError, DailyReportRepository
 from app.security import (
     PERIOD_PRESETS,
     RequestValidationError,
+    validate_administration_save_request,
+    validate_common_master_save_request,
     validate_load_request,
     validate_ime_diagnostic_request,
     validate_save_request,
     validate_settings_request,
     validate_ui_state_request,
+    validate_user_administration_save_request,
 )
 
 
@@ -170,6 +173,98 @@ class DailyReportApi:
             logger.exception("Failed to load daily report data")
             return {"ok": False, "message": "現在利用できません。"}
 
+    def load_common_masters(self) -> dict[str, Any]:
+        try:
+            if not self._settings.is_complete:
+                return {
+                    "ok": False,
+                    "message": "ネットワークFSパスが未設定です。",
+                    "needs_settings": True,
+                }
+            repo = DailyReportRepository(self._settings, self._base_dir)
+            repo.validate_paths()
+            data = repo.load_common_masters()
+            return {
+                "ok": True,
+                "data": data,
+                "revisions": repo.get_common_master_revisions(),
+                "migration_required": {
+                    "user_master": repo.legacy_rank_migration_required
+                },
+            }
+        except Exception:
+            logger.exception("Failed to load common masters")
+            return {"ok": False, "message": "共通マスターを読み込めませんでした。"}
+
+    def save_common_master(self, payload: Any) -> dict[str, Any]:
+        try:
+            master, rows, revision = validate_common_master_save_request(payload)
+            if master != "calendar":
+                raise RequestValidationError(
+                    "ユーザー情報はユーザー管理画面から保存してください。"
+                )
+            if not self._settings.is_complete:
+                return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
+            repo = DailyReportRepository(self._settings, self._base_dir)
+            repo.validate_paths()
+            new_revision = repo.save_common_master(
+                master, rows, expected_revision=revision
+            )
+            return {
+                "ok": True,
+                "message": "共通マスターを保存しました。",
+                "master": master,
+                "revision": new_revision,
+            }
+        except CommonMasterConflictError:
+            return {
+                "ok": False,
+                "conflict": True,
+                "message": "別のユーザーが更新しています。再読み込みしてから修正してください。",
+            }
+        except RequestValidationError as exc:
+            return self._invalid_request(exc)
+        except Exception:
+            logger.exception("Failed to save common master")
+            return {"ok": False, "message": "共通マスターの保存に失敗しました。"}
+
+    def save_user_administration(self, payload: Any) -> dict[str, Any]:
+        try:
+            if isinstance(payload, dict) and "teams" in payload:
+                teams, users, relationships, revisions = (
+                    validate_administration_save_request(payload)
+                )
+            else:
+                users, relationships, revisions = (
+                    validate_user_administration_save_request(payload)
+                )
+                teams = None
+            if not self._settings.is_complete:
+                return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
+            repo = DailyReportRepository(self._settings, self._base_dir)
+            repo.validate_paths()
+            new_revisions = (
+                repo.save_administration(teams, users, relationships, revisions)
+                if teams is not None
+                else repo.save_user_administration(users, relationships, revisions)
+            )
+            return {
+                "ok": True,
+                "message": "組織・ユーザー情報を保存しました。",
+                "revisions": new_revisions,
+            }
+        except CommonMasterConflictError:
+            return {
+                "ok": False,
+                "conflict": True,
+                "message": "別のユーザーが更新しています。再読み込みしてから修正してください。",
+            }
+        except RequestValidationError as exc:
+            return self._invalid_request(exc)
+        except Exception:
+            logger.exception("Failed to save user administration")
+            return {"ok": False, "message": "ユーザー管理データの保存に失敗しました。"}
+
     def save_updates(self, payload: Any) -> dict[str, Any]:
         try:
             user_updates, comment_updates = validate_save_request(payload)
@@ -212,11 +307,11 @@ class DailyReportApi:
         }
 
     def _validated_font_size(self, value: Any) -> str:
-        font_size = str(value or "standard").strip()
+        font_size = str(value or "large").strip()
         return (
             font_size
-            if font_size in {"standard", "large", "xlarge"}
-            else "standard"
+            if font_size in {"compact", "standard", "medium", "large", "xlarge"}
+            else "large"
         )
 
     def _get_employee_id(self) -> str:

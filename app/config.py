@@ -48,7 +48,7 @@ class AppSettings:
     ui_period_preset: str = "default"
     ui_start_date: str = ""
     ui_end_date: str = ""
-    ui_font_size: str = "standard"
+    ui_font_size: str = "large"
     ui_color_theme: str = "green"
 
     @property

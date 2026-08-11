@@ -14,6 +14,30 @@ MAX_TEXT_LENGTH = 20_000
 MAX_EMPLOYEE_ID_LENGTH = 128
 MAX_PATH_LENGTH = 4_096
 MAX_IME_DIAGNOSTIC_EVENTS = 200
+MAX_COMMON_MASTER_ROWS = 20_000
+MAX_COMMON_FIELD_LENGTH = 20_000
+
+COMMON_MASTER_COLUMNS = {
+    "user_master": (
+        "employee_id",
+        "display_name",
+        "superior_rank",
+        "small_team_id",
+        "display_order",
+    ),
+    "team_master": (
+        "team_id",
+        "team_name",
+        "team_level",
+        "parent_team_id",
+        "sort_order",
+        "is_active",
+    ),
+    "superior_config": ("superior_employee_id", "subordinate_employee_id"),
+    "calendar": ("date", "is_holiday", "description"),
+}
+
+TEAM_LEVELS = frozenset({"large", "medium", "small"})
 
 IME_DIAGNOSTIC_EVENT_NAMES = frozenset(
     {
@@ -139,6 +163,252 @@ def validate_save_request(
     return user_updates, comment_updates
 
 
+def validate_common_master_save_request(
+    payload: Any,
+) -> tuple[str, list[dict[str, str]], str]:
+    source = require_request_mapping(payload, "共通マスター")
+    _reject_unknown_keys(source, {"master", "rows", "revision"})
+    master = source.get("master")
+    if not isinstance(master, str) or master not in COMMON_MASTER_COLUMNS:
+        raise RequestValidationError("共通マスターの種類が不正です。")
+
+    row_values = source.get("rows")
+    if not isinstance(row_values, list):
+        raise RequestValidationError("共通マスターの行データが不正です。")
+    if len(row_values) > MAX_COMMON_MASTER_ROWS:
+        raise RequestValidationError("共通マスターの件数が多すぎます。")
+
+    columns = COMMON_MASTER_COLUMNS[master]
+    rows: list[dict[str, str]] = []
+    for index, value in enumerate(row_values):
+        row_source = require_request_mapping(value, f"{index + 1}行目")
+        _reject_unknown_keys(row_source, set(columns))
+        row = {
+            column: _bounded_string(
+                row_source.get(column, ""),
+                f"{index + 1}行目の{column}",
+                MAX_COMMON_FIELD_LENGTH,
+            ).strip()
+            for column in columns
+        }
+        _validate_common_master_row(master, row, index)
+        rows.append(row)
+
+    key_columns = {
+        "user_master": ("employee_id",),
+        "team_master": ("team_id",),
+        "superior_config": ("superior_employee_id", "subordinate_employee_id"),
+        "calendar": ("date",),
+    }[master]
+    _reject_duplicate_values(
+        [tuple(row[column] for column in key_columns) for row in rows],
+        "同じキーを持つ行が重複しています。",
+    )
+    if master == "team_master":
+        _validate_team_hierarchy(rows)
+    revision = _bounded_string(source.get("revision", ""), "データの版", 128)
+    if revision and revision != "missing" and not re.fullmatch(r"[0-9a-f]{64}", revision):
+        raise RequestValidationError("データの版が不正です。")
+    return master, rows, revision
+
+
+def validate_administration_save_request(
+    payload: Any,
+) -> tuple[
+    list[dict[str, str]],
+    list[dict[str, str]],
+    list[dict[str, str]],
+    dict[str, str],
+]:
+    source = require_request_mapping(payload, "組織・ユーザー管理")
+    _reject_unknown_keys(
+        source, {"teams", "users", "relationships", "revisions"}
+    )
+    revisions_source = require_request_mapping(
+        source.get("revisions", {}), "データの版"
+    )
+    _reject_unknown_keys(
+        revisions_source, {"team_master", "user_master", "superior_config"}
+    )
+
+    _, teams, team_revision = validate_common_master_save_request(
+        {
+            "master": "team_master",
+            "rows": source.get("teams", []),
+            "revision": revisions_source.get("team_master", ""),
+        }
+    )
+    users, relationships, user_revisions = (
+        validate_user_administration_save_request(
+            {
+                "users": source.get("users"),
+                "relationships": source.get("relationships"),
+                "revisions": {
+                    "user_master": revisions_source.get("user_master", ""),
+                    "superior_config": revisions_source.get(
+                        "superior_config", ""
+                    ),
+                },
+            }
+        )
+    )
+
+    teams_by_id = {row["team_id"]: row for row in teams}
+    for index, user in enumerate(users):
+        small_team_id = user["small_team_id"]
+        if not small_team_id:
+            continue
+        team = teams_by_id.get(small_team_id)
+        if team is None:
+            raise RequestValidationError(
+                f"{index + 1}人目の所属小チームがチームマスターにありません。"
+            )
+        if team["team_level"] != "small":
+            raise RequestValidationError(
+                f"{index + 1}人目の所属先には小チームを指定してください。"
+            )
+        if team["is_active"] != "1":
+            raise RequestValidationError(
+                f"{index + 1}人目の所属先には有効な小チームを指定してください。"
+            )
+
+    return (
+        teams,
+        users,
+        relationships,
+        {"team_master": team_revision, **user_revisions},
+    )
+
+
+def validate_user_administration_save_request(
+    payload: Any,
+) -> tuple[list[dict[str, str]], list[dict[str, str]], dict[str, str]]:
+    source = require_request_mapping(payload, "ユーザー管理")
+    _reject_unknown_keys(source, {"users", "relationships", "revisions"})
+    revisions_source = require_request_mapping(
+        source.get("revisions", {}), "データの版"
+    )
+    _reject_unknown_keys(revisions_source, {"user_master", "superior_config"})
+
+    _, users, user_revision = validate_common_master_save_request(
+        {
+            "master": "user_master",
+            "rows": source.get("users"),
+            "revision": revisions_source.get("user_master", ""),
+        }
+    )
+    _, relationships, relationship_revision = validate_common_master_save_request(
+        {
+            "master": "superior_config",
+            "rows": source.get("relationships"),
+            "revision": revisions_source.get("superior_config", ""),
+        }
+    )
+
+    users_by_id = {row["employee_id"]: row for row in users}
+    supervisors_with_subordinates: set[str] = set()
+    for index, relationship in enumerate(relationships):
+        superior_id = relationship["superior_employee_id"]
+        subordinate_id = relationship["subordinate_employee_id"]
+        if superior_id not in users_by_id or subordinate_id not in users_by_id:
+            raise RequestValidationError(
+                f"{index + 1}件目の担当関係に未登録の社員IDが含まれています。"
+            )
+        if superior_id == subordinate_id:
+            raise RequestValidationError("自分自身を担当部下には設定できません。")
+        supervisors_with_subordinates.add(superior_id)
+
+    missing_rank = [
+        users_by_id[employee_id]["display_name"] or employee_id
+        for employee_id in supervisors_with_subordinates
+        if not users_by_id[employee_id]["superior_rank"]
+    ]
+    if missing_rank:
+        raise RequestValidationError(
+            f"{missing_rank[0]}は担当部下がいるため、上司ランクを入力してください。"
+        )
+
+    return (
+        users,
+        relationships,
+        {
+            "user_master": user_revision,
+            "superior_config": relationship_revision,
+        },
+    )
+
+
+def _validate_common_master_row(
+    master: str, row: dict[str, str], index: int
+) -> None:
+    label = f"{index + 1}行目"
+    employee_columns = {
+        "user_master": ("employee_id",),
+        "superior_config": ("superior_employee_id", "subordinate_employee_id"),
+    }.get(master, ())
+    for column in employee_columns:
+        try:
+            validate_employee_id(row[column], f"{label}の社員ID")
+        except ValueError as exc:
+            raise RequestValidationError(str(exc)) from exc
+
+    if master == "user_master" and not row["display_name"]:
+        raise RequestValidationError(f"{label}の表示名を入力してください。")
+    if master == "user_master":
+        rank = row["superior_rank"]
+        if rank and (not rank.isdigit() or not 0 <= int(rank) <= 9999):
+            raise RequestValidationError(f"{label}の上司ランクが不正です。")
+        display_order = row["display_order"]
+        if display_order and (
+            not display_order.isdigit() or not 0 <= int(display_order) <= 999999
+        ):
+            raise RequestValidationError(f"{label}の表示順が不正です。")
+    if master == "team_master":
+        if not row["team_id"] or not row["team_name"]:
+            raise RequestValidationError(f"{label}のチームIDと名称を入力してください。")
+        if row["team_level"] not in TEAM_LEVELS:
+            raise RequestValidationError(f"{label}のチーム階層が不正です。")
+        sort_order = row["sort_order"]
+        if sort_order and (
+            not sort_order.isdigit() or not 0 <= int(sort_order) <= 999999
+        ):
+            raise RequestValidationError(f"{label}の表示順が不正です。")
+        if row["is_active"] not in {"0", "1"}:
+            raise RequestValidationError(f"{label}の有効区分が不正です。")
+    if master == "calendar":
+        _required_iso_date(row["date"], f"{label}の日付")
+        if row["is_holiday"] not in {"0", "1"}:
+            raise RequestValidationError(f"{label}の休日区分が不正です。")
+
+
+def _validate_team_hierarchy(rows: list[dict[str, str]]) -> None:
+    teams = {row["team_id"]: row for row in rows}
+    expected_parent_level = {"medium": "large", "small": "medium"}
+    for row in rows:
+        team_id = row["team_id"]
+        level = row["team_level"]
+        parent_id = row["parent_team_id"]
+        if level == "large":
+            if parent_id:
+                raise RequestValidationError(
+                    f"大チーム「{team_id}」には親チームを設定できません。"
+                )
+            continue
+        if not parent_id:
+            raise RequestValidationError(
+                f"チーム「{team_id}」の親チームを入力してください。"
+            )
+        parent = teams.get(parent_id)
+        if parent is None:
+            raise RequestValidationError(
+                f"チーム「{team_id}」の親チームが見つかりません。"
+            )
+        if parent["team_level"] != expected_parent_level[level]:
+            raise RequestValidationError(
+                f"チーム「{team_id}」の親チーム階層が不正です。"
+            )
+
+
 def validate_employee_id(value: Any, label: str = "社員ID") -> str:
     if not isinstance(value, str):
         raise ValueError(f"{label}が不正です。")
@@ -227,9 +497,11 @@ def validate_ui_state_request(payload: Any) -> Mapping[str, Any]:
     )
     if "sidebar_open" in source and not isinstance(source["sidebar_open"], bool):
         raise RequestValidationError("サイドバーの表示状態が不正です。")
-    font_size = source.get("font_size", "standard")
+    font_size = source.get("font_size", "large")
     if not isinstance(font_size, str) or font_size not in {
+        "compact",
         "standard",
+        "medium",
         "large",
         "xlarge",
     }:

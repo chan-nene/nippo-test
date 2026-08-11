@@ -123,7 +123,6 @@ function getSettingsPayload() {
     missing_comment_start_date: $("missingCommentStartDate").value,
     include_today_in_missing_comments: $("includeTodayInMissingComments").checked,
     comment_signature: $("commentSignature").value,
-    ui_color_theme: state.colorTheme,
   };
 }
 
@@ -158,9 +157,6 @@ async function saveSettings() {
         payload.include_today_in_missing_comments,
     );
     state.commentSignature = result.settings?.comment_signature || "";
-    setColorTheme(
-      result.settings?.ui_color_theme ?? payload.ui_color_theme,
-    );
     showSettings(false);
     await loadData();
     persistUiState();

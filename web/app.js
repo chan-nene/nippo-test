@@ -3,9 +3,11 @@ const state = {
   employeeId: "",
   displayName: "",
   isSuperior: false,
-  activeView: "daily",
-  lastReportView: "daily",
+  activeView: "reports",
   hasInitializedReportView: false,
+  memberScope: "all",
+  viewableMembers: [],
+  currentTeam: [],
   selectedSubordinateId: "",
   expandedReplies: new Set(),
   pendingReplyFocusKey: "",
@@ -27,9 +29,7 @@ const state = {
   missingCommentRangeStart: "",
   missingCommentRangeEnd: "",
   commentSignature: "",
-  darkMode: false,
-  fontSize: "standard",
-  colorTheme: "green",
+  fontSize: "large",
 };
 
 let currentEditingElement = null;
@@ -40,7 +40,6 @@ const toastState = {
   fadeTimer: null,
 };
 const actionButtonSignatures = new Map();
-const COLOR_THEMES = ["green", "blue", "orange"];
 const PERIOD_MODES = ["month", "week", "day", "default"];
 const LEGACY_PERIOD_MODE_MAP = Object.freeze({
   last7days: "default",
@@ -58,16 +57,13 @@ function bindEvents() {
   $("saveSettingsButton").addEventListener("click", saveSettings);
   $("refreshButton").addEventListener("click", refreshData);
   $("saveButton").addEventListener("click", saveUpdates);
+  $("dismissToastButton").addEventListener("click", dismissToast);
   $("openSettingsButton").addEventListener("click", () => switchView("settings"));
-  $("toggleThemeButton").addEventListener("click", toggleTheme);
+  $("adminViewButton").addEventListener("click", () => switchView("admin"));
   $("fontSizeButton").addEventListener("click", toggleFontSizeMenu);
   $("fontSizeMenu").addEventListener("click", (event) => {
     const button = event.target.closest("[data-font-size]");
     if (button) setFontSize(button.dataset.fontSize);
-  });
-  $("colorThemeOptions")?.addEventListener("click", (event) => {
-    const button = event.target.closest(".color-theme-option[data-color-theme]");
-    if (button) setColorTheme(button.dataset.colorTheme);
   });
   $("defaultStartOffsetDays").addEventListener("input", updateDefaultRangePreview);
   $("defaultEndOffsetDays").addEventListener("input", updateDefaultRangePreview);
@@ -91,11 +87,12 @@ function bindEvents() {
     btnMissingComments.addEventListener("click", () => applyPreset("missing"));
   }
 
-  $("showAllSubordinatesButton").addEventListener(
-    "click",
-    clearSubordinateFilters,
-  );
   $("bossSearchControl").addEventListener("click", (e) => {
+    const scopeButton = e.target.closest("[data-member-scope]");
+    if (scopeButton) {
+      setMemberScope(scopeButton.dataset.memberScope);
+      return;
+    }
     const tag = e.target.closest(".member-switch-button[data-id]");
     if (tag) toggleSubordinateFilter(tag.dataset.id);
   });
@@ -114,8 +111,8 @@ function bindEvents() {
   $("tableWrap").addEventListener("click", handleTableClick);
   $("tableWrap").addEventListener("keydown", handleTableKeydown);
   document.addEventListener("keydown", handleGlobalShortcut);
-  $("dailyViewButton").addEventListener("click", () => switchView("daily"));
-  $("bossViewButton").addEventListener("click", () => switchView("boss"));
+  $("dailyViewButton").addEventListener("click", () => switchView("reports"));
+  window.adminMasters?.initialize();
   window.addEventListener("beforeunload", handleBeforeUnload);
   window.addEventListener("resize", positionToast);
 
@@ -168,20 +165,17 @@ function restoreUiState(settings) {
     state.startDate = hasUsableCustomRange ? range.startDate : "";
     state.endDate = hasUsableCustomRange ? range.endDate : "";
   }
-  state.fontSize = ["standard", "large", "xlarge"].includes(
+  state.fontSize = ["compact", "standard", "medium", "large", "xlarge"].includes(
     settings.ui_font_size,
   )
     ? settings.ui_font_size
-    : "standard";
-  state.colorTheme = normalizeColorTheme(settings.ui_color_theme);
-
+    : "large";
   const sidebar = $("sidebar");
   const isSidebarOpen = settings.ui_sidebar_open !== false;
   sidebar.classList.toggle("is-open", isSidebarOpen);
   updateSidebarToggleButton(isSidebarOpen);
   syncPeriodPresets();
   applyFontSize();
-  applyTheme();
 }
 
 function persistUiState() {
@@ -266,11 +260,6 @@ function offsetDateStr(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
-function toggleTheme() {
-  state.darkMode = !state.darkMode;
-  applyTheme();
-}
-
 function toggleFontSizeMenu() {
   const menu = $("fontSizeMenu");
   const willOpen = menu.classList.contains("hidden");
@@ -284,35 +273,16 @@ function closeFontSizeMenu() {
 }
 
 function setFontSize(fontSize) {
-  if (!["standard", "large", "xlarge"].includes(fontSize)) return;
+  if (!["compact", "standard", "medium", "large", "xlarge"].includes(fontSize)) return;
   state.fontSize = fontSize;
   applyFontSize();
   closeFontSizeMenu();
   persistUiState();
 }
 
-function normalizeColorTheme(colorTheme) {
-  return COLOR_THEMES.includes(colorTheme) ? colorTheme : "green";
-}
-
-function setColorTheme(colorTheme) {
-  state.colorTheme = normalizeColorTheme(colorTheme);
-  applyTheme();
-}
-
-function syncColorThemeOptions() {
-  $("colorThemeOptions")
-    ?.querySelectorAll("[data-color-theme]")
-    .forEach((button) => {
-      const isSelected = button.dataset.colorTheme === state.colorTheme;
-      button.classList.toggle("is-selected", isSelected);
-      button.setAttribute("aria-pressed", String(isSelected));
-    });
-}
-
 function applyFontSize() {
   document.body.dataset.fontSize = state.fontSize;
-  $("fontSizeButton").classList.toggle("is-active", state.fontSize !== "standard");
+  $("fontSizeButton").classList.remove("is-active");
   $("fontSizeMenu")
     .querySelectorAll("[data-font-size]")
     .forEach((button) => {
@@ -320,38 +290,6 @@ function applyFontSize() {
       button.classList.toggle("is-active", isActive);
       button.setAttribute("aria-pressed", String(isActive));
     });
-}
-
-function applyTheme() {
-  document.body.classList.add("is-theme-switching");
-  document.body.dataset.colorTheme = normalizeColorTheme(state.colorTheme);
-  document.body.classList.toggle("is-dark-mode", state.darkMode);
-  document.documentElement.classList.toggle("dark", state.darkMode);
-  document.documentElement.classList.toggle("light", !state.darkMode);
-  document.documentElement.style.colorScheme = state.darkMode ? "dark" : "light";
-  syncColorThemeOptions();
-  updateThemeToggleButton();
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      document.body.classList.remove("is-theme-switching");
-    });
-  });
-}
-
-function updateThemeToggleButton() {
-  const themeButton = $("toggleThemeButton");
-  if (!themeButton) return;
-  const icon = themeButton.querySelector("svg");
-  const title = state.darkMode ? "ライトモードに切替" : "ダークモードに切替";
-  themeButton.removeAttribute("title");
-  themeButton.setAttribute("aria-label", title);
-  themeButton.setAttribute("aria-pressed", String(state.darkMode));
-  themeButton.classList.toggle("is-active", state.darkMode);
-  if (icon) {
-    icon.innerHTML = state.darkMode
-      ? '<circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />'
-      : '<path d="M12 3a6 6 0 0 0 9 7.8A8.5 8.5 0 1 1 12 3z" />';
-  }
 }
 
 function toggleSidebar() {
@@ -378,7 +316,7 @@ function updateSidebarToggleButton(
 }
 
 function showSettings(visible) {
-  switchView(visible ? "settings" : state.lastReportView || "daily");
+  switchView(visible ? "settings" : "reports");
 }
 
 function showMain(visible) {
@@ -387,7 +325,10 @@ function showMain(visible) {
 }
 
 function hasUnsavedChanges() {
-  return getDirtyCounts().total > 0;
+  return (
+    getDirtyCounts().total > 0 ||
+    Boolean(window.adminMasters?.hasUnsaved?.())
+  );
 }
 
 function confirmDiscardUnsaved(message) {
@@ -406,7 +347,12 @@ function handleBeforeUnload(event) {
 function handleGlobalShortcut(event) {
   if (!event.ctrlKey || event.altKey || event.key.toLowerCase() !== "s") return;
   event.preventDefault();
-  if (state.isBusy || !hasUnsavedChanges()) return;
+  if (state.isBusy) return;
+  if (state.activeView === "admin") {
+    window.adminMasters?.save?.();
+    return;
+  }
+  if (getDirtyCounts().total === 0) return;
   saveUpdates();
 }
 
@@ -414,7 +360,7 @@ function notify({ text, type = "info", autoHide = shouldAutoHideToast(type) }) {
   const message = $("message");
   if (!message) return;
   clearToastTimers();
-  message.textContent = text;
+  $("messageText").textContent = text;
   message.classList.remove(
     "hidden",
     "is-fading",
@@ -428,7 +374,7 @@ function notify({ text, type = "info", autoHide = shouldAutoHideToast(type) }) {
   showToast(message);
 
   if (autoHide) {
-    scheduleToastHide();
+    scheduleToastHide(type);
   }
 }
 
@@ -448,8 +394,8 @@ function positionToast() {
   region.style.setProperty("--toast-right", `${Math.round(right)}px`);
 }
 
-function shouldAutoHideToast(type) {
-  return type === "success" || type === "info";
+function shouldAutoHideToast() {
+  return true;
 }
 
 function clearToastTimers() {
@@ -459,19 +405,28 @@ function clearToastTimers() {
   toastState.fadeTimer = null;
 }
 
-function scheduleToastHide() {
+function scheduleToastHide(type = "info") {
   const message = $("message");
   if (!message) return;
 
-  // 3秒表示 → 0.8秒かけてフェードアウト → 非表示
+  // エラーと警告は読み取る時間を長めにし、いずれも自動で閉じる。
+  const visibleDuration = type === "error" || type === "warning" ? 7000 : 4000;
   toastState.hideTimer = setTimeout(() => {
     message.classList.add("is-fading");
     toastState.fadeTimer = setTimeout(() => {
       hideToast(message);
       message.classList.remove("is-fading");
       clearToastTimers();
-    }, 800);
-  }, 3000);
+    }, 300);
+  }, visibleDuration);
+}
+
+function dismissToast() {
+  const message = $("message");
+  if (!message) return;
+  clearToastTimers();
+  message.classList.remove("is-fading");
+  hideToast(message);
 }
 
 function showToast(message) {
@@ -486,68 +441,59 @@ function setBusy(busy, action = "") {
   state.isBusy = busy;
   state.busyAction = busy ? action : "";
   document.querySelectorAll("button").forEach((button) => {
-    button.disabled = busy;
+    if (!button.hasAttribute("data-allow-when-busy")) button.disabled = busy;
   });
   syncChrome();
   syncPeriodPresets();
 }
 
 function switchView(view) {
-  if (view === "boss" && !state.isSuperior) return;
   finishEditing();
   if (state.activeView === view) return;
-  if (view === "settings") {
-    if (state.activeView === "daily" || state.activeView === "boss") {
-      state.lastReportView = state.activeView;
-    }
-  } else {
-    state.lastReportView = view;
-  }
   state.activeView = view;
   const isSettings = view === "settings";
+  const isAdmin = view === "admin";
   $("settingsPanel").classList.toggle("hidden", !isSettings);
-  $("reportPanel").classList.toggle("hidden", isSettings);
+  $("adminPanel").classList.toggle("hidden", !isAdmin);
+  $("reportPanel").classList.toggle("hidden", isSettings || isAdmin);
   updateViewChrome();
   syncChrome();
-  if (!isSettings) renderTable();
+  if (isAdmin) {
+    window.adminMasters?.ensureLoaded?.();
+  } else if (!isSettings) {
+    renderTable();
+  }
 }
 
 function updateViewAvailability() {
-  const bossButton = $("bossViewButton");
-  if (!bossButton) return;
-  bossButton.classList.toggle("hidden", !state.isSuperior);
-  if (!state.isSuperior && state.activeView === "boss") {
-    state.activeView = "daily";
-    state.lastReportView = "daily";
-  }
+  // The report screen is shared by every role; permissions are row-specific.
 }
 
 function updateViewChrome() {
-  const isBossView = state.activeView === "boss" && state.isSuperior;
+  const isReportView = state.activeView === "reports";
   const isSettingsView = state.activeView === "settings";
-  const pageTitle = $("pageTitle");
-
-  if (pageTitle) {
-    pageTitle.textContent = isBossView ? "上司コメント" : "日報入力";
-  }
-
+  const isAdminView = state.activeView === "admin";
   $("dailyViewButton").classList.toggle(
     "is-active",
-    !isBossView && !isSettingsView,
+    isReportView && !isSettingsView && !isAdminView,
   );
-  $("bossViewButton").classList.toggle("is-active", isBossView);
+  $("adminViewButton").classList.toggle("is-active", isAdminView);
   $("openSettingsButton").classList.toggle("is-active", isSettingsView);
-  document.body.classList.toggle("is-boss-view", isBossView);
+  document.body.classList.toggle("is-boss-view", state.isSuperior && isReportView);
   document.body.classList.toggle("is-settings-view", isSettingsView);
+  document.body.classList.toggle("is-admin-view", isAdminView);
   const bossFilterArea = $("bossFilterArea");
   if (bossFilterArea) {
-    bossFilterArea.classList.toggle("hidden", !isBossView || isSettingsView);
+    bossFilterArea.classList.toggle(
+      "hidden",
+      !isReportView || isSettingsView || isAdminView,
+    );
   }
   const missingCommentsFilterGroup = $("missingCommentsFilterGroup");
   if (missingCommentsFilterGroup) {
     missingCommentsFilterGroup.classList.toggle(
       "hidden",
-      !isBossView || isSettingsView,
+      !isReportView || !state.isSuperior || isSettingsView || isAdminView,
     );
   }
 }
@@ -568,7 +514,6 @@ function escapeHtml(value) {
 }
 
 window.addEventListener("pywebviewready", async () => {
-  applyTheme();
   updateSidebarToggleButton();
   bindEvents();
   syncChrome();

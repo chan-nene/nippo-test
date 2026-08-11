@@ -221,6 +221,15 @@ function installImeProtectedEditor(textarea) {
   });
 }
 function clearSubordinateFilters() {
+  state.memberScope = "all";
+  state.selectedSubordinateId = "";
+  updateSubordinateFilterUi();
+  renderTable();
+}
+
+function setMemberScope(scope) {
+  if (!["all", "self", "team", "subordinates"].includes(scope)) return;
+  state.memberScope = scope;
   state.selectedSubordinateId = "";
   updateSubordinateFilterUi();
   renderTable();
@@ -228,8 +237,9 @@ function clearSubordinateFilters() {
 
 function toggleSubordinateFilter(employeeId) {
   if (!employeeId) return;
-  state.selectedSubordinateId =
-    state.selectedSubordinateId === employeeId ? "" : employeeId;
+  const wasSelected = state.selectedSubordinateId === employeeId;
+  state.selectedSubordinateId = wasSelected ? "" : employeeId;
+  state.memberScope = wasSelected ? "all" : "member";
   updateSubordinateFilterUi();
   renderTable();
 }
@@ -238,20 +248,20 @@ function updateSubordinateFilterUi() {
   const container = $("bossSearchControl");
   if (!container) return;
 
-  const hasSelection = Boolean(state.selectedSubordinateId);
-  const allButton = $("showAllSubordinatesButton");
-  if (allButton) {
-    const isAllActive = !hasSelection;
-    allButton.classList.toggle("is-active", isAllActive);
-    allButton.setAttribute("aria-pressed", String(isAllActive));
-  }
+  container.querySelectorAll("[data-member-scope]").forEach((button) => {
+    const isActive =
+      !state.selectedSubordinateId && button.dataset.memberScope === state.memberScope;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
   const missingButton = $("showMissingCommentsButton");
   if (missingButton) {
     syncMissingCommentCount();
   }
 
   container.querySelectorAll(".member-switch-button[data-id]").forEach((btn) => {
-    const isActive = btn.dataset.id === state.selectedSubordinateId;
+    const isActive =
+      state.memberScope === "member" && btn.dataset.id === state.selectedSubordinateId;
     btn.classList.toggle("is-active", isActive);
     btn.setAttribute("aria-pressed", String(isActive));
   });
@@ -272,7 +282,7 @@ function syncChrome() {
   if (textarea) queueImeDiagnostic("chrome_sync", textarea);
   const model = getChromeModel();
   renderActionButtons(model.actions);
-  syncNativeUnsavedState(model.dirty.total > 0);
+  syncNativeUnsavedState(hasUnsavedChanges());
 }
 
 function syncNativeUnsavedState(hasUnsavedChanges) {
@@ -294,7 +304,7 @@ function syncMissingCommentCount() {
   const isLoading = state.busyAction === "load";
   const label = document.createElement("span");
   label.className = "missing-filter-label";
-  label.textContent = "未コメントのみ";
+  label.textContent = "未確認のみ";
   const badge = document.createElement("span");
   badge.className = [
     "missing-count-badge",
@@ -307,14 +317,14 @@ function syncMissingCommentCount() {
   badge.textContent = isLoading ? "…" : `${summary.count}日`;
   badge.setAttribute("aria-hidden", "true");
   button.replaceChildren(label, badge);
-  let statusDescription = "未コメントの日報だけを表示、対象0日";
+  let statusDescription = "未確認の日報だけを表示、対象0日";
   if (isLoading) {
-    statusDescription = "未コメントの日数を確認中";
+    statusDescription = "未確認の日数を確認中";
   } else if (summary.count > 0) {
     const overdueDescription = summary.hasOverdue
-      ? "、過去日の未コメントあり"
+      ? "、過去日の未確認あり"
       : "";
-    statusDescription = `未コメントの日報だけを表示、対象${summary.count}日${overdueDescription}`;
+    statusDescription = `未確認の日報だけを表示、対象${summary.count}日${overdueDescription}`;
   }
   const todayScopeDescription = state.includeTodayInMissingComments
     ? "今日分を含む"
@@ -517,10 +527,32 @@ async function loadData({
   syncCurrentUserName();
   state.isSuperior = Boolean(result.data.is_superior);
   if (!state.hasInitializedReportView) {
-    state.activeView = state.isSuperior ? "boss" : "daily";
-    state.lastReportView = state.activeView;
+    state.activeView = "reports";
     state.hasInitializedReportView = true;
   }
+  state.viewableMembers = Array.isArray(result.data.viewable_members)
+    ? result.data.viewable_members
+    : [
+        ...new Map(
+          (Array.isArray(result.data.rows) ? result.data.rows : []).map((row) => [
+            row.employee_id,
+            {
+              employee_id: row.employee_id,
+              display_name: row.display_name || row.employee_id,
+              relations:
+                row.employee_id === result.data.employee_id
+                  ? ["self", "same_small_team"]
+                  : result.data.is_superior
+                    ? ["assigned_subordinate"]
+                    : [],
+              team_path: [],
+            },
+          ]),
+        ).values(),
+      ];
+  state.currentTeam = Array.isArray(result.data.current_team)
+    ? result.data.current_team
+    : [];
   state.myRank = Number.isFinite(result.data.my_rank)
     ? result.data.my_rank
     : 9999;
@@ -544,16 +576,11 @@ async function loadData({
 
   const container = $("bossSearchControl");
   if (container) {
-    const subordinates = [
-      ...new Map(
-        state.rows
-          .filter((r) => r.employee_id !== state.employeeId)
-          .map((r) => [
-            r.employee_id,
-            { id: r.employee_id, name: r.display_name || r.employee_id },
-          ]),
-      ).values(),
-    ].sort((a, b) => a.name.localeCompare(b.name, "ja"));
+    const subordinates = state.viewableMembers.map((member) => ({
+      id: member.employee_id,
+      name: member.display_name || member.employee_id,
+      relations: Array.isArray(member.relations) ? member.relations : [],
+    }));
 
     const availableIds = new Set(subordinates.map((sub) => sub.id));
     if (!availableIds.has(state.selectedSubordinateId)) {
@@ -589,6 +616,22 @@ async function loadData({
 
     const allButton = $("showAllSubordinatesButton");
     if (allButton) allButton.textContent = `全員（${subordinates.length}人）`;
+    const teamCount = subordinates.filter((member) =>
+      member.relations.includes("same_small_team"),
+    ).length;
+    const teamButton = $("showTeamButton");
+    if (teamButton) {
+      teamButton.textContent = `自チーム（${teamCount}人）`;
+      teamButton.classList.toggle("hidden", teamCount === 0);
+    }
+    const subordinateCount = subordinates.filter((member) =>
+      member.relations.includes("assigned_subordinate"),
+    ).length;
+    const subordinateButton = $("showSubordinatesButton");
+    if (subordinateButton) {
+      subordinateButton.textContent = `担当部下（${subordinateCount}人）`;
+      subordinateButton.classList.toggle("hidden", subordinateCount === 0);
+    }
 
     updateSubordinateFilterUi();
   }
@@ -949,15 +992,12 @@ function restoreTableScrollState(wrap, scrollState) {
 }
 
 function createTableRenderContext(rows) {
-  const showUserColumn = state.activeView === "boss";
   const sampleComments = getVisibleComments(
     rows[0]?.comments || state.rows[0]?.comments || [],
   );
 
   return {
-    showUserColumn,
     sampleComments,
-    ...buildDateRowMetadata(rows, showUserColumn),
   };
 }
 
@@ -966,23 +1006,20 @@ function renderTableShell({ header, body, minWidth }) {
 }
 
 function getTableContentWidth(context) {
-  const fixedColumns = 86 + 220 + (context.showUserColumn ? 132 + 380 : 420);
+  const fixedColumns = 144 + 86 + 220 + 420;
   const commentColumns = context.sampleComments.length * 300;
-  const fallback = context.showUserColumn ? 1240 : 1110;
+  const fallback = 1240;
   return Math.max(fallback, fixedColumns + commentColumns);
 }
 
 function renderTableHeader(context) {
-  const userHeader = context.showUserColumn
-    ? '<th class="user-col">部下の氏名</th>'
-    : "";
   const superiorHeaders = context.sampleComments
     .map(renderSuperiorHeader)
     .join("");
 
   return `<thead><tr>
+    <th class="user-col">名前</th>
     <th class="date-col">日付</th>
-    ${userHeader}
     <th class="name-col">業務名</th>
     <th class="detail-col">業務詳細</th>
     ${superiorHeaders}
@@ -991,66 +1028,72 @@ function renderTableHeader(context) {
 
 function renderSuperiorHeader(cell) {
   const isMe = cell.superior_employee_id === state.employeeId;
-  const selfClass = isMe && state.activeView === "boss" ? " self-comment-col" : "";
+  const selfClass = isMe ? " self-comment-col" : "";
   return `<th class="comment-col${selfClass}">${escapeHtml(cell.superior_name)}</th>`;
 }
 
 function getVisibleComments(comments = []) {
   if (!Array.isArray(comments)) return [];
-  if (state.activeView === "boss") return comments;
-  return comments.filter((cell) => cell.rank > state.myRank);
-}
-
-function buildDateRowMetadata(rows, showUserColumn) {
-  // 上司コメント画面では同じ日付のセルを結合し、全員表示では日付ごとに罫線で区切る
-  const dateRowSpans = new Map();
-  const dateGroupClasses = new Map();
-
-  if (!showUserColumn) {
-    return { dateRowSpans, dateGroupClasses };
-  }
-
-  let i = 0;
-  let groupIndex = 0;
-  const showDateGroupDividers = !state.selectedSubordinateId;
-  while (i < rows.length) {
-    const d = rows[i].date;
-    let span = 1;
-    while (i + span < rows.length && rows[i + span].date === d) span++;
-    dateRowSpans.set(i, span);
-    if (showDateGroupDividers && groupIndex > 0) {
-      dateGroupClasses.set(i, "boss-date-group-start");
-    }
-    i += span;
-    groupIndex += 1;
-  }
-
-  return { dateRowSpans, dateGroupClasses };
+  return comments;
 }
 
 function renderReportRows(rows, context) {
-  return rows.map((row, idx) => renderReportRow(row, idx, context)).join("");
+  const groups = [];
+  rows.forEach((row) => {
+    let group = groups.at(-1);
+    if (!group || group.employeeId !== row.employee_id) {
+      group = { employeeId: row.employee_id, rows: [] };
+      groups.push(group);
+    }
+    group.rows.push(row);
+  });
+  return groups
+    .map((group) => {
+      const member = getViewableMember(group.employeeId);
+      const displayName =
+        member?.display_name || group.rows[0]?.display_name || group.employeeId;
+      return group.rows
+        .map((row, idx) => renderReportRow(row, idx, context, {
+          displayName,
+          rowSpan: group.rows.length,
+          showUserCell: idx === 0,
+        }))
+        .join("");
+    })
+    .join("");
 }
 
-function renderReportRow(row, idx, context) {
+function getViewableMember(employeeId) {
+  return state.viewableMembers.find((member) => member.employee_id === employeeId);
+}
+
+function renderReportRow(row, idx, context, memberContext) {
   const contentCells = row.__holidayPlaceholder
     ? renderHolidayPlaceholderCells(context)
-    : `${renderUserCell(row, context)}
-    ${renderReportNameCell(row)}
+    : `${renderReportNameCell(row)}
     ${renderReportDetailCell(row)}
     ${renderCommentCells(row)}`;
   return `<tr class="${renderReportRowClass(row, idx, context)}" data-scroll-key="${escapeHtml(getReportRowKey(row))}">
+    ${renderUserCell(memberContext)}
     ${renderDateCell(row, idx, context)}
     ${contentCells}
   </tr>`;
+}
+
+function renderUserCell(memberContext) {
+  if (!memberContext?.showUserCell) return "";
+  return `<th class="user-col" scope="rowgroup" rowspan="${memberContext.rowSpan}">
+    <div class="user-content">
+      <strong>${escapeHtml(memberContext.displayName)}</strong>
+    </div>
+  </th>`;
 }
 
 function renderHolidayPlaceholderCells(context) {
   const commentCells = context.sampleComments
     .map(() => '<td class="comment-col holiday-placeholder-cell"></td>')
     .join("");
-  return `<td class="user-col holiday-placeholder-cell" aria-label="休日のため日報なし"></td>
-    <td class="name-col holiday-placeholder-cell"></td>
+  return `<td class="name-col holiday-placeholder-cell" aria-label="休日のため日報なし"></td>
     <td class="detail-col holiday-placeholder-cell"></td>
     ${commentCells}`;
 }
@@ -1063,7 +1106,6 @@ function renderReportRowClass(row, idx, context) {
     rowHasReportData(row) ? "has-report-data" : "is-report-empty",
     rowHasVisibleBossComment(row) ? "has-boss-comment" : "",
     rowNeedsBossComment(row) ? "needs-boss-comment" : "",
-    context.showUserColumn ? context.dateGroupClasses.get(idx) || "" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -1074,14 +1116,7 @@ function renderDateCell(row, idx, context) {
     `${formatDisplayDateHTML(row.date)}${renderHolidayLabel(row)}`,
     "cell-frame-static date-content",
   );
-  if (!context.showUserColumn) {
-    return `<td class="date-col">${content}</td>`;
-  }
-  if (!context.dateRowSpans.has(idx)) {
-    return "";
-  }
-  const span = context.dateRowSpans.get(idx);
-  return `<td class="date-col" rowspan="${span}">${content}</td>`;
+  return `<td class="date-col">${content}</td>`;
 }
 
 function renderHolidayLabel(row) {
@@ -1094,12 +1129,6 @@ function rowHasVisibleBossComment(row) {
   return getVisibleComments(row.comments || []).some((cell) =>
     normalizeCellValue(cell.comment),
   );
-}
-
-function renderUserCell(row, context) {
-  return context.showUserColumn
-    ? `<td class="user-col">${renderCellFrame(escapeHtml(row.display_name), "cell-frame-static user-content")}</td>`
-    : "";
 }
 
 function renderReportNameCell(row) {
@@ -1197,19 +1226,18 @@ function getReplyKey(row, cell) {
 
 function renderCommentCell(row, cell, rowIndex, commentIndex) {
   const context = createCommentRenderContext(row, cell, rowIndex, commentIndex);
-  return state.activeView === "boss"
+  return context.canEditComment
     ? renderBossCommentCell(context)
     : renderDailyCommentCell(context);
 }
 
 function createCommentRenderContext(row, cell, rowIndex, commentIndex) {
-  const canEditComment =
-    state.activeView === "boss" ? Boolean(cell.editable) : false;
+  const canEditComment = Boolean(cell.editable);
   const canAddBossComment = canEditComment && rowCanReceiveBossComment(row);
   const hasBossComment = Boolean(String(cell.comment || "").trim());
   const hasReply = Boolean(String(cell.reply || "").trim());
   const canEditReply =
-    state.activeView === "daily" && row.can_edit_report && hasBossComment;
+    row.can_edit_report && hasBossComment;
 
   return {
     row,
@@ -1651,7 +1679,7 @@ function finishEditing() {
     editingElement.classList.toggle("is-empty", isEmpty(normalized));
     editingElement.classList.remove("is-editing");
 
-    if (state.activeView === "boss" && textarea.dataset.kind === "comment") {
+    if (textarea.dataset.kind === "comment") {
       const bossCommentActions = editingElement.parentElement?.querySelector(
         ".boss-comment-actions",
       );
@@ -1690,25 +1718,11 @@ function rowCanReceiveBossComment(row) {
 }
 
 function rowNeedsBossComment(row) {
-  if (!row || row.employee_id === state.employeeId) return false;
-  if (!rowCanReceiveBossComment(row)) return false;
-  if (
-    row.date === getTodayJST() &&
-    !state.includeTodayInMissingComments
-  ) {
-    return false;
-  }
-  const missingStartDate =
-    state.missingCommentRangeStart || state.missingCommentStartDate;
-  if (missingStartDate && row.date < missingStartDate) {
-    return false;
-  }
-  return (row.comments || []).some(
-    (cell) =>
-      cell.superior_employee_id === state.employeeId &&
-      cell.editable &&
-      (isEmpty(cell.comment) || isBossCommentDirty(row, cell)),
+  if (!row || !row.needs_review) return false;
+  const myCell = (row.comments || []).find(
+    (cell) => cell.superior_employee_id === state.employeeId && cell.editable,
   );
+  return Boolean(myCell && (isEmpty(myCell.comment) || isBossCommentDirty(row, myCell)));
 }
 
 function getMissingCommentSummary() {
@@ -1761,56 +1775,67 @@ function getFilteredRows() {
     return true;
   });
 
-  if (state.activeView === "boss" && state.isSuperior) {
-    const selectedId = state.selectedSubordinateId;
-    const bossRows = filteredByDate.filter((row) => {
-      if (row.employee_id === state.employeeId) return false;
-      if (selectedId && row.employee_id !== selectedId) {
-        return false;
-      }
-      return true;
-    });
-    if (state.showMissingCommentsOnly) {
-      return bossRows.filter(rowNeedsBossComment);
-    }
-    return collapseEmptyHolidayRows(bossRows);
+  const selectedId = state.selectedSubordinateId;
+  const allowedIds = new Set(
+    state.viewableMembers
+      .filter((member) => {
+        const relations = Array.isArray(member.relations) ? member.relations : [];
+        if (state.memberScope === "self") return member.employee_id === state.employeeId;
+        if (state.memberScope === "team") return relations.includes("same_small_team");
+        if (state.memberScope === "subordinates") {
+          return relations.includes("assigned_subordinate");
+        }
+        if (state.memberScope === "member") return member.employee_id === selectedId;
+        return true;
+      })
+      .map((member) => member.employee_id),
+  );
+  let visibleRows = filteredByDate.filter((row) => allowedIds.has(row.employee_id));
+  if (state.showMissingCommentsOnly) {
+    visibleRows = visibleRows.filter(rowNeedsBossComment);
   }
 
-  return filteredByDate.filter(
-    (row) => row.employee_id === state.employeeId,
+  const memberOrder = new Map(
+    state.viewableMembers.map((member, index) => [member.employee_id, index]),
   );
+  return collapseEmptyHolidayRows(visibleRows).sort((left, right) => {
+    const memberDelta =
+      (memberOrder.get(left.employee_id) ?? Number.MAX_SAFE_INTEGER) -
+      (memberOrder.get(right.employee_id) ?? Number.MAX_SAFE_INTEGER);
+    if (memberDelta) return memberDelta;
+    return left.date.localeCompare(right.date);
+  });
 }
 
 function collapseEmptyHolidayRows(rows) {
   const holidayDatesWithReports = new Set(
     rows
       .filter((row) => row.is_holiday && rowHasReportData(row))
-      .map((row) => row.date),
+      .map((row) => `${row.employee_id}|${row.date}`),
   );
   const placeholderDates = new Set();
 
   return rows.flatMap((row) => {
     if (!row.is_holiday) return [row];
+    if (row.can_edit_report) return [row];
+    const holidayKey = `${row.employee_id}|${row.date}`;
     if (rowHasReportData(row)) return [row];
     if (
-      holidayDatesWithReports.has(row.date) ||
-      placeholderDates.has(row.date)
+      holidayDatesWithReports.has(holidayKey) ||
+      placeholderDates.has(holidayKey)
     ) {
       return [];
     }
-    placeholderDates.add(row.date);
+    placeholderDates.add(holidayKey);
     return [{ ...row, __holidayPlaceholder: true }];
   });
 }
 
 function getEmptyMessage() {
-  if (state.activeView === "boss" && state.isSuperior) {
-    if (state.showMissingCommentsOnly) {
-      return "未コメントの日報はありません。";
-    }
-    return "条件に一致する部下の日報はありません。";
+  if (state.showMissingCommentsOnly) {
+    return "未確認の日報はありません。";
   }
-  return "表示対象の日報がありません。";
+  return "条件に一致するメンバーの日報はありません。";
 }
 
 function onCellInput(event) {

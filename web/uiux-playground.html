@@ -1,0 +1,2262 @@
+<!doctype html>
+<html lang="ja" data-accent="green" data-mode="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NIPPO UI/UX Playground</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap"
+    />
+    <style>
+      /* Hallmark · genre: modern-minimal · macrostructure: Workbench · designed-as: isolated playground
+       * pre-emit critique: P5 H5 E5 S5 R5 V4 · production files: untouched
+       */
+      :root {
+        --color-canvas: oklch(96% 0.008 165);
+        --color-paper: oklch(99% 0.004 165);
+        --color-paper-2: oklch(96.5% 0.008 165);
+        --color-paper-3: oklch(93% 0.012 165);
+        --color-ink: oklch(22% 0.025 165);
+        --color-ink-2: oklch(39% 0.025 165);
+        --color-muted: oklch(47% 0.025 165);
+        --color-rule: oklch(86% 0.015 165);
+        --color-rule-strong: oklch(69% 0.03 165);
+        --color-accent: oklch(51% 0.135 163);
+        --color-accent-hover: oklch(43% 0.12 163);
+        --color-accent-soft: oklch(93% 0.035 163);
+        --color-accent-ink: oklch(99% 0.004 165);
+        --color-focus: oklch(45% 0.17 252);
+        --color-current-focus: color-mix(
+          in oklch,
+          var(--color-accent) 42%,
+          transparent
+        );
+        --color-error: oklch(50% 0.18 22);
+        --color-error-soft: oklch(96% 0.035 22);
+        --color-warning: oklch(48% 0.11 60);
+        --color-dirty: oklch(95% 0.06 90);
+        --color-sidebar: oklch(21% 0.035 165);
+        --color-sidebar-deep: oklch(15% 0.03 165);
+        --color-sidebar-ink: oklch(96% 0.01 165);
+        --color-saturday: oklch(48% 0.15 252);
+        --color-sunday: oklch(51% 0.18 22);
+        --font-display: "Segoe UI", Arial, "IBM Plex Sans JP", "Yu Gothic UI", sans-serif;
+        --font-body: "Segoe UI", Arial, "IBM Plex Sans JP", "Yu Gothic UI", sans-serif;
+        --font-mono: "Segoe UI", Arial, "IBM Plex Sans JP", "Yu Gothic UI", sans-serif;
+        --space-3xs: 0.25rem;
+        --space-2xs: 0.5rem;
+        --space-xs: 0.75rem;
+        --space-sm: 1rem;
+        --space-md: 1.5rem;
+        --space-lg: 2rem;
+        --space-xl: 3rem;
+        --text-xs: 0.75rem;
+        --text-sm: 0.875rem;
+        --text-md: 1rem;
+        --text-lg: 1.25rem;
+        --text-xl: 1.65rem;
+        --rule: 1px solid var(--color-rule);
+        --radius-sm: 0.35rem;
+        --radius-md: 0.65rem;
+        --radius-lg: 0.9rem;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --dur-short: 160ms;
+        --dur-medium: 240ms;
+        --shadow-float: 0 1rem 2.5rem oklch(20% 0.03 165 / 0.12);
+        color-scheme: light;
+      }
+
+      :root[data-accent="blue"] {
+        --color-canvas: oklch(96% 0.008 252);
+        --color-paper-2: oklch(96.5% 0.008 252);
+        --color-paper-3: oklch(93% 0.012 252);
+        --color-ink: oklch(22% 0.03 252);
+        --color-ink-2: oklch(39% 0.025 252);
+        --color-muted: oklch(47% 0.025 252);
+        --color-rule: oklch(86% 0.015 252);
+        --color-rule-strong: oklch(69% 0.03 252);
+        --color-accent: oklch(51% 0.14 252);
+        --color-accent-hover: oklch(43% 0.12 252);
+        --color-accent-soft: oklch(93% 0.035 252);
+        --color-sidebar: oklch(21% 0.04 252);
+        --color-sidebar-deep: oklch(15% 0.035 252);
+      }
+
+      :root[data-accent="orange"] {
+        --color-canvas: oklch(96% 0.01 55);
+        --color-paper-2: oklch(96.5% 0.01 55);
+        --color-paper-3: oklch(93% 0.015 55);
+        --color-ink: oklch(22% 0.03 55);
+        --color-ink-2: oklch(39% 0.03 55);
+        --color-muted: oklch(47% 0.03 55);
+        --color-rule: oklch(86% 0.02 55);
+        --color-rule-strong: oklch(69% 0.04 55);
+        --color-accent: oklch(53% 0.17 45);
+        --color-accent-hover: oklch(45% 0.15 45);
+        --color-accent-soft: oklch(94% 0.04 45);
+        --color-sidebar: oklch(22% 0.035 55);
+        --color-sidebar-deep: oklch(15% 0.03 55);
+      }
+
+      :root[data-mode="dark"] {
+        --color-canvas: oklch(15% 0.015 165);
+        --color-paper: oklch(19% 0.018 165);
+        --color-paper-2: oklch(23% 0.02 165);
+        --color-paper-3: oklch(28% 0.022 165);
+        --color-ink: oklch(93% 0.01 165);
+        --color-ink-2: oklch(80% 0.015 165);
+        --color-muted: oklch(72% 0.018 165);
+        --color-rule: oklch(34% 0.02 165);
+        --color-rule-strong: oklch(49% 0.03 165);
+        --color-accent: oklch(70% 0.13 163);
+        --color-accent-hover: oklch(77% 0.12 163);
+        --color-accent-soft: oklch(29% 0.055 163);
+        --color-accent-ink: oklch(18% 0.03 165);
+        --color-focus: oklch(79% 0.15 252);
+        --color-current-focus: color-mix(
+          in oklch,
+          var(--color-accent) 42%,
+          transparent
+        );
+        --color-error: oklch(75% 0.15 22);
+        --color-error-soft: oklch(29% 0.06 22);
+        --color-warning: oklch(78% 0.1 76);
+        --color-dirty: oklch(30% 0.055 90);
+        --color-sidebar: oklch(12% 0.018 165);
+        --color-sidebar-deep: oklch(9% 0.015 165);
+        --color-saturday: oklch(76% 0.12 252);
+        --color-sunday: oklch(77% 0.14 22);
+        --shadow-float: 0 1rem 2.5rem oklch(3% 0.01 165 / 0.4);
+        color-scheme: dark;
+      }
+
+      :root[data-mode="dark"][data-accent="blue"] {
+        --color-canvas: oklch(15% 0.018 252);
+        --color-paper: oklch(19% 0.02 252);
+        --color-paper-2: oklch(23% 0.022 252);
+        --color-paper-3: oklch(28% 0.025 252);
+        --color-ink: oklch(93% 0.01 252);
+        --color-ink-2: oklch(80% 0.015 252);
+        --color-muted: oklch(72% 0.018 252);
+        --color-rule: oklch(34% 0.025 252);
+        --color-rule-strong: oklch(49% 0.04 252);
+        --color-accent: oklch(71% 0.13 252);
+        --color-accent-hover: oklch(78% 0.12 252);
+        --color-accent-soft: oklch(29% 0.055 252);
+        --color-sidebar: oklch(12% 0.025 252);
+        --color-sidebar-deep: oklch(9% 0.02 252);
+      }
+
+      :root[data-mode="dark"][data-accent="orange"] {
+        --color-canvas: oklch(15% 0.018 55);
+        --color-paper: oklch(19% 0.02 55);
+        --color-paper-2: oklch(23% 0.024 55);
+        --color-paper-3: oklch(28% 0.03 55);
+        --color-ink: oklch(93% 0.01 55);
+        --color-ink-2: oklch(80% 0.018 55);
+        --color-muted: oklch(72% 0.02 55);
+        --color-rule: oklch(34% 0.03 55);
+        --color-rule-strong: oklch(49% 0.045 55);
+        --color-accent: oklch(72% 0.15 45);
+        --color-accent-hover: oklch(79% 0.13 45);
+        --color-accent-soft: oklch(30% 0.065 45);
+        --color-sidebar: oklch(13% 0.025 55);
+        --color-sidebar-deep: oklch(9% 0.02 55);
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        overflow-x: clip;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-canvas);
+        color: var(--color-ink);
+        font-family: var(--font-body);
+        font-size: var(--text-sm);
+        line-height: 1.5;
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+      }
+
+      button,
+      a,
+      input,
+      textarea,
+      [role="button"] {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .lab-button:focus-visible,
+      .lab-select:focus-visible,
+      .lab-toggle:focus-visible {
+        outline: 3px solid var(--color-focus);
+        outline-offset: 2px;
+      }
+
+      .lab-header {
+        position: sticky;
+        z-index: 100;
+        top: 0;
+        display: flex;
+        min-height: 4.25rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-md);
+        border-bottom: var(--rule);
+        background: color-mix(in oklch, var(--color-paper) 94%, transparent);
+        padding: var(--space-xs) var(--space-md);
+        backdrop-filter: blur(1rem);
+      }
+
+      .lab-brand {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: var(--space-xs);
+      }
+
+      .lab-mark {
+        display: grid;
+        width: 2rem;
+        height: 2rem;
+        flex: 0 0 2rem;
+        place-items: center;
+        border-radius: var(--radius-sm);
+        background: var(--color-accent);
+        color: var(--color-accent-ink);
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
+        font-weight: 800;
+      }
+
+      .lab-title {
+        min-width: 0;
+      }
+
+      .lab-title strong,
+      .lab-title span {
+        display: block;
+      }
+
+      .lab-title strong {
+        font-family: var(--font-display);
+        font-size: var(--text-md);
+        line-height: 1.2;
+      }
+
+      .lab-title span {
+        overflow: hidden;
+        color: var(--color-muted);
+        font-size: var(--text-xs);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .isolation-badge {
+        display: inline-flex;
+        min-height: 2rem;
+        align-items: center;
+        gap: var(--space-2xs);
+        border: 1px solid var(--color-rule-strong);
+        border-radius: 999px;
+        background: var(--color-paper-2);
+        color: var(--color-ink-2);
+        padding: 0 var(--space-xs);
+        font-size: var(--text-xs);
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .isolation-badge::before {
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 50%;
+        background: var(--color-accent);
+        content: "";
+      }
+
+      .lab-layout {
+        display: grid;
+        min-height: calc(100vh - 4.25rem);
+        grid-template-columns: minmax(16rem, 19rem) minmax(0, 1fr);
+      }
+
+      .lab-controls {
+        border-right: var(--rule);
+        background: var(--color-paper);
+        padding: var(--space-md);
+      }
+
+      .controls-sticky {
+        position: sticky;
+        top: calc(4.25rem + var(--space-md));
+        display: grid;
+        gap: var(--space-md);
+      }
+
+      .control-intro {
+        margin: 0;
+        color: var(--color-ink-2);
+        font-size: var(--text-sm);
+      }
+
+      .preset-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: var(--space-2xs);
+      }
+
+      .preset-button,
+      .seg-button,
+      .icon-lab-button {
+        min-height: 2.75rem;
+        border: 1px solid var(--color-rule-strong);
+        border-radius: var(--radius-sm);
+        background: var(--color-paper);
+        color: var(--color-ink);
+        padding: 0 var(--space-xs);
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .preset-button[aria-pressed="true"],
+      .seg-button[aria-pressed="true"] {
+        border-color: var(--color-accent);
+        background: var(--color-accent-soft);
+        color: var(--color-accent);
+      }
+
+      .preset-button.primary {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+        color: var(--color-accent-ink);
+      }
+
+      .control-group {
+        display: grid;
+        gap: var(--space-2xs);
+        margin: 0;
+        border: 0;
+        padding: 0;
+      }
+
+      .control-group legend {
+        margin-bottom: var(--space-2xs);
+        color: var(--color-muted);
+        font-size: var(--text-xs);
+        font-weight: 800;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(var(--segments, 2), minmax(0, 1fr));
+        gap: var(--space-3xs);
+        border-radius: var(--radius-md);
+        background: var(--color-paper-2);
+        padding: var(--space-3xs);
+      }
+
+      .seg-button {
+        min-width: 0;
+        border-color: transparent;
+        background: transparent;
+        overflow: hidden;
+        font-size: var(--text-xs);
+        text-overflow: ellipsis;
+      }
+
+      .control-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-sm);
+      }
+
+      .lab-select {
+        min-height: 2.75rem;
+        border: 1px solid var(--color-rule-strong);
+        border-radius: var(--radius-sm);
+        background: var(--color-paper);
+        color: var(--color-ink);
+        padding: 0 var(--space-xs);
+      }
+
+      .lab-main {
+        min-width: 0;
+        padding: var(--space-md);
+      }
+
+      .main-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: var(--space-md);
+        margin-bottom: var(--space-sm);
+      }
+
+      .main-heading h1 {
+        max-width: 22ch;
+        min-width: 0;
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-family: var(--font-display);
+        font-size: clamp(1.5rem, 2vw, 2.3rem);
+        line-height: 1.05;
+      }
+
+      .main-heading p {
+        max-width: 52ch;
+        margin: 0;
+        color: var(--color-muted);
+      }
+
+      .preview-shell {
+        border: 1px solid var(--color-rule-strong);
+        border-radius: var(--radius-lg);
+        background: var(--color-paper-2);
+        box-shadow: var(--shadow-float);
+        overflow: hidden;
+      }
+
+      .preview-meta {
+        display: flex;
+        min-height: 2.75rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-sm);
+        border-bottom: var(--rule);
+        background: var(--color-paper);
+        padding: 0 var(--space-sm);
+      }
+
+      .preview-meta strong {
+        font-size: var(--text-xs);
+      }
+
+      .preview-meta-output {
+        color: var(--color-muted);
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
+      }
+
+      .preview-viewport {
+        width: 100%;
+        overflow: auto;
+        background:
+          linear-gradient(
+            135deg,
+            color-mix(in oklch, var(--color-rule) 46%, transparent) 25%,
+            transparent 25%
+          )
+          0 0 / 1rem 1rem;
+        padding: var(--space-sm);
+      }
+
+      .product-preview {
+        width: var(--preview-width, 100%);
+        min-width: min(100%, var(--preview-width, 100%));
+        height: 38rem;
+        margin-inline: auto;
+        overflow: hidden;
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-md);
+        background: var(--color-paper);
+        color: var(--color-ink);
+      }
+
+      .product-preview button,
+      .product-preview input,
+      .product-preview textarea {
+        font: inherit;
+      }
+
+      .product-preview button,
+      .editable-cell {
+        white-space: nowrap;
+      }
+
+      .product-preview[data-font="large"] {
+        font-size: 1rem;
+      }
+
+      .product-preview[data-font="xlarge"] {
+        font-size: 1.125rem;
+      }
+
+      .nippo-titlebar {
+        display: flex;
+        height: 3.25rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-sm);
+        background: var(--color-sidebar);
+        color: var(--color-sidebar-ink);
+        padding: 0 var(--space-sm);
+      }
+
+      .nippo-wordmark,
+      .nippo-user {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2xs);
+      }
+
+      .nippo-wordmark {
+        font-family: var(--font-display);
+        font-weight: 900;
+        letter-spacing: 0.08em;
+      }
+
+      .nippo-wordmark-mark {
+        display: grid;
+        width: 1.75rem;
+        height: 1.75rem;
+        place-items: center;
+        border-radius: var(--radius-sm);
+        background: var(--color-accent);
+        color: var(--color-accent-ink);
+        font-size: var(--text-xs);
+      }
+
+      .nippo-user {
+        font-size: 0.8em;
+        font-weight: 700;
+      }
+
+      .nippo-app {
+        display: flex;
+        height: calc(100% - 3.25rem);
+        min-height: 0;
+      }
+
+      .nippo-sidebar {
+        display: flex;
+        width: 12.5rem;
+        flex: 0 0 12.5rem;
+        flex-direction: column;
+        justify-content: space-between;
+        overflow: hidden;
+        background: linear-gradient(
+          180deg,
+          var(--color-sidebar),
+          var(--color-sidebar-deep)
+        );
+        color: var(--color-sidebar-ink);
+        padding: var(--space-2xs);
+      }
+
+      .product-preview.is-sidebar-collapsed .nippo-sidebar {
+        width: 3.75rem;
+        flex-basis: 3.75rem;
+      }
+
+      :root[data-motion="legacy"] .nippo-sidebar {
+        transition:
+          width 180ms ease,
+          flex-basis 180ms ease;
+      }
+
+      :root[data-motion="legacy"] .side-label {
+        transition:
+          max-width 140ms ease,
+          opacity 100ms ease;
+      }
+
+      :root[data-motion="safe"] .nippo-sidebar {
+        transition: none;
+      }
+
+      :root[data-motion="safe"] .side-label {
+        transition: opacity var(--dur-short) var(--ease-out);
+      }
+
+      :root[data-motion="reduce"] .nippo-sidebar,
+      :root[data-motion="reduce"] .side-label {
+        transition: none;
+      }
+
+      .side-nav,
+      .side-nav-secondary {
+        display: grid;
+        gap: var(--space-3xs);
+      }
+
+      .side-nav-button,
+      .side-collapse-button {
+        display: inline-flex;
+        width: 100%;
+        min-height: var(--target-size, 2.25rem);
+        align-items: center;
+        gap: var(--space-2xs);
+        overflow: hidden;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--color-sidebar-ink);
+        padding: 0 var(--space-xs);
+        font-weight: 700;
+        text-align: left;
+      }
+
+      .side-nav-button.is-active {
+        border-color: color-mix(
+          in oklch,
+          var(--color-accent) 68%,
+          var(--color-sidebar)
+        );
+        background: var(--color-accent);
+        color: var(--color-accent-ink);
+      }
+
+      .side-icon {
+        display: grid;
+        width: 1.25rem;
+        height: 1.25rem;
+        flex: 0 0 1.25rem;
+        place-items: center;
+        font-family: var(--font-mono);
+        font-size: 0.75em;
+      }
+
+      .side-label {
+        max-width: 9rem;
+        overflow: hidden;
+        opacity: 1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .product-preview.is-sidebar-collapsed .side-label {
+        max-width: 0;
+        opacity: 0;
+      }
+
+      .product-preview.is-sidebar-collapsed
+        :is(.side-nav-button, .side-collapse-button) {
+        justify-content: center;
+        padding-inline: 0;
+      }
+
+      .nippo-workspace {
+        display: flex;
+        min-width: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        overflow: hidden;
+        background: var(--color-paper);
+        padding: var(--space-sm);
+        container-type: inline-size;
+      }
+
+      .work-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-sm);
+        margin-bottom: var(--space-xs);
+      }
+
+      .work-heading h2 {
+        min-width: 0;
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-family: var(--font-display);
+        font-size: 1.25em;
+        line-height: 1.1;
+      }
+
+      .action-row,
+      .filter-row,
+      .date-control,
+      .preset-control,
+      .member-strip {
+        display: flex;
+        align-items: center;
+      }
+
+      .action-row {
+        gap: var(--space-2xs);
+      }
+
+      .toolbar-button,
+      .preset-chip,
+      .date-input,
+      .member-button,
+      .comment-button {
+        min-height: var(--target-size, 2.25rem);
+        border: 1px solid var(--color-rule-strong);
+        border-radius: var(--radius-sm);
+        background: var(--color-paper);
+        color: var(--color-ink);
+        padding: 0 var(--space-xs);
+        font-size: 0.85em;
+        font-weight: 700;
+      }
+
+      .toolbar-button.primary {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+        color: var(--color-accent-ink);
+      }
+
+      .toolbar-button:disabled {
+        border-color: var(--color-rule);
+        background: var(--color-paper-3);
+        color: var(--color-muted);
+      }
+
+      .filter-row {
+        min-width: 0;
+        flex-wrap: wrap;
+        gap: var(--space-2xs);
+        margin-bottom: var(--space-xs);
+      }
+
+      .date-control {
+        gap: var(--space-2xs);
+      }
+
+      .date-input {
+        width: 9.25rem;
+      }
+
+      .preset-control {
+        gap: 0.1rem;
+        border-radius: var(--radius-sm);
+        background: var(--color-paper-2);
+        padding: 0.2rem;
+      }
+
+      .preset-chip {
+        min-width: var(--target-size, 2.25rem);
+        border-color: transparent;
+        background: transparent;
+        padding-inline: var(--space-2xs);
+      }
+
+      .preset-chip[aria-pressed="true"] {
+        background: var(--color-accent);
+        color: var(--color-accent-ink);
+      }
+
+      .member-strip-wrap {
+        position: relative;
+        display: none;
+        min-width: 0;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--space-3xs);
+        margin-bottom: var(--space-xs);
+      }
+
+      .product-preview.is-supervisor .member-strip-wrap {
+        display: grid;
+      }
+
+      .member-strip {
+        min-width: 0;
+        gap: var(--space-3xs);
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+      }
+
+      .member-button {
+        flex: 0 0 auto;
+      }
+
+      .member-button[aria-pressed="true"] {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+        color: var(--color-accent-ink);
+      }
+
+      .member-scroll-button {
+        display: none;
+        width: var(--target-size, 2.25rem);
+        height: var(--target-size, 2.25rem);
+        border: 1px solid var(--color-rule-strong);
+        border-radius: var(--radius-sm);
+        background: var(--color-paper);
+        color: var(--color-ink);
+      }
+
+      :root[data-supervisor="inspector"] .member-scroll-button {
+        display: grid;
+        place-items: center;
+      }
+
+      :root[data-supervisor="inspector"] .member-strip-wrap::after {
+        position: absolute;
+        z-index: 2;
+        top: 0;
+        right: calc(var(--target-size, 2.25rem) + var(--space-3xs));
+        bottom: 0;
+        width: 2rem;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--color-paper)
+        );
+        content: "";
+        pointer-events: none;
+      }
+
+      .report-layout {
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        flex: 1 1 auto;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-xs);
+      }
+
+      :root[data-supervisor="inspector"]
+        .product-preview.is-supervisor
+        .report-layout {
+        grid-template-columns: minmax(24rem, 1fr) minmax(15rem, 19rem);
+      }
+
+      .table-scroll {
+        min-width: 0;
+        overflow: auto;
+        border: var(--rule);
+        border-radius: var(--radius-sm);
+      }
+
+      .report-table {
+        width: 100%;
+        min-width: 43rem;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+      }
+
+      .product-preview.is-supervisor .report-table {
+        min-width: 72rem;
+      }
+
+      .report-table th,
+      .report-table td {
+        border-right: var(--rule);
+        border-bottom: var(--rule);
+        text-align: left;
+      }
+
+      .report-table th:last-child,
+      .report-table td:last-child {
+        border-right: 0;
+      }
+
+      .report-table tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .report-table th {
+        position: sticky;
+        z-index: 4;
+        top: 0;
+        height: 2.4rem;
+        background: var(--color-paper-3);
+        color: var(--color-ink);
+        padding: 0 var(--space-2xs);
+        font-size: 0.78em;
+        white-space: nowrap;
+      }
+
+      .report-table td {
+        height: var(--row-height, 3rem);
+        background: var(--color-paper);
+        padding: 0;
+        vertical-align: top;
+      }
+
+      .report-table tr:nth-child(odd) td {
+        background: var(--color-paper-2);
+      }
+
+      .date-cell {
+        width: 6rem;
+      }
+
+      .name-cell {
+        width: 12rem;
+      }
+
+      .detail-cell {
+        width: 24rem;
+      }
+
+      .comment-cell {
+        width: 16rem;
+      }
+
+      .cell-static,
+      .editable-cell {
+        display: flex;
+        width: 100%;
+        min-height: var(--row-height, 3rem);
+        align-items: flex-start;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--color-ink);
+        padding: var(--space-2xs);
+        text-align: left;
+      }
+
+      .cell-static {
+        cursor: default;
+      }
+
+      .editable-cell {
+        white-space: normal;
+      }
+
+      .editable-cell:hover {
+        background: color-mix(
+          in oklch,
+          var(--color-accent) 7%,
+          transparent
+        );
+      }
+
+      .empty-hint {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-3xs);
+        color: var(--color-muted);
+        font-size: 0.82em;
+      }
+
+      .empty-hint::before {
+        display: none;
+        content: "+";
+        font-family: var(--font-mono);
+        font-weight: 800;
+      }
+
+      :root[data-empty="icon"] .empty-hint::before {
+        display: inline;
+      }
+
+      .editing-input {
+        width: 100%;
+        min-height: calc(var(--row-height, 3rem) - 2px);
+        resize: none;
+        border: 0;
+        border-radius: 0;
+        background: var(--color-dirty);
+        color: var(--color-ink);
+        padding: var(--space-2xs);
+      }
+
+      .comment-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3xs);
+        padding: var(--space-2xs);
+      }
+
+      .comment-button {
+        min-height: calc(var(--target-size, 2.25rem) - 0.35rem);
+        border-color: var(--color-accent);
+        background: var(--color-accent-soft);
+        color: var(--color-accent);
+      }
+
+      .comment-inspector {
+        display: none;
+        min-width: 0;
+        overflow: auto;
+        align-content: start;
+        gap: var(--space-xs);
+        border: 1px solid var(--color-rule-strong);
+        border-radius: var(--radius-md);
+        background: var(--color-paper-2);
+        padding: var(--space-sm);
+      }
+
+      :root[data-supervisor="inspector"]
+        .product-preview.is-supervisor
+        .comment-inspector {
+        display: grid;
+      }
+
+      :root[data-supervisor="inspector"]
+        .product-preview.is-supervisor
+        .comment-cell {
+        display: none;
+      }
+
+      .comment-inspector h3,
+      .comment-inspector p {
+        margin: 0;
+      }
+
+      .comment-inspector h3 {
+        font-size: 1em;
+      }
+
+      .comment-inspector p {
+        color: var(--color-muted);
+        font-size: 0.8em;
+      }
+
+      .comment-inspector textarea {
+        min-height: 8rem;
+        resize: vertical;
+        border: 1px solid var(--color-rule-strong);
+        border-radius: var(--radius-sm);
+        background: var(--color-paper);
+        color: var(--color-ink);
+        padding: var(--space-xs);
+      }
+
+      .inspector-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-2xs);
+      }
+
+      :root[data-focus="current"]
+        .product-preview
+        :is(button, input, textarea, [role="button"]):focus-visible {
+        outline: 2px solid var(--color-current-focus);
+        outline-offset: 1px;
+      }
+
+      :root[data-focus="strong"]
+        .product-preview
+        :is(button, input, textarea, [role="button"]):focus-visible {
+        outline: 3px solid var(--color-focus);
+        outline-offset: 2px;
+      }
+
+      :root[data-hit="compact"] .product-preview {
+        --target-size: 2.25rem;
+        --row-height: 3rem;
+      }
+
+      :root[data-hit="accessible"] .product-preview {
+        --target-size: 2.75rem;
+        --row-height: 3.35rem;
+      }
+
+      :root[data-press="flat"] .product-preview button:active {
+        transform: none;
+      }
+
+      :root[data-press="tactile"]
+        .product-preview
+        button:not(:disabled):active {
+        background-color: var(--color-accent-soft);
+        color: var(--color-accent);
+        transform: translateY(1px);
+      }
+
+      :root[data-press="tactile"]
+        .product-preview
+        button.primary:not(:disabled):active {
+        background-color: var(--color-accent-hover);
+        color: var(--color-accent-ink);
+      }
+
+      .diagnostics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-xs);
+        margin-top: var(--space-sm);
+      }
+
+      .diagnostic-card {
+        min-width: 0;
+        border-top: 0.2rem solid var(--color-accent);
+        background: var(--color-paper);
+        padding: var(--space-sm);
+      }
+
+      .diagnostic-card h2 {
+        margin: 0 0 var(--space-2xs);
+        font-size: var(--text-sm);
+      }
+
+      .diagnostic-value {
+        min-height: 2.8em;
+        margin: 0;
+        color: var(--color-ink-2);
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
+        overflow-wrap: anywhere;
+      }
+
+      .token-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3xs);
+        margin-top: var(--space-2xs);
+      }
+
+      .token-chip {
+        display: inline-flex;
+        min-height: 1.75rem;
+        align-items: center;
+        gap: var(--space-3xs);
+        border: var(--rule);
+        border-radius: 999px;
+        background: var(--color-paper-2);
+        padding: 0 var(--space-2xs);
+        font-size: var(--text-xs);
+      }
+
+      .token-dot {
+        width: 0.65rem;
+        height: 0.65rem;
+        border-radius: 50%;
+        background: var(--token-color);
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+
+      @media (max-width: 78rem) {
+        .diagnostics {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        :root[data-supervisor="inspector"]
+          .product-preview.is-supervisor
+          .report-layout {
+          grid-template-columns: minmax(24rem, 1fr) minmax(14rem, 17rem);
+        }
+      }
+
+      @container (max-width: 48rem) {
+        :root[data-supervisor="inspector"]
+          .product-preview.is-supervisor
+          .report-layout {
+          grid-template-columns: minmax(20rem, 1fr) minmax(13.5rem, 15rem);
+        }
+
+        .comment-inspector {
+          gap: var(--space-2xs);
+          padding: var(--space-xs);
+        }
+
+        .comment-inspector textarea {
+          min-height: 5.5rem;
+        }
+      }
+
+      @media (max-width: 58rem) {
+        .lab-layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .lab-controls {
+          border-right: 0;
+          border-bottom: var(--rule);
+        }
+
+        .controls-sticky {
+          position: static;
+        }
+
+        .control-group-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: var(--space-sm);
+        }
+      }
+
+      @media (max-width: 42rem) {
+        .lab-header,
+        .main-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .lab-layout {
+          display: block;
+        }
+
+        .control-group-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .lab-main {
+          padding: var(--space-xs);
+        }
+
+        .preview-viewport {
+          padding: var(--space-2xs);
+        }
+
+        .product-preview {
+          --preview-width: 48rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .nippo-sidebar,
+        .side-label,
+        .product-preview button {
+          transition: none !important;
+        }
+
+        .product-preview button:active {
+          transform: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="lab-header">
+      <div class="lab-brand">
+        <span class="lab-mark" aria-hidden="true">UX</span>
+        <div class="lab-title">
+          <strong>NIPPO UI/UX Playground</strong>
+          <span>改善案を隔離環境で比較する検証ページ</span>
+        </div>
+      </div>
+      <span class="isolation-badge">本番ファイルから分離</span>
+    </header>
+
+    <div class="lab-layout">
+      <aside class="lab-controls" aria-label="検証条件">
+        <div class="controls-sticky">
+          <p class="control-intro">
+            プリセットで全体を比較するか、各課題を個別に切り替えてください。
+          </p>
+
+          <div class="preset-row">
+            <button
+              class="lab-button preset-button"
+              type="button"
+              data-preset="current"
+              aria-pressed="false"
+            >
+              現状相当
+            </button>
+            <button
+              class="lab-button preset-button primary"
+              type="button"
+              data-preset="proposed"
+              aria-pressed="true"
+            >
+              改善案
+            </button>
+          </div>
+
+          <div class="control-group-grid">
+            <fieldset class="control-group">
+              <legend>アクセント</legend>
+              <div class="segmented" style="--segments: 3">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="accent"
+                  data-value="green"
+                  aria-pressed="true"
+                >
+                  緑
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="accent"
+                  data-value="blue"
+                  aria-pressed="false"
+                >
+                  青
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="accent"
+                  data-value="orange"
+                  aria-pressed="false"
+                >
+                  橙
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-group">
+              <legend>表示モード</legend>
+              <div class="segmented">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="mode"
+                  data-value="light"
+                  aria-pressed="true"
+                >
+                  ライト
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="mode"
+                  data-value="dark"
+                  aria-pressed="false"
+                >
+                  ダーク
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-group">
+              <legend>P0-1 フォーカス</legend>
+              <div class="segmented">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="focus"
+                  data-value="current"
+                  aria-pressed="false"
+                >
+                  現状
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="focus"
+                  data-value="strong"
+                  aria-pressed="true"
+                >
+                  3:1+
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-group">
+              <legend>P0-2 / P1-1 空セル</legend>
+              <div class="segmented" style="--segments: 3">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="empty"
+                  data-value="blank"
+                  aria-pressed="false"
+                >
+                  空白
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="empty"
+                  data-value="hint"
+                  aria-pressed="true"
+                >
+                  ヒント
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="empty"
+                  data-value="icon"
+                  aria-pressed="false"
+                >
+                  ＋入力
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-group">
+              <legend>P1-2 押下状態</legend>
+              <div class="segmented">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="press"
+                  data-value="flat"
+                  aria-pressed="false"
+                >
+                  なし
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="press"
+                  data-value="tactile"
+                  aria-pressed="true"
+                >
+                  1px
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-group">
+              <legend>P1-3 操作領域</legend>
+              <div class="segmented">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="hit"
+                  data-value="compact"
+                  aria-pressed="false"
+                >
+                  36px
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="hit"
+                  data-value="accessible"
+                  aria-pressed="true"
+                >
+                  44px
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-group">
+              <legend>P1-4 上司コメント</legend>
+              <div class="segmented">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="supervisor"
+                  data-value="table"
+                  aria-pressed="false"
+                >
+                  表内
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="supervisor"
+                  data-value="inspector"
+                  aria-pressed="true"
+                >
+                  固定欄
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-group">
+              <legend>P1-5 現在画面</legend>
+              <div class="segmented">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="semantics"
+                  data-value="visual"
+                  aria-pressed="false"
+                >
+                  見た目のみ
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="semantics"
+                  data-value="aria"
+                  aria-pressed="true"
+                >
+                  aria-current
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-group">
+              <legend>P1-6 モーション</legend>
+              <div class="segmented" style="--segments: 3">
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="motion"
+                  data-value="legacy"
+                  aria-pressed="false"
+                >
+                  幅
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="motion"
+                  data-value="safe"
+                  aria-pressed="true"
+                >
+                  安全
+                </button>
+                <button
+                  class="lab-button seg-button"
+                  type="button"
+                  data-setting="motion"
+                  data-value="reduce"
+                  aria-pressed="false"
+                >
+                  停止
+                </button>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="control-row">
+            <label for="previewWidth">プレビュー幅</label>
+            <select id="previewWidth" class="lab-select">
+              <option value="100%">可変</option>
+              <option value="1280px">1280px</option>
+              <option value="960px">960px</option>
+              <option value="760px">760px</option>
+            </select>
+          </div>
+
+          <div class="control-row">
+            <label for="previewFont">文字サイズ</label>
+            <select id="previewFont" class="lab-select">
+              <option value="standard">標準</option>
+              <option value="large">大</option>
+              <option value="xlarge">特大</option>
+            </select>
+          </div>
+        </div>
+      </aside>
+
+      <main class="lab-main">
+        <header class="main-heading">
+          <div>
+            <h1>改善案を、混ぜずに試す。</h1>
+          </div>
+          <p>
+            Tabでフォーカスを移動し、空セルをEnterで編集してください。
+            上司コメント画面では、狭い幅でコメント操作の到達性を比較できます。
+          </p>
+        </header>
+
+        <section class="preview-shell" aria-labelledby="previewTitle">
+          <div class="preview-meta">
+            <strong id="previewTitle">NIPPO 操作プレビュー</strong>
+            <output id="previewSummary" class="preview-meta-output"></output>
+          </div>
+          <div class="preview-viewport">
+            <div id="productPreview" class="product-preview" data-font="standard">
+              <header class="nippo-titlebar">
+                <span class="nippo-wordmark">
+                  <span class="nippo-wordmark-mark" aria-hidden="true">日</span>
+                  NIPPO
+                </span>
+                <span class="nippo-user">○ 山田 太郎</span>
+              </header>
+
+              <div class="nippo-app">
+                <aside class="nippo-sidebar" aria-label="NIPPOメニュー">
+                  <nav class="side-nav" aria-label="メインメニュー">
+                    <button
+                      class="side-nav-button is-active"
+                      type="button"
+                      data-view="daily"
+                      title="日報入力"
+                    >
+                      <span class="side-icon" aria-hidden="true">P</span>
+                      <span class="side-label">日報入力</span>
+                    </button>
+                    <button
+                      class="side-nav-button"
+                      type="button"
+                      data-view="boss"
+                      title="上司コメント"
+                    >
+                      <span class="side-icon" aria-hidden="true">C</span>
+                      <span class="side-label">上司コメント</span>
+                    </button>
+                  </nav>
+
+                  <div class="side-nav-secondary">
+                    <button
+                      class="side-nav-button"
+                      type="button"
+                      data-view="settings"
+                      title="設定"
+                    >
+                      <span class="side-icon" aria-hidden="true">S</span>
+                      <span class="side-label">設定</span>
+                    </button>
+                    <button
+                      id="collapseSidebar"
+                      class="side-collapse-button"
+                      type="button"
+                      aria-expanded="true"
+                    >
+                      <span class="side-icon" aria-hidden="true">«</span>
+                      <span class="side-label">折りたたむ</span>
+                    </button>
+                  </div>
+                </aside>
+
+                <section class="nippo-workspace" aria-labelledby="workTitle">
+                  <div class="work-heading">
+                    <h2 id="workTitle">日報入力</h2>
+                    <div class="action-row">
+                      <button class="toolbar-button" type="button">
+                        最新データを取得
+                      </button>
+                      <button class="toolbar-button primary" type="button">
+                        保存
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="filter-row">
+                    <div class="date-control">
+                      <input
+                        class="date-input"
+                        type="date"
+                        value="2026-06-02"
+                        aria-label="開始日"
+                      />
+                      <span aria-hidden="true">〜</span>
+                      <input
+                        class="date-input"
+                        type="date"
+                        value="2026-06-05"
+                        aria-label="終了日"
+                      />
+                    </div>
+                    <div class="preset-control" aria-label="期間プリセット">
+                      <button class="preset-chip" type="button" aria-pressed="false">
+                        月
+                      </button>
+                      <button class="preset-chip" type="button" aria-pressed="false">
+                        週
+                      </button>
+                      <button class="preset-chip" type="button" aria-pressed="false">
+                        日
+                      </button>
+                      <button class="preset-chip" type="button" aria-pressed="true">
+                        設定範囲
+                      </button>
+                    </div>
+                    <button class="toolbar-button" type="button">前の期間</button>
+                    <button class="toolbar-button" type="button">次の期間</button>
+                  </div>
+
+                  <div class="member-strip-wrap">
+                    <button
+                      class="member-scroll-button"
+                      type="button"
+                      data-member-scroll="-1"
+                      aria-label="前のメンバー"
+                    >
+                      ‹
+                    </button>
+                    <div id="memberStrip" class="member-strip" aria-label="対象メンバー">
+                      <button
+                        class="member-button"
+                        type="button"
+                        aria-pressed="true"
+                      >
+                        全員（20人）
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        伊藤
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        井上
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        加藤
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        吉田
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        高橋
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        佐々木
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        佐藤
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        斎藤
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        山口
+                      </button>
+                      <button class="member-button" type="button" aria-pressed="false">
+                        山田
+                      </button>
+                    </div>
+                    <button
+                      class="member-scroll-button"
+                      type="button"
+                      data-member-scroll="1"
+                      aria-label="次のメンバー"
+                    >
+                      ›
+                    </button>
+                  </div>
+
+                  <div class="report-layout">
+                    <div class="table-scroll">
+                      <table class="report-table">
+                        <thead>
+                          <tr>
+                            <th class="date-cell">日付</th>
+                            <th class="name-cell" data-supervisor-column="user">
+                              業務名
+                            </th>
+                            <th class="detail-cell">業務詳細</th>
+                            <th class="comment-cell">上司コメント</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>
+                              <span class="cell-static">
+                                6/2（火）<br />社休日
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                class="editable-cell"
+                                type="button"
+                                data-date="6月2日"
+                                data-field="業務名"
+                                data-value="未保存終了試験"
+                              >
+                                未保存終了試験
+                              </button>
+                            </td>
+                            <td>
+                              <button
+                                class="editable-cell"
+                                type="button"
+                                data-date="6月2日"
+                                data-field="業務詳細"
+                                data-value="2機能実装しました"
+                              >
+                                2機能実装しました
+                              </button>
+                            </td>
+                            <td class="comment-cell">
+                              <div class="comment-actions">
+                                <button class="comment-button" type="button">
+                                  サイン
+                                </button>
+                                <button class="comment-button" type="button">
+                                  コメントを追加
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <span class="cell-static">6/3（水）</span>
+                            </td>
+                            <td>
+                              <button
+                                class="editable-cell"
+                                type="button"
+                                data-date="6月3日"
+                                data-field="業務名"
+                                data-value="フロントエンド作成"
+                              >
+                                フロントエンド作成
+                              </button>
+                            </td>
+                            <td>
+                              <button
+                                class="editable-cell"
+                                type="button"
+                                data-date="6月3日"
+                                data-field="業務詳細"
+                                data-value="CSSを作りました"
+                              >
+                                CSSを作りました
+                              </button>
+                            </td>
+                            <td class="comment-cell">
+                              <div class="comment-actions">
+                                <button class="comment-button" type="button">
+                                  サイン
+                                </button>
+                                <button class="comment-button" type="button">
+                                  コメントを追加
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <span class="cell-static">
+                                6/4（木）<br />祝日
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                class="editable-cell"
+                                type="button"
+                                data-date="6月4日"
+                                data-field="業務名"
+                                data-value=""
+                              ></button>
+                            </td>
+                            <td>
+                              <button
+                                class="editable-cell"
+                                type="button"
+                                data-date="6月4日"
+                                data-field="業務詳細"
+                                data-value=""
+                              ></button>
+                            </td>
+                            <td class="comment-cell">
+                              <div class="comment-actions">
+                                <button class="comment-button" type="button">
+                                  サイン
+                                </button>
+                                <button class="comment-button" type="button">
+                                  コメントを追加
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <span class="cell-static">6/5（金）</span>
+                            </td>
+                            <td>
+                              <button
+                                class="editable-cell"
+                                type="button"
+                                data-date="6月5日"
+                                data-field="業務名"
+                                data-value=""
+                              ></button>
+                            </td>
+                            <td>
+                              <button
+                                class="editable-cell"
+                                type="button"
+                                data-date="6月5日"
+                                data-field="業務詳細"
+                                data-value=""
+                              ></button>
+                            </td>
+                            <td class="comment-cell">
+                              <div class="comment-actions">
+                                <button class="comment-button" type="button">
+                                  サイン
+                                </button>
+                                <button class="comment-button" type="button">
+                                  コメントを追加
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <aside class="comment-inspector" aria-label="上司コメント編集">
+                      <div>
+                        <h3>佐藤 花子 · 6月3日</h3>
+                        <p>フロントエンド作成 / CSSを作りました</p>
+                      </div>
+                      <label for="supervisorComment">上司コメント</label>
+                      <textarea
+                        id="supervisorComment"
+                        placeholder="コメントを入力"
+                      ></textarea>
+                      <div class="inspector-actions">
+                        <button class="toolbar-button" type="button">サイン</button>
+                        <button class="toolbar-button primary" type="button">
+                          反映
+                        </button>
+                      </div>
+                    </aside>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="diagnostics" aria-label="検証結果">
+          <article class="diagnostic-card">
+            <h2>フォーカス中の要素</h2>
+            <p id="focusDiagnostic" class="diagnostic-value">
+              Tabキーでプレビューへ移動してください
+            </p>
+          </article>
+          <article class="diagnostic-card">
+            <h2>現在画面のセマンティクス</h2>
+            <p id="ariaDiagnostic" class="diagnostic-value"></p>
+          </article>
+          <article class="diagnostic-card">
+            <h2>意味トークン</h2>
+            <p class="diagnostic-value">直接色ではなく役割で比較</p>
+            <div class="token-list" aria-label="使用中の色トークン">
+              <span class="token-chip">
+                <span
+                  class="token-dot"
+                  style="--token-color: var(--color-accent)"
+                ></span>
+                accent
+              </span>
+              <span class="token-chip">
+                <span
+                  class="token-dot"
+                  style="--token-color: var(--color-focus)"
+                ></span>
+                focus
+              </span>
+              <span class="token-chip">
+                <span
+                  class="token-dot"
+                  style="--token-color: var(--color-saturday)"
+                ></span>
+                saturday
+              </span>
+              <span class="token-chip">
+                <span
+                  class="token-dot"
+                  style="--token-color: var(--color-error)"
+                ></span>
+                error
+              </span>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <div id="liveRegion" class="sr-only" aria-live="polite"></div>
+
+    <script>
+      const root = document.documentElement;
+      const productPreview = document.querySelector("#productPreview");
+      const previewSummary = document.querySelector("#previewSummary");
+      const focusDiagnostic = document.querySelector("#focusDiagnostic");
+      const ariaDiagnostic = document.querySelector("#ariaDiagnostic");
+      const liveRegion = document.querySelector("#liveRegion");
+      const workTitle = document.querySelector("#workTitle");
+      const memberStrip = document.querySelector("#memberStrip");
+
+      const settings = {
+        accent: "green",
+        mode: "light",
+        focus: "strong",
+        empty: "hint",
+        press: "tactile",
+        hit: "accessible",
+        supervisor: "inspector",
+        semantics: "aria",
+        motion: "safe",
+      };
+
+      const presets = {
+        current: {
+          focus: "current",
+          empty: "blank",
+          press: "flat",
+          hit: "compact",
+          supervisor: "table",
+          semantics: "visual",
+          motion: "legacy",
+        },
+        proposed: {
+          focus: "strong",
+          empty: "hint",
+          press: "tactile",
+          hit: "accessible",
+          supervisor: "inspector",
+          semantics: "aria",
+          motion: "safe",
+        },
+      };
+
+      function setSetting(name, value, { syncPreset = true } = {}) {
+        settings[name] = value;
+        if (name === "accent" || name === "mode") {
+          root.dataset[name] = value;
+        } else {
+          root.dataset[name] = value;
+        }
+
+        document
+          .querySelectorAll(`[data-setting="${name}"]`)
+          .forEach((button) => {
+            button.setAttribute(
+              "aria-pressed",
+              String(button.dataset.value === value),
+            );
+          });
+
+        if (syncPreset) {
+          document
+            .querySelectorAll("[data-preset]")
+            .forEach((button) => button.setAttribute("aria-pressed", "false"));
+        }
+
+        renderEditableCells();
+        syncViewSemantics();
+        updateDiagnostics();
+      }
+
+      function applyPreset(name) {
+        Object.entries(presets[name]).forEach(([settingName, value]) => {
+          setSetting(settingName, value, { syncPreset: false });
+        });
+        document.querySelectorAll("[data-preset]").forEach((button) => {
+          button.setAttribute(
+            "aria-pressed",
+            String(button.dataset.preset === name),
+          );
+        });
+        updateDiagnostics();
+      }
+
+      function getCellAccessibleName(cell) {
+        const value = cell.dataset.value.trim();
+        const state = value ? value : "未入力";
+        return `${cell.dataset.date}の${cell.dataset.field}、${state}。Enterキーで編集`;
+      }
+
+      function renderEditableCells() {
+        document.querySelectorAll(".editable-cell").forEach((cell) => {
+          if (cell.querySelector("textarea")) return;
+          const value = cell.dataset.value.trim();
+          cell.replaceChildren();
+
+          if (value) {
+            cell.textContent = value;
+          } else if (settings.empty !== "blank") {
+            const hint = document.createElement("span");
+            hint.className = "empty-hint";
+            hint.textContent = settings.empty === "icon" ? "入力" : "未入力";
+            cell.appendChild(hint);
+          }
+
+          if (settings.semantics === "aria") {
+            cell.setAttribute("aria-label", getCellAccessibleName(cell));
+          } else {
+            cell.removeAttribute("aria-label");
+          }
+        });
+      }
+
+      function startEditing(cell) {
+        if (cell.querySelector("textarea")) return;
+        const originalValue = cell.dataset.value;
+        const textarea = document.createElement("textarea");
+        textarea.className = "editing-input";
+        textarea.value = originalValue;
+        if (settings.semantics === "aria") {
+          textarea.setAttribute(
+            "aria-label",
+            `${cell.dataset.date}の${cell.dataset.field}`,
+          );
+        }
+        cell.replaceChildren(textarea);
+        textarea.focus();
+        textarea.select();
+
+        const finish = ({ cancel = false } = {}) => {
+          if (!cancel) {
+            cell.dataset.value = textarea.value.trim();
+          }
+          renderEditableCells();
+          cell.focus({ preventScroll: true });
+          liveRegion.textContent = cancel
+            ? "編集を取り消しました"
+            : `${cell.dataset.field}を更新しました`;
+        };
+
+        textarea.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            finish({ cancel: true });
+          }
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            finish();
+          }
+        });
+        textarea.addEventListener("blur", () => {
+          if (cell.contains(textarea)) finish();
+        });
+      }
+
+      function setView(view) {
+        document.querySelectorAll("[data-view]").forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.view === view);
+        });
+        productPreview.classList.toggle("is-supervisor", view === "boss");
+        workTitle.textContent =
+          view === "boss" ? "上司コメント" : view === "settings" ? "設定" : "日報入力";
+        syncViewSemantics();
+        updateDiagnostics();
+      }
+
+      function syncViewSemantics() {
+        document.querySelectorAll("[data-view]").forEach((button) => {
+          const isActive = button.classList.contains("is-active");
+          if (settings.semantics === "aria" && isActive) {
+            button.setAttribute("aria-current", "page");
+          } else {
+            button.removeAttribute("aria-current");
+          }
+        });
+      }
+
+      function updateDiagnostics() {
+        const activeView = document.querySelector("[data-view].is-active");
+        const ariaCurrent = activeView?.getAttribute("aria-current");
+        ariaDiagnostic.textContent = activeView
+          ? `${activeView.title}: aria-current=${ariaCurrent ?? "なし"}`
+          : "選択画面なし";
+        previewSummary.textContent =
+          `${settings.focus} / ${settings.empty} / ` +
+          `${settings.hit} / ${settings.supervisor}`;
+        updateFocusDiagnostic();
+      }
+
+      function updateFocusDiagnostic() {
+        const target = document.activeElement;
+        if (!target || !productPreview.contains(target)) return;
+        const label =
+          target.getAttribute("aria-label") ||
+          target.getAttribute("title") ||
+          target.textContent.trim() ||
+          target.tagName.toLowerCase();
+        focusDiagnostic.textContent =
+          `${target.tagName.toLowerCase()} · ${label} · ` +
+          `aria-current=${target.getAttribute("aria-current") ?? "なし"}`;
+      }
+
+      document.querySelectorAll("[data-setting]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setSetting(button.dataset.setting, button.dataset.value);
+        });
+      });
+
+      document.querySelectorAll("[data-preset]").forEach((button) => {
+        button.addEventListener("click", () => applyPreset(button.dataset.preset));
+      });
+
+      document.querySelectorAll("[data-view]").forEach((button) => {
+        button.addEventListener("click", () => setView(button.dataset.view));
+      });
+
+      document.querySelectorAll(".editable-cell").forEach((cell) => {
+        cell.addEventListener("click", () => startEditing(cell));
+        cell.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            startEditing(cell);
+          }
+        });
+      });
+
+      document.querySelectorAll(".preset-chip").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".preset-chip").forEach((candidate) => {
+            candidate.setAttribute(
+              "aria-pressed",
+              String(candidate === button),
+            );
+          });
+        });
+      });
+
+      document.querySelectorAll(".member-button").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".member-button").forEach((candidate) => {
+            candidate.setAttribute(
+              "aria-pressed",
+              String(candidate === button),
+            );
+          });
+          button.scrollIntoView({
+            behavior: settings.motion === "reduce" ? "auto" : "smooth",
+            block: "nearest",
+            inline: "center",
+          });
+        });
+      });
+
+      document.querySelectorAll("[data-member-scroll]").forEach((button) => {
+        button.addEventListener("click", () => {
+          memberStrip.scrollBy({
+            left: Number(button.dataset.memberScroll) * 220,
+            behavior: settings.motion === "reduce" ? "auto" : "smooth",
+          });
+        });
+      });
+
+      document
+        .querySelector("#collapseSidebar")
+        .addEventListener("click", (event) => {
+          const collapsed = productPreview.classList.toggle(
+            "is-sidebar-collapsed",
+          );
+          event.currentTarget.setAttribute(
+            "aria-expanded",
+            String(!collapsed),
+          );
+          event.currentTarget.querySelector(".side-icon").textContent = collapsed
+            ? "»"
+            : "«";
+          event.currentTarget.querySelector(".side-label").textContent = collapsed
+            ? "展開する"
+            : "折りたたむ";
+        });
+
+      document.querySelector("#previewWidth").addEventListener("change", (event) => {
+        productPreview.style.setProperty("--preview-width", event.target.value);
+      });
+
+      document.querySelector("#previewFont").addEventListener("change", (event) => {
+        productPreview.dataset.font = event.target.value;
+      });
+
+      document.addEventListener("focusin", (event) => {
+        if (!productPreview.contains(event.target)) return;
+        updateFocusDiagnostic();
+      });
+
+      Object.entries(settings).forEach(([name, value]) => {
+        setSetting(name, value, { syncPreset: false });
+      });
+      applyPreset("proposed");
+      setView("daily");
+      renderEditableCells();
+      updateDiagnostics();
+    </script>
+  </body>
+</html>

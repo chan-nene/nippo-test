@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -13,7 +14,11 @@ from zoneinfo import ZoneInfo
 import polars as pl
 
 from app.config import AppSettings, validate_settings_paths
-from app.security import safe_employee_csv_path, validate_employee_id
+from app.security import (
+    COMMON_MASTER_COLUMNS,
+    safe_employee_csv_path,
+    validate_employee_id,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -39,12 +44,17 @@ CSV_ENCODINGS = ("utf8", "cp932")
 DEFAULT_BACKUP_LIMIT = 20
 
 
+class CommonMasterConflictError(RuntimeError):
+    """The common CSV changed after it was loaded in the admin screen."""
+
+
 class DailyReportRepository:
     def __init__(self, settings: AppSettings, base_dir: Path) -> None:
         self.settings = settings
         self.base_dir = base_dir
         self.load_warnings: list[dict[str, str]] = []
         self.backup_limit = DEFAULT_BACKUP_LIMIT
+        self.legacy_rank_migration_required = False
 
     @staticmethod
     def now_jst() -> datetime:
@@ -63,10 +73,184 @@ class DailyReportRepository:
         common_dir = Path(self.settings.common_dir)
         return {
             "superior_config": self._read_csv(common_dir / "superior_config.csv"),
-            "superior_master": self._read_csv(common_dir / "superior_master.csv"),
-            "user_master": self._read_csv(common_dir / "user_master.csv"),
+            "user_master": self._load_user_master(common_dir),
+            "team_master": self._read_csv_or_empty(
+                common_dir / "team_master.csv",
+                list(COMMON_MASTER_COLUMNS["team_master"]),
+            ).to_dicts(),
             "calendar": self._read_csv(common_dir / "calendar.csv"),
         }
+
+    def load_common_masters(self) -> dict[str, list[dict[str, Any]]]:
+        common_dir = Path(self.settings.common_dir)
+        return {
+            master: (
+                self._load_user_master(common_dir)
+                if master == "user_master"
+                else self._read_csv_or_empty(
+                    common_dir / f"{master}.csv", list(columns)
+                ).to_dicts()
+            )
+            for master, columns in COMMON_MASTER_COLUMNS.items()
+        }
+
+    def _load_user_master(self, common_dir: Path) -> list[dict[str, Any]]:
+        path = common_dir / "user_master.csv"
+        columns = list(COMMON_MASTER_COLUMNS["user_master"])
+        if not path.exists():
+            self._record_load_warning(path, FileNotFoundError("ファイルがありません"))
+            return []
+        try:
+            source = self._read_csv_frame(path)
+        except Exception as exc:
+            self._record_load_warning(path, exc)
+            return []
+
+        has_integrated_rank = "superior_rank" in source.columns
+        rows = self._ensure_columns(source, columns).to_dicts()
+        legacy_path = common_dir / "superior_master.csv"
+        if has_integrated_rank or not legacy_path.exists():
+            return rows
+
+        self.legacy_rank_migration_required = True
+        legacy_ranks = {
+            str(row.get("employee_id", "")): str(row.get("rank", ""))
+            for row in self._read_csv(legacy_path)
+            if row.get("employee_id")
+        }
+        for row in rows:
+            row["superior_rank"] = legacy_ranks.get(
+                str(row.get("employee_id", "")), ""
+            )
+        return rows
+
+    def get_common_master_revisions(self) -> dict[str, str]:
+        common_dir = Path(self.settings.common_dir)
+        return {
+            master: self._common_master_revision(common_dir / f"{master}.csv")
+            for master in COMMON_MASTER_COLUMNS
+        }
+
+    def save_common_master(
+        self,
+        master: str,
+        rows: list[dict[str, str]],
+        expected_revision: str = "",
+    ) -> str:
+        if master not in COMMON_MASTER_COLUMNS:
+            raise ValueError("共通マスターの種類が不正です。")
+        columns = list(COMMON_MASTER_COLUMNS[master])
+        normalized = [
+            {column: str(row.get(column, "")) for column in columns}
+            for row in rows
+        ]
+        df = (
+            pl.DataFrame(normalized, schema=columns, orient="row")
+            if normalized
+            else self._empty_df(columns)
+        )
+        target_path = Path(self.settings.common_dir) / f"{master}.csv"
+        if (
+            expected_revision
+            and self._common_master_revision(target_path) != expected_revision
+        ):
+            raise CommonMasterConflictError(
+                "共通マスターが別の場所で更新されています。"
+            )
+        self._write_csv_atomically(df, target_path, "common")
+        return self._common_master_revision(target_path)
+
+    def save_user_administration(
+        self,
+        users: list[dict[str, str]],
+        relationships: list[dict[str, str]],
+        expected_revisions: dict[str, str],
+    ) -> dict[str, str]:
+        common_dir = Path(self.settings.common_dir)
+        targets = {
+            "user_master": common_dir / "user_master.csv",
+            "superior_config": common_dir / "superior_config.csv",
+        }
+        for master, target_path in targets.items():
+            expected = expected_revisions.get(master, "")
+            if expected and self._common_master_revision(target_path) != expected:
+                raise CommonMasterConflictError(
+                    "共通マスターが別の場所で更新されています。"
+                )
+
+        frames = [
+            (
+                self._common_master_frame("user_master", users),
+                targets["user_master"],
+            ),
+            (
+                self._common_master_frame("superior_config", relationships),
+                targets["superior_config"],
+            ),
+        ]
+        self._write_csv_frames_atomically(frames, "common")
+        return {
+            master: self._common_master_revision(path)
+            for master, path in targets.items()
+        }
+
+    def save_administration(
+        self,
+        teams: list[dict[str, str]],
+        users: list[dict[str, str]],
+        relationships: list[dict[str, str]],
+        expected_revisions: dict[str, str],
+    ) -> dict[str, str]:
+        common_dir = Path(self.settings.common_dir)
+        targets = {
+            "team_master": common_dir / "team_master.csv",
+            "user_master": common_dir / "user_master.csv",
+            "superior_config": common_dir / "superior_config.csv",
+        }
+        for master, target_path in targets.items():
+            expected = expected_revisions.get(master, "")
+            if expected and self._common_master_revision(target_path) != expected:
+                raise CommonMasterConflictError(
+                    "共通マスターが別の場所で更新されています。"
+                )
+
+        frames = [
+            (self._common_master_frame(master, rows), targets[master])
+            for master, rows in (
+                ("team_master", teams),
+                ("user_master", users),
+                ("superior_config", relationships),
+            )
+        ]
+        self._write_csv_frames_atomically(frames, "common")
+        return {
+            master: self._common_master_revision(path)
+            for master, path in targets.items()
+        }
+
+    def _common_master_frame(
+        self, master: str, rows: list[dict[str, str]]
+    ) -> pl.DataFrame:
+        columns = list(COMMON_MASTER_COLUMNS[master])
+        normalized = [
+            {column: str(row.get(column, "")) for column in columns}
+            for row in rows
+        ]
+        return (
+            pl.DataFrame(normalized, schema=columns, orient="row")
+            if normalized
+            else self._empty_df(columns)
+        )
+
+    @staticmethod
+    def _common_master_revision(path: Path) -> str:
+        if not path.exists():
+            return "missing"
+        digest = hashlib.sha256()
+        with path.open("rb") as file:
+            for chunk in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def _read_csv(self, path: Path) -> list[dict[str, Any]]:
         if not path.exists():
@@ -119,29 +303,26 @@ class DailyReportRepository:
         user_master = {row.get("employee_id", ""): row for row in common["user_master"]}
         my_display = user_master.get(employee_id, {}).get("display_name") or employee_id
 
-        is_superior = any(
-            row.get("superior_employee_id") == employee_id
+        assigned_subordinate_ids = {
+            str(row.get("subordinate_employee_id", ""))
             for row in common["superior_config"]
+            if str(row.get("superior_employee_id", "")) == employee_id
+            and row.get("subordinate_employee_id")
+        }
+        viewable_members = self._build_viewable_members(
+            common, employee_id, assigned_subordinate_ids
         )
-        subordinate_ids = [
-            row.get("subordinate_employee_id", "")
-            for row in common["superior_config"]
-            if row.get("superior_employee_id") == employee_id
-        ]
-        if employee_id not in subordinate_ids:
-            subordinate_ids.append(employee_id)
+        target_employee_ids = [member["employee_id"] for member in viewable_members]
 
-        users_df = self._load_all_user_rows(
-            subordinate_ids if is_superior else [employee_id]
-        )
+        users_df = self._load_all_user_rows(target_employee_ids)
         comments_df = self._load_all_comment_rows()
         rows, default_start, default_end = self._build_rows(
             users_df,
             comments_df,
             common,
             employee_id,
-            is_superior,
-            subordinate_ids if is_superior else [employee_id],
+            assigned_subordinate_ids,
+            target_employee_ids,
             start_date,
             end_date,
         )
@@ -150,12 +331,20 @@ class DailyReportRepository:
             comments_df,
             common,
             employee_id,
-            subordinate_ids if is_superior else [],
+            list(assigned_subordinate_ids),
         )
+        for member in viewable_members:
+            member["pending_review_count"] = missing_comment_summary.get(
+                "member_counts", {}
+            ).get(member["employee_id"], 0)
         return {
             "employee_id": employee_id,
             "display_name": my_display,
-            "is_superior": is_superior,
+            "is_superior": bool(assigned_subordinate_ids),
+            "current_team": self._team_path(
+                common, str(user_master.get(employee_id, {}).get("small_team_id", ""))
+            ),
+            "viewable_members": viewable_members,
             "rows": rows,
             "missing_comment_summary": missing_comment_summary,
             "my_rank": self._get_my_rank(common, employee_id),
@@ -163,6 +352,102 @@ class DailyReportRepository:
             "end_date": default_end.isoformat() if default_end else None,
             "load_warning_count": len(self.load_warnings),
         }
+
+    def _build_viewable_members(
+        self,
+        common: dict[str, list[dict[str, Any]]],
+        employee_id: str,
+        assigned_subordinate_ids: set[str],
+    ) -> list[dict[str, Any]]:
+        users = {
+            str(row.get("employee_id", "")): row
+            for row in common["user_master"]
+            if row.get("employee_id")
+        }
+        current_user = users.get(employee_id, {})
+        small_team_id = str(current_user.get("small_team_id", "")).strip()
+        same_team_ids = {
+            target_id
+            for target_id, row in users.items()
+            if small_team_id
+            and str(row.get("small_team_id", "")).strip() == small_team_id
+        }
+        target_ids = {employee_id, *same_team_ids, *assigned_subordinate_ids}
+
+        def display_order(row: dict[str, Any]) -> int:
+            try:
+                return int(row.get("display_order") or 999999)
+            except (TypeError, ValueError):
+                return 999999
+
+        members: list[dict[str, Any]] = []
+        for target_id in target_ids:
+            row = users.get(target_id, {})
+            relations = []
+            if target_id == employee_id:
+                relations.append("self")
+            if target_id in same_team_ids:
+                relations.append("same_small_team")
+            if target_id in assigned_subordinate_ids:
+                relations.append("assigned_subordinate")
+            members.append(
+                {
+                    "employee_id": target_id,
+                    "display_name": str(row.get("display_name") or target_id),
+                    "small_team_id": str(row.get("small_team_id", "")),
+                    "team_path": self._team_path(
+                        common, str(row.get("small_team_id", ""))
+                    ),
+                    "relations": relations,
+                    "can_view_report": True,
+                    "can_comment": target_id in assigned_subordinate_ids,
+                    "display_order": display_order(row),
+                }
+            )
+
+        members.sort(
+            key=lambda member: (
+                0
+                if member["employee_id"] == employee_id
+                else 1
+                if "same_small_team" in member["relations"]
+                else 2,
+                member["display_order"],
+                member["display_name"],
+                member["employee_id"],
+            )
+        )
+        return members
+
+    @staticmethod
+    def _team_path(
+        common: dict[str, list[dict[str, Any]]], small_team_id: str
+    ) -> list[dict[str, str]]:
+        if not small_team_id:
+            return []
+        teams = {
+            str(row.get("team_id", "")): row
+            for row in common.get("team_master", [])
+            if row.get("team_id")
+        }
+        path: list[dict[str, str]] = []
+        team_id = small_team_id
+        visited: set[str] = set()
+        while team_id and team_id not in visited:
+            visited.add(team_id)
+            row = teams.get(team_id)
+            if row is None:
+                break
+            path.append(
+                {
+                    "team_id": team_id,
+                    "team_name": str(row.get("team_name") or team_id),
+                    "team_level": str(row.get("team_level", "")),
+                }
+            )
+            team_id = str(row.get("parent_team_id", ""))
+        path.reverse()
+        return path
 
     def _previous_working_date(
         self,
@@ -181,13 +466,32 @@ class DailyReportRepository:
         return candidate
 
     def _get_my_rank(self, common: dict[str, Any], employee_id: str) -> int:
-        for row in common["superior_master"]:
-            if row.get("employee_id") == employee_id:
-                try:
-                    return int(row.get("rank") or 9999)
-                except ValueError:
-                    return 9999
-        return 0
+        return self._superior_rank_map(common).get(employee_id, -1)
+
+    def _superior_rank_map(self, common: dict[str, Any]) -> dict[str, int]:
+        ranks: dict[str, int] = {}
+        for row in common.get("user_master", []):
+            employee_id = str(row.get("employee_id", ""))
+            raw_rank = row.get("superior_rank", "")
+            if not employee_id or raw_rank in {"", None}:
+                continue
+            try:
+                ranks[employee_id] = int(raw_rank)
+            except (TypeError, ValueError):
+                ranks[employee_id] = 9999
+
+        # Tests and transitional callers may still provide the former structure.
+        if ranks:
+            return ranks
+        for row in common.get("superior_master", []):
+            employee_id = str(row.get("employee_id", ""))
+            if not employee_id:
+                continue
+            try:
+                ranks[employee_id] = int(row.get("rank") or 9999)
+            except (TypeError, ValueError):
+                ranks[employee_id] = 9999
+        return ranks
 
     def _build_missing_comment_summary(
         self,
@@ -213,6 +517,7 @@ class DailyReportRepository:
             "start_date": range_start.isoformat(),
             "end_date": range_end.isoformat(),
             "dates": [],
+            "member_counts": {},
         }
         if range_start > range_end:
             return summary
@@ -231,18 +536,6 @@ class DailyReportRepository:
             if str(row.get("is_holiday", "0")) == "1"
             and (calendar_date := self._to_date(row.get("date"))) is not None
         }
-        report_keys: set[tuple[str, date]] = set()
-        for row in users_df.to_dicts():
-            target_id = str(row.get("employee_id", ""))
-            report_date = self._to_date(row.get("date"))
-            if (
-                target_id in subordinate_ids
-                and report_date is not None
-                and range_start <= report_date <= range_end
-                and self._row_has_report_data(row)
-            ):
-                report_keys.add((target_id, report_date))
-
         comments = {
             (str(row.get("subordinate_employee_id", "")), comment_date): str(
                 row.get("comment") or ""
@@ -254,17 +547,22 @@ class DailyReportRepository:
         }
 
         missing_dates: list[str] = []
+        member_counts = {subordinate_id: 0 for subordinate_id in subordinate_ids}
         for offset in range((range_end - range_start).days + 1):
             target_date = range_start + timedelta(days=offset)
+            if target_date in holiday_dates:
+                continue
+            date_is_missing = False
             for subordinate_id in subordinate_ids:
                 report_key = (subordinate_id, target_date)
-                if target_date in holiday_dates and report_key not in report_keys:
-                    continue
                 if not comments.get(report_key, ""):
-                    missing_dates.append(target_date.isoformat())
-                    break
+                    member_counts[subordinate_id] += 1
+                    date_is_missing = True
+            if date_is_missing:
+                missing_dates.append(target_date.isoformat())
 
         summary["dates"] = missing_dates
+        summary["member_counts"] = member_counts
         return summary
 
     @staticmethod
@@ -407,21 +705,14 @@ class DailyReportRepository:
         comments_df: pl.DataFrame,
         common: dict[str, list[dict[str, Any]]],
         employee_id: str,
-        is_superior: bool,
+        assigned_subordinate_ids: set[str],
         target_employee_ids: list[str],
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> tuple[list[dict[str, Any]], date | None, date | None]:
         user_master = {row.get("employee_id", ""): row for row in common["user_master"]}
         calendar = {row.get("date", ""): row for row in common["calendar"]}
-        superior_ranks: dict[str, int] = {}
-        for row in common["superior_master"]:
-            sid = row.get("employee_id", "")
-            if sid:
-                try:
-                    superior_ranks[sid] = int(row.get("rank") or 9999)
-                except ValueError:
-                    superior_ranks[sid] = 9999
+        superior_ranks = self._superior_rank_map(common)
         superior_ids = sorted(
             superior_ranks.keys(),
             key=lambda item: superior_ranks.get(item, 9999),
@@ -481,11 +772,23 @@ class DailyReportRepository:
                             (superior_id, target_employee_id, d), ""
                         ),
                         "reply": replies.get(superior_id, ""),
-                        "editable": is_superior and superior_id == employee_id,
+                        "editable": (
+                            target_employee_id in assigned_subordinate_ids
+                            and superior_id == employee_id
+                        ),
                         "rank": superior_ranks.get(superior_id, 9999),
                     }
                 )
             cal = calendar.get(date_text, {})
+            is_holiday = str(cal.get("is_holiday", "0")) == "1"
+            my_comment = comment_map.get((employee_id, target_employee_id, d), "")
+            needs_review = (
+                target_employee_id in assigned_subordinate_ids
+                and not is_holiday
+                and d <= today
+                and (d < today or self.settings.include_today_in_missing_comments)
+                and not str(my_comment).strip()
+            )
             return {
                 "employee_id": target_employee_id,
                 "display_name": user_master.get(target_employee_id, {}).get(
@@ -497,10 +800,12 @@ class DailyReportRepository:
                 "business_detail": str(
                     (source_row or {}).get("business_detail") or ""
                 ),
-                "is_holiday": str(cal.get("is_holiday", "0")) == "1",
+                "is_holiday": is_holiday,
                 "holiday_description": cal.get("description", ""),
                 "is_today": d == today,
                 "can_edit_report": target_employee_id == employee_id,
+                "can_edit_my_comment": target_employee_id in assigned_subordinate_ids,
+                "needs_review": needs_review,
                 "comments": comment_cells,
             }
 
@@ -521,8 +826,12 @@ class DailyReportRepository:
                 d = default_start + timedelta(days=offset)
                 if (target_employee_id, d) not in present_keys:
                     view_rows.append(build_view_row(target_employee_id, d))
+        member_order = {target_id: index for index, target_id in enumerate(target_ids)}
         view_rows.sort(
-            key=lambda item: (item["date"], item["employee_id"]), reverse=False
+            key=lambda item: (
+                member_order.get(item["employee_id"], len(member_order)),
+                date.fromisoformat(item["date"]).toordinal(),
+            )
         )
         return view_rows, default_start, default_end
 
@@ -633,35 +942,85 @@ class DailyReportRepository:
         self, df: pl.DataFrame, target_path: Path, backup_group: str
     ) -> None:
         """Write a CSV completely, then replace the destination in one operation."""
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path: Path | None = None
+        self._write_csv_frames_atomically([(df, target_path)], backup_group)
+
+    def _write_csv_frames_atomically(
+        self,
+        frames: list[tuple[pl.DataFrame, Path]],
+        backup_group: str,
+    ) -> None:
+        staged: dict[Path, Path | None] = {}
+        originals: dict[Path, Path | None] = {}
+        replaced: list[Path] = []
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="wb",
-                prefix=f".{target_path.stem}.",
-                suffix=".tmp",
-                dir=target_path.parent,
-                delete=False,
-            ) as temporary:
-                temp_path = Path(temporary.name)
+            for df, target_path in frames:
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile(
+                    mode="wb",
+                    prefix=f".{target_path.stem}.",
+                    suffix=".tmp",
+                    dir=target_path.parent,
+                    delete=False,
+                ) as temporary:
+                    staged[target_path] = Path(temporary.name)
+                stage_path = staged[target_path]
+                if stage_path is None:
+                    raise RuntimeError("一時CSVを作成できませんでした。")
+                df.write_csv(stage_path)
+                with stage_path.open("rb+") as completed_file:
+                    os.fsync(completed_file.fileno())
 
-            df.write_csv(temp_path)
-            with temp_path.open("rb+") as completed_file:
-                os.fsync(completed_file.fileno())
+            for _, target_path in frames:
+                originals[target_path] = None
+                if target_path.exists():
+                    with tempfile.NamedTemporaryFile(
+                        mode="wb",
+                        prefix=f".{target_path.stem}.",
+                        suffix=".rollback",
+                        dir=target_path.parent,
+                        delete=False,
+                    ) as original:
+                        originals[target_path] = Path(original.name)
+                    original_path = originals[target_path]
+                    if original_path is not None:
+                        shutil.copy2(target_path, original_path)
+                    self._backup_csv(target_path, backup_group)
 
-            if target_path.exists():
-                backup_dir = self.base_dir / "cache" / "csv_backups" / backup_group
-                backup_dir.mkdir(parents=True, exist_ok=True)
-                timestamp = self.now_jst().strftime("%Y%m%d_%H%M%S_%f")
-                backup_path = backup_dir / f"{target_path.stem}_{timestamp}.csv"
-                shutil.copy2(target_path, backup_path)
-                self._prune_backups(backup_dir, target_path.stem)
-
-            os.replace(temp_path, target_path)
-            temp_path = None
+            for _, target_path in frames:
+                stage_path = staged[target_path]
+                if stage_path is None:
+                    raise RuntimeError("保存対象の一時CSVがありません。")
+                os.replace(stage_path, target_path)
+                staged[target_path] = None
+                replaced.append(target_path)
+        except Exception:
+            for target_path in reversed(replaced):
+                original_path = originals.get(target_path)
+                try:
+                    if original_path is None:
+                        target_path.unlink(missing_ok=True)
+                    else:
+                        os.replace(original_path, target_path)
+                        originals[target_path] = None
+                except Exception:
+                    logger.critical(
+                        "Failed to roll back a common CSV transaction: %s",
+                        target_path,
+                        exc_info=True,
+                    )
+            raise
         finally:
-            if temp_path is not None:
-                temp_path.unlink(missing_ok=True)
+            for path in (*staged.values(), *originals.values()):
+                if path is not None:
+                    path.unlink(missing_ok=True)
+
+    def _backup_csv(self, target_path: Path, backup_group: str) -> None:
+        backup_dir = self.base_dir / "cache" / "csv_backups" / backup_group
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = self.now_jst().strftime("%Y%m%d_%H%M%S_%f")
+        backup_path = backup_dir / f"{target_path.stem}_{timestamp}.csv"
+        shutil.copy2(target_path, backup_path)
+        self._prune_backups(backup_dir, target_path.stem)
 
     def _prune_backups(self, backup_dir: Path, target_stem: str) -> None:
         backups = sorted(

@@ -5,15 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; media-src 'none'; worker-src 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; media-src 'none'; worker-src 'none'"
     />
     <title>NIPPO | Daily Report</title>
 
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap"
+    />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./reports.css" />
     <link rel="stylesheet" href="./settings.css" />
+    <link rel="stylesheet" href="./admin.css" />
   </head>
-  <body data-color-theme="green">
+  <body>
     <header class="title-bar">
       <div class="title-bar-brand">
         <span class="brand-mark" aria-hidden="true">
@@ -100,22 +105,13 @@
             role="group"
             aria-label="文字サイズ"
           >
-            <button type="button" data-font-size="standard" aria-pressed="true">標準</button>
-            <button type="button" data-font-size="large" aria-pressed="false">大</button>
-            <button type="button" data-font-size="xlarge" aria-pressed="false">特大</button>
+            <button type="button" data-font-size="compact" aria-pressed="false">極小</button>
+            <button type="button" data-font-size="standard" aria-pressed="false">小</button>
+            <button type="button" data-font-size="medium" aria-pressed="false">中</button>
+            <button type="button" data-font-size="large" aria-pressed="true">大</button>
+            <button type="button" data-font-size="xlarge" aria-pressed="false">極大</button>
           </div>
         </div>
-        <button
-          id="toggleThemeButton"
-          class="header-icon-button"
-          type="button"
-          aria-label="ダークモードに切替"
-          aria-pressed="false"
-        >
-          <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
-            <path d="M12 3a6 6 0 0 0 9 7.8A8.5 8.5 0 1 1 12 3z" />
-          </svg>
-        </button>
       </div>
     </header>
 
@@ -128,7 +124,7 @@
                 id="dailyViewButton"
                 class="sidebar-item is-active"
                 type="button"
-                title="日報入力"
+                title="日報"
               >
                 <span class="sidebar-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" role="img">
@@ -136,28 +132,27 @@
                     <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                   </svg>
                 </span>
-                <span class="sidebar-text">日報入力</span>
-              </button>
-            </li>
-            <li>
-              <button
-                id="bossViewButton"
-                class="sidebar-item"
-                type="button"
-                title="上司コメント"
-              >
-                <span class="sidebar-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" role="img">
-                    <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" />
-                    <path d="M8 9h8M8 13h5" />
-                  </svg>
-                </span>
-                <span class="sidebar-text">上司コメント</span>
+                <span class="sidebar-text">日報</span>
               </button>
             </li>
           </ul>
         </nav>
         <nav class="sidebar-secondary-nav" aria-label="アプリ設定">
+          <button
+            id="adminViewButton"
+            class="sidebar-item"
+            type="button"
+            title="共通マスター"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="img">
+                <ellipse cx="12" cy="5" rx="8" ry="3" />
+                <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+                <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+              </svg>
+            </span>
+            <span class="sidebar-text">共通マスター</span>
+          </button>
           <button
             id="openSettingsButton"
             class="sidebar-item"
@@ -189,46 +184,23 @@
 
       <main class="main-area">
         <div id="statusRegion" class="status-region" aria-live="polite">
-          <div id="message" class="message hidden" role="status"></div>
+          <div id="message" class="message hidden" role="status">
+            <span id="messageText" class="message-text"></span>
+            <button
+              id="dismissToastButton"
+              class="message-close-button"
+              type="button"
+              aria-label="通知を閉じる"
+              data-allow-when-busy
+            >×</button>
+          </div>
         </div>
         <section id="mainPanel" class="content">
           <div id="reportPanel" class="workspace-card">
             <div class="report-toolbar">
-              <div class="toolbar-row toolbar-heading-row">
-                <div class="view-label">
-                  <span id="pageTitle">日報入力</span>
-                </div>
-
-                <div class="toolbar-right">
-                  <button
-                    id="refreshButton"
-                    class="toolbar-button"
-                    type="button"
-                    disabled
-                  >
-                    <span class="toolbar-button-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v6h-6" /></svg>
-                    </span>
-                    最新データを取得
-                  </button>
-                  <button
-                    id="saveButton"
-                    class="toolbar-button primary"
-                    type="button"
-                    disabled
-                  >
-                    <span class="toolbar-button-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg>
-                    </span>
-                    保存
-                  </button>
-                </div>
-              </div>
-
               <div class="toolbar-row toolbar-filter-row">
                 <div class="toolbar-left toolbar-left-wide">
-                  <div class="period-main-controls">
-                    <div class="period-control-container">
+                  <div class="period-control-container">
                       <div class="period-control">
                         <div class="period-field-group">
                           <input id="startDate" type="date" aria-label="開始日" aria-describedby="periodError" />
@@ -239,7 +211,9 @@
                         </div>
                       </div>
                       <div id="periodError" class="field-error period-error hidden" role="alert"></div>
-                    </div>
+                  </div>
+                </div>
+                <div class="period-main-controls">
                     <div class="period-mode-control">
                       <div class="period-presets" role="group" aria-label="表示期間">
                         <button
@@ -279,10 +253,8 @@
                     <div class="period-navigation" role="group" aria-label="表示期間を移動">
                       <button id="periodPrevButton" class="period-shift-button" type="button">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
-                        <span class="period-shift-label">前の期間</span>
                       </button>
                       <button id="periodNextButton" class="period-shift-button" type="button">
-                        <span class="period-shift-label">次の期間</span>
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
                       </button>
                     </div>
@@ -297,11 +269,34 @@
                         type="button"
                         aria-pressed="false"
                       >
-                        <span class="missing-filter-label">未コメントのみ</span>
+                        <span class="missing-filter-label">未確認のみ</span>
                         <span class="missing-count-badge is-empty" aria-hidden="true">0日</span>
                       </button>
                     </div>
-                  </div>
+                </div>
+                <div class="toolbar-right">
+                  <button
+                    id="refreshButton"
+                    class="toolbar-button"
+                    type="button"
+                    disabled
+                  >
+                    <span class="toolbar-button-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v6h-6" /></svg>
+                    </span>
+                    最新データを取得
+                  </button>
+                  <button
+                    id="saveButton"
+                    class="toolbar-button primary"
+                    type="button"
+                    disabled
+                  >
+                    <span class="toolbar-button-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg>
+                    </span>
+                    保存
+                  </button>
                 </div>
               </div>
             </div>
@@ -311,71 +306,136 @@
                   id="showAllSubordinatesButton"
                   class="member-switch-button is-active"
                   type="button"
+                  data-member-scope="all"
                   aria-pressed="true"
                 >
                   全員
+                </button>
+                <button
+                  id="showSelfButton"
+                  class="member-switch-button"
+                  type="button"
+                  data-member-scope="self"
+                  aria-label="自分の日報"
+                  aria-pressed="false"
+                >
+                  自分
+                </button>
+                <button
+                  id="showTeamButton"
+                  class="member-switch-button"
+                  type="button"
+                  data-member-scope="team"
+                  aria-label="自チームの日報"
+                  aria-pressed="false"
+                >
+                  自チーム
+                </button>
+                <button
+                  id="showSubordinatesButton"
+                  class="member-switch-button hidden"
+                  type="button"
+                  data-member-scope="subordinates"
+                  aria-label="担当部下の日報"
+                  aria-pressed="false"
+                >
+                  担当部下
                 </button>
               </div>
             </div>
             <div id="tableWrap" class="table-card hidden"></div>
           </div>
+          <section id="adminPanel" class="admin-panel hidden" aria-labelledby="adminTitle">
+            <header class="admin-header">
+              <div class="admin-heading">
+                <div class="admin-title-line">
+                  <h2 id="adminTitle">共通マスター</h2>
+                  <span id="adminDirtyBadge" class="admin-dirty-badge hidden">変更なし</span>
+                </div>
+              </div>
+              <div class="admin-header-actions">
+                <button id="adminReloadButton" class="toolbar-button" type="button">
+                  <span class="toolbar-button-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v6h-6" /></svg>
+                  </span>
+                  再読み込み
+                </button>
+                <button id="adminSaveButton" class="toolbar-button primary" type="button" disabled>
+                  <span class="toolbar-button-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg>
+                  </span>
+                  変更を保存
+                </button>
+              </div>
+            </header>
+
+            <div id="adminLoading" class="admin-loading">
+              <span class="admin-loading-mark" aria-hidden="true"></span>
+              <p>共通マスターを読み込んでいます</p>
+            </div>
+
+            <div id="adminWorkspace" class="admin-workspace hidden">
+              <aside class="master-rail" aria-label="共通マスターの種類">
+                <div class="master-rail-heading">
+                  <strong>データセット</strong>
+                    <span>4 CSV</span>
+                </div>
+                <div id="masterNav" class="master-nav"></div>
+                <div class="master-ledger">
+                  <span>変更台帳</span>
+                  <strong id="adminLedgerCount">変更はありません</strong>
+                  <small>保存時に元ファイルをバックアップします</small>
+                </div>
+              </aside>
+
+              <section class="master-table-pane" aria-labelledby="activeMasterTitle">
+                <div class="master-table-toolbar">
+                  <div>
+                    <p id="activeMasterFile" class="master-file-name">user_master.csv</p>
+                    <h3 id="activeMasterTitle">ユーザーマスター</h3>
+                  </div>
+                  <div class="master-table-tools">
+                    <label class="master-search">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-4-4" />
+                      </svg>
+                      <span class="visually-hidden">行を検索</span>
+                      <input id="adminSearchInput" type="search" placeholder="ID・名称で検索" autocomplete="off" />
+                    </label>
+                    <button id="adminAddRowButton" class="admin-add-button" type="button">
+                      <span aria-hidden="true">＋</span>
+                      行を追加
+                    </button>
+                  </div>
+                </div>
+                <div id="adminTableWrap" class="admin-table-wrap"></div>
+                <footer class="master-table-footer">
+                  <span id="adminRowCount">0件</span>
+                  <span>行を選択すると右側で編集できます</span>
+                </footer>
+              </section>
+
+              <aside id="masterInspector" class="master-inspector" aria-label="行の編集">
+                <div id="adminInspectorEmpty" class="inspector-empty">
+                  <span class="inspector-empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M4 4h16v16H4z" />
+                      <path d="M8 9h8M8 13h6" />
+                    </svg>
+                  </span>
+                  <h3>行を選択</h3>
+                  <p>一覧から編集する行を選んでください。</p>
+                </div>
+                <div id="adminInspectorForm" class="inspector-form hidden"></div>
+              </aside>
+            </div>
+          </section>
           <section id="settingsPanel" class="settings-panel hidden">
             <div class="settings-card">
               <div class="settings-header">
                 <h2>設定</h2>
               </div>
-              <section class="appearance-setting" aria-labelledby="appearanceSettingTitle">
-                <div class="settings-section-heading">
-                  <h3 id="appearanceSettingTitle">デザインカラー</h3>
-                </div>
-                <div id="colorThemeOptions" class="color-theme-options" role="group" aria-label="デザインカラー">
-                  <button
-                    class="color-theme-option is-selected"
-                    type="button"
-                    data-color-theme="green"
-                    aria-pressed="true"
-                  >
-                    <span class="color-theme-swatch" aria-hidden="true">
-                      <span class="color-theme-swatch-shell"></span>
-                      <span class="color-theme-swatch-accent"></span>
-                    </span>
-                    <span class="color-theme-option-copy">
-                      <strong>グリーン</strong>
-                    </span>
-                    <span class="color-theme-option-check" aria-hidden="true">✓</span>
-                  </button>
-                  <button
-                    class="color-theme-option"
-                    type="button"
-                    data-color-theme="blue"
-                    aria-pressed="false"
-                  >
-                    <span class="color-theme-swatch" aria-hidden="true">
-                      <span class="color-theme-swatch-shell"></span>
-                      <span class="color-theme-swatch-accent"></span>
-                    </span>
-                    <span class="color-theme-option-copy">
-                      <strong>ブルー</strong>
-                    </span>
-                    <span class="color-theme-option-check" aria-hidden="true">✓</span>
-                  </button>
-                  <button
-                    class="color-theme-option"
-                    type="button"
-                    data-color-theme="orange"
-                    aria-pressed="false"
-                  >
-                    <span class="color-theme-swatch" aria-hidden="true">
-                      <span class="color-theme-swatch-shell"></span>
-                      <span class="color-theme-swatch-accent"></span>
-                    </span>
-                    <span class="color-theme-option-copy">
-                      <strong>オレンジ</strong>
-                    </span>
-                    <span class="color-theme-option-check" aria-hidden="true">✓</span>
-                  </button>
-                </div>
-              </section>
               <label class="settings-field">
                 <span>ユーザー日報フォルダ</span>
                 <input id="usersDir" type="text" autocomplete="off" aria-describedby="usersDirError" />
@@ -441,8 +501,8 @@
               </section>
               <section class="missing-comment-setting" aria-labelledby="missingCommentSettingTitle">
                 <div class="settings-section-heading">
-                  <h3 id="missingCommentSettingTitle">未コメントの集計</h3>
-                  <p>「未コメントのみ」の集計期間と、当日分の扱いを設定します。</p>
+                  <h3 id="missingCommentSettingTitle">未確認の集計</h3>
+                  <p>「未確認のみ」の集計期間と、当日分の扱いを設定します。</p>
                 </div>
                 <label class="settings-field">
                   <span>集計を開始する日</span>
@@ -451,8 +511,8 @@
                 <label class="settings-check-option">
                   <input id="includeTodayInMissingComments" type="checkbox" />
                   <span class="settings-check-copy">
-                    <strong>当日分を未コメント日数に含める</strong>
-                    <small>今日の日報も未コメントバッジと絞り込みの対象にします。</small>
+                    <strong>当日分を未確認日数に含める</strong>
+                    <small>今日の日報も未確認バッジと絞り込みの対象にします。</small>
                   </span>
                 </label>
               </section>
@@ -483,6 +543,7 @@
 
     <script src="reports.js"></script>
     <script src="settings.js"></script>
+    <script src="admin.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

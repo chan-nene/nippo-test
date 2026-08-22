@@ -1,4 +1,4 @@
-/* Common-master workbench. */
+/* Hallmark · genre: modern-minimal · tone: utilitarian · macrostructure: Workbench · signature: three-column organization ledger + focused inspector · anchor hue: ink blue · pre-emit critique: P5 H5 E5 S5 R5 V5 */
 
 html body .visually-hidden {
   position: absolute;
@@ -23,17 +23,21 @@ html body .admin-panel {
 
 html body .admin-header {
   display: flex;
-  min-height: 66px;
+  min-height: 80px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   border-bottom: 1px solid var(--border);
-  padding: 9px 14px 9px 18px;
+  padding: 9px 14px 0 18px;
 }
 
 html body .admin-heading {
+  display: flex;
   min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
 }
 
 html body .admin-title-line,
@@ -102,99 +106,71 @@ html body .admin-workspace {
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
-  grid-template-columns: 190px minmax(330px, 1fr) 292px;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   overflow: hidden;
 }
 
 html body .admin-workspace.is-user-master {
-  grid-template-columns: 190px 330px minmax(390px, 1fr);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
 }
 
-html body .master-rail,
+html body .admin-workspace.is-team-master {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+
 html body .master-table-pane,
 html body .master-inspector {
   min-width: 0;
   min-height: 0;
 }
 
-html body .master-rail {
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid var(--border);
-  background: var(--surface-alt);
-  padding: 13px 10px 10px;
-}
-
-html body .master-rail-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 5px 9px;
-}
-
-html body .master-rail-heading strong {
-  color: var(--text-strong);
-  font-size: var(--font-12);
-}
-
-html body .master-rail-heading span {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: var(--font-10);
-}
-
 html body .master-nav {
-  display: grid;
-  gap: 5px;
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: flex-end;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 html body .master-nav-button {
-  position: relative;
-  display: grid;
-  width: 100%;
-  min-height: 54px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: inline-flex;
+  min-width: 92px;
+  min-height: 35px;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   background: transparent;
-  color: var(--text);
-  padding: 7px 8px 7px 10px;
-  text-align: left;
+  color: var(--text-muted);
+  padding: 6px 13px 7px;
+  font-size: var(--font-12);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-html body .master-nav-button::before {
-  position: absolute;
-  top: 9px;
-  bottom: 9px;
-  left: -1px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: transparent;
-  content: "";
-}
-
-html body .master-nav-button:hover {
+html body .master-nav-button:hover,
+html body .master-nav-button:focus-visible {
   border-color: var(--border);
-  background: var(--surface);
+  border-bottom-color: var(--primary-border);
+  background: var(--surface-hover);
+  color: var(--primary-ink);
 }
 
 html body .master-nav-button.is-active {
-  border-color: var(--primary-border);
+  border-color: var(--primary-border) var(--primary-border) var(--primary);
   background: var(--primary-soft);
-}
-
-html body .master-nav-button.is-active::before {
-  background: var(--primary);
+  color: var(--primary);
 }
 
 html body .master-nav-copy {
   min-width: 0;
 }
 
-html body .master-nav-copy strong,
-html body .master-nav-copy small {
+html body .master-nav-copy strong {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -202,58 +178,8 @@ html body .master-nav-copy small {
 }
 
 html body .master-nav-copy strong {
-  color: var(--text-strong);
-  font-size: var(--font-12);
-}
-
-html body .master-nav-copy small {
-  margin-top: 1px;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 9px;
-}
-
-html body .master-nav-count {
-  min-width: 25px;
-  border-radius: 999px;
-  background: var(--surface-soft);
-  color: var(--text-muted);
-  padding: 2px 5px;
-  font-size: var(--font-10);
-  font-weight: 800;
-  text-align: center;
-}
-
-html body .master-nav-button.is-dirty .master-nav-count {
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-html body .master-ledger {
-  display: flex;
-  margin-top: auto;
-  border-top: 1px solid var(--border);
-  padding: 10px 5px 2px;
-  flex-direction: column;
-}
-
-html body .master-ledger span {
-  color: var(--text-muted);
-  font-size: var(--font-10);
-  font-weight: 500;
-}
-
-html body .master-ledger strong {
-  margin-top: 2px;
-  color: var(--text-strong);
-  font-size: var(--font-12);
-}
-
-html body .master-ledger small {
-  margin-top: 4px;
-  color: var(--text-muted);
-  font-size: 9px;
-  line-height: 1.35;
+  color: currentColor;
+  font-size: inherit;
 }
 
 html body .master-table-pane {
@@ -265,10 +191,10 @@ html body .master-table-pane {
 
 html body .master-table-toolbar {
   display: flex;
-  min-height: 70px;
+  min-height: 54px;
   flex: 0 0 auto;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   border-bottom: 1px solid var(--border);
   padding: 10px 12px 10px 16px;
@@ -339,17 +265,104 @@ html body .admin-add-button {
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  border: 1px solid var(--primary-border);
+  border: 1px solid var(--primary);
   border-radius: var(--radius-sm);
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-on);
   padding: 0 10px;
   font-size: var(--font-12);
   font-weight: 600;
 }
 
 html body .admin-add-button:hover {
-  border-color: var(--primary);
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+}
+
+html body .master-table-tools {
+  position: relative;
+}
+
+html body .team-create-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 32px));
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 0;
+  box-shadow: var(--shadow-popover);
+}
+
+html body .team-create-dialog::backdrop {
+  background: color-mix(in oklch, var(--text-strong) 28%, transparent);
+}
+
+html body .team-create-dialog-content {
+  display: grid;
+  gap: 15px;
+  padding: 22px;
+}
+
+html body .team-create-eyebrow {
+  margin: 0 0 3px;
+  color: var(--primary-ink);
+  font-size: var(--font-10);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+html body .team-create-dialog h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--font-18);
+  font-weight: 700;
+}
+
+html body .team-create-description {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-12);
+  line-height: 1.5;
+}
+
+html body .team-create-breadcrumb-wrap {
+  display: grid;
+  gap: 5px;
+}
+
+html body .team-create-breadcrumb-label {
+  color: var(--text);
+  font-size: var(--font-12);
+  font-weight: 600;
+}
+
+html body .team-create-breadcrumb {
+  min-height: var(--control-height);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--text-strong);
+  padding: 7px var(--field-padding-x);
+  font-size: var(--font-12);
+  line-height: 1.35;
+}
+
+html body .team-create-error {
+  min-height: 0;
+  margin: -4px 0 0;
+  color: var(--error);
+  font-size: var(--font-12);
+}
+
+html body .team-create-error:empty {
+  display: none;
+}
+
+html body .team-create-dialog .confirmation-dialog-actions {
+  margin-top: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
 }
 
 html body .admin-table-wrap {
@@ -357,6 +370,273 @@ html body .admin-table-wrap {
   flex: 1 1 auto;
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+html body .team-tree-utility {
+  display: flex;
+  min-height: 39px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0 12px 0 16px;
+  font-size: var(--font-10);
+}
+
+html body .team-tree-utility div {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+html body .team-tree-utility button {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0 6px;
+  font-size: var(--font-10);
+}
+
+html body .team-tree-utility button:last-child {
+  border-right: 0;
+}
+
+html body .team-tree-utility button svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+
+html body .team-tree-utility button:hover,
+html body .team-tree-utility button:focus-visible {
+  background: var(--surface-hover);
+  color: var(--primary-ink);
+}
+
+html body .team-tree {
+  padding: 10px 9px 20px;
+}
+
+html body .team-hierarchy-table {
+  table-layout: fixed;
+}
+
+html body .team-hierarchy-table th,
+html body .team-hierarchy-table td {
+  width: 30.666%;
+}
+
+html body .team-hierarchy-table th:first-child,
+html body .team-hierarchy-table td:first-child {
+  width: 8%;
+}
+
+html body .team-hierarchy-table td {
+  height: 38px;
+  padding: 0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+html body .team-hierarchy-table td.is-row-spanned {
+  background: var(--surface);
+}
+
+html body .team-hierarchy-table td.is-row-spanned .team-hierarchy-cell {
+  min-height: calc(38px * var(--team-row-span));
+}
+
+html body .team-hierarchy-table td.is-section-column {
+  border-right: 1px solid var(--table-border-strong);
+}
+
+html body .team-hierarchy-cell {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-strong);
+  padding: 7px 12px;
+  font-size: var(--font-12);
+  font-weight: normal;
+  text-align: left;
+}
+
+html body .team-hierarchy-cell:hover,
+html body .team-hierarchy-cell:focus-visible {
+  background: var(--surface-hover);
+  color: var(--primary-ink);
+}
+
+html body .team-hierarchy-cell.is-selected {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+html body .team-hierarchy-empty {
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  padding: 0 12px !important;
+}
+
+html body .team-tree > .team-tree-branch + .team-tree-branch {
+  margin-top: 7px;
+}
+
+html body .team-tree-branch {
+  min-width: 0;
+}
+
+html body .team-tree-children {
+  position: relative;
+  margin-left: 18px;
+  padding-left: 18px;
+}
+
+html body .team-tree-children::before {
+  position: absolute;
+  top: 0;
+  bottom: 23px;
+  left: 7px;
+  border-left: 1px solid var(--border-strong);
+  content: "";
+}
+
+html body .team-tree-row {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+html body .team-tree-children > .team-tree-branch > .team-tree-row::before {
+  position: absolute;
+  top: 23px;
+  left: -11px;
+  width: 11px;
+  border-top: 1px solid var(--border-strong);
+  content: "";
+}
+
+html body .team-tree-row:hover {
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+
+html body .team-tree-row.is-selected {
+  border-color: var(--primary-border);
+  background: var(--primary-soft);
+}
+
+html body .team-tree-toggle,
+html body .team-tree-toggle-spacer {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+
+html body .team-tree-toggle {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0;
+}
+
+html body .team-tree-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  transition: transform 140ms ease;
+}
+
+html body .team-tree-toggle.is-collapsed svg {
+  transform: rotate(-90deg);
+}
+
+html body .team-tree-toggle:hover,
+html body .team-tree-toggle:focus-visible {
+  background: var(--surface);
+  color: var(--primary);
+}
+
+html body .team-tree-select {
+  display: flex;
+  min-width: 0;
+  min-height: 46px;
+  flex: 1 1 auto;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 6px 10px 6px 3px;
+  flex-direction: column;
+  text-align: left;
+}
+
+html body .team-tree-select strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--font-12);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body .team-tree-select > span {
+  display: flex;
+  min-width: 0;
+  margin-top: 2px;
+  align-items: center;
+  gap: 5px;
+}
+
+html body .team-level-label,
+html body .team-unsaved-label {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html body .team-level-label {
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+html body .team-level-label.is-small {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+html body .team-unsaved-label {
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 html body .admin-data-table {
@@ -382,7 +662,7 @@ html body .admin-data-table th {
 }
 
 html body .admin-data-table td {
-  height: 42px;
+  height: 38px;
   overflow: hidden;
   border-bottom: 1px solid var(--table-border);
   background: var(--table-cell-bg);
@@ -393,20 +673,20 @@ html body .admin-data-table td {
   white-space: nowrap;
 }
 
+html body .admin-data-table.team-hierarchy-table td {
+  padding: 0;
+}
+
 html body .admin-data-table tbody tr {
   cursor: pointer;
 }
 
-html body .admin-data-table tbody tr:hover td {
+html body .admin-data-table:not(.team-hierarchy-table) tbody td:hover {
   background: var(--surface-hover);
 }
 
 html body .admin-data-table tbody tr.is-selected td {
   background: var(--primary-soft);
-}
-
-html body .admin-data-table tbody tr.is-selected td:first-child {
-  box-shadow: inset 3px 0 var(--primary);
 }
 
 html body .admin-data-table tbody tr:focus-visible {
@@ -415,20 +695,41 @@ html body .admin-data-table tbody tr:focus-visible {
 }
 
 html body .admin-data-table.is-user-table th:nth-child(1) {
-  width: 30%;
+  width: 8%;
 }
 
 html body .admin-data-table.is-user-table th:nth-child(2) {
-  width: 36%;
+  width: 22%;
 }
 
 html body .admin-data-table.is-user-table th:nth-child(3) {
-  width: 34%;
+  width: 27%;
+}
+
+html body .admin-data-table.is-user-table th:nth-child(4) {
+  width: 18%;
+}
+
+html body .admin-data-table.is-user-table th:nth-child(5) {
+  width: 25%;
+}
+
+html body .admin-table-no-header,
+html body .admin-table-no {
+  width: 8%;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: center !important;
+}
+
+html body .admin-table-no {
+  padding-right: 6px;
+  padding-left: 6px;
 }
 
 html body .admin-cell-primary {
   color: var(--text-strong);
-  font-weight: 600;
+  font-weight: normal;
 }
 
 html body .admin-rank-pill,
@@ -462,12 +763,19 @@ html body .admin-holiday-pill {
   color: var(--text-muted);
   padding: 1px 7px;
   font-size: var(--font-10);
-  font-weight: 600;
+  font-weight: normal;
 }
 
 html body .admin-holiday-pill.is-holiday {
   background: var(--error-bg);
   color: var(--error);
+}
+
+html body .admin-data-table th,
+html body .admin-data-table td,
+html body .admin-data-table th *,
+html body .admin-data-table td * {
+  font-weight: normal;
 }
 
 html body .admin-table-empty {
@@ -556,7 +864,14 @@ html body .inspector-empty p {
 }
 
 html body .inspector-form {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
   padding: 15px;
+}
+
+html body .admin-workspace.is-team-master .inspector-form {
+  padding: 18px 20px;
 }
 
 html body .inspector-form-header {
@@ -811,38 +1126,2130 @@ html body .subordinate-empty {
   font-size: var(--font-10);
 }
 
-html body .admin-workspace.is-user-master .master-table-toolbar {
-  min-height: 104px;
-  align-items: stretch;
+html body .managed-team-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+html body .managed-team-option {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+html body .managed-team-option:last-child {
+  border-bottom: 0;
+}
+
+html body .managed-team-option:hover {
+  background: var(--surface-hover);
+}
+
+html body .managed-team-option:has(input:checked) {
+  background: var(--primary-soft);
+}
+
+html body .managed-team-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+html body .managed-team-option-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+html body .managed-team-option-copy strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--font-12);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+html body .team-arrange-actions {
+  display: grid;
+  gap: 14px;
+  margin-top: 13px;
+}
+
+html body .team-child-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+html body .team-order-row {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+html body .team-order-row > span {
+  color: var(--text);
+  font-size: var(--font-12);
+  font-weight: 600;
+}
+
+html body .team-order-row > small {
+  color: var(--text-muted);
+  font-size: var(--font-10);
+}
+
+html body .team-order-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+html body .team-child-add-button,
+html body .team-order-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
   justify-content: center;
-  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 4px 9px;
+  font-size: var(--font-12);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-html body .admin-workspace.is-user-master .master-table-tools {
-  width: 100%;
+html body .team-child-add-button {
+  gap: 6px;
 }
 
-html body .admin-workspace.is-user-master .master-search {
+html body .team-child-add-button svg,
+html body .team-order-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+html body .team-order-button {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+html body .team-child-add-button {
+  border-color: var(--primary-border);
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+html body .team-child-add-button:hover,
+html body .team-child-add-button:focus-visible,
+html body .team-order-button:hover,
+html body .team-order-button:focus-visible {
+  border-color: var(--primary);
+}
+
+html body .team-child-add-button:active,
+html body .team-order-button:active {
+  transform: translateY(1px);
+}
+
+html body .team-child-add-button:disabled,
+html body .team-order-button:disabled {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+html body .inspector-form-header > .team-level-label {
+  margin-top: 7px;
+}
+
+html body .team-inspector-header {
+  padding-bottom: 15px;
+}
+
+html body .admin-workspace.is-team-master .inspector-section {
+  margin-top: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 0 0 18px;
+}
+
+html body .team-editor-fields {
+  gap: 15px;
+}
+
+html body .team-editor-actions {
+  margin-top: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+}
+
+html body .team-editor-actions .team-order-row {
+  border-top: 0;
+  padding-top: 0;
+}
+
+html body .admin-workspace.is-team-master .team-arrange-section {
+  border-bottom: 0;
+}
+
+html body .admin-workspace.is-team-master .inspector-delete-button {
   width: auto;
-  flex: 1 1 auto;
+  min-width: 150px;
+  padding: 0 14px;
+}
+
+html body .inspector-record-actions {
+  display: flex;
+  margin: 0 0 18px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+
+html body .inspector-delete-actions {
+  display: flex;
+  margin-top: auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+html body .inspector-save-button {
+  display: inline-flex;
+  min-width: 150px;
+  min-height: var(--control-height);
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--primary-on);
+  padding: 0 14px;
+  font-size: var(--font-12);
+  font-weight: 600;
+}
+
+html body .inspector-save-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+html body .inspector-save-button:hover,
+html body .inspector-save-button:focus-visible {
+  background: var(--primary-hover);
+}
+
+html body .inspector-save-button:disabled {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+html body .inspector-delete-actions .inspector-delete-button,
+html body .admin-workspace.is-team-master .inspector-delete-actions .inspector-delete-button {
+  width: auto;
+  min-width: 0;
+  margin-top: 0;
+  align-self: auto;
+  padding: 0 12px;
 }
 
 @media (max-width: 1180px) {
   html body .admin-workspace {
-    grid-template-columns: 172px minmax(310px, 1fr) 258px;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 
   html body .admin-workspace.is-user-master {
-    grid-template-columns: 172px 285px minmax(360px, 1fr);
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 
-  html body .master-nav-button {
-    padding-left: 8px;
+  html body .admin-workspace.is-team-master {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html body .admin-loading-mark {
     animation-duration: 1.8s;
+  }
+}
+
+/* Platform-style master navigation and neutral editor surfaces. */
+html body #adminPanel .admin-header {
+  min-height: 58px;
+  align-items: flex-end;
+  padding: 10px 34px 0;
+}
+
+html body #adminPanel .admin-heading {
+  gap: 0;
+}
+
+html body #adminPanel .master-nav {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  padding: 3px;
+}
+
+html body #adminPanel .master-nav-button {
+  min-width: 0;
+  min-height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0 12px;
+  font-size: var(--font-12);
+  font-weight: 600;
+}
+
+html body #adminPanel .master-nav-button:hover,
+html body #adminPanel .master-nav-button:focus-visible,
+html body #adminPanel .master-nav-button.is-active {
+  border-color: transparent;
+  background: var(--surface);
+  color: var(--text-strong);
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+html body #adminPanel .master-table-toolbar {
+  min-height: 58px;
+  border-bottom-color: var(--border);
+  padding: 10px 18px;
+}
+
+html body #adminPanel .master-table-pane,
+html body #adminPanel .master-inspector {
+  background: var(--surface);
+}
+
+html body #adminPanel .admin-data-table tbody tr.is-selected td {
+  background: var(--surface-active);
+  color: var(--text-strong);
+}
+
+html body #adminPanel .admin-data-table td {
+  transition: none;
+}
+
+html body #adminPanel .admin-data-table:not(.team-hierarchy-table) tbody td:hover {
+  background: var(--surface-hover) !important;
+}
+
+html body #adminPanel .admin-data-table:not(.team-hierarchy-table) tbody tr.is-selected td:hover {
+  background: var(--surface-hover);
+}
+
+html body #adminPanel .inspector-field :is(input, select):focus {
+  border-color: var(--text-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-strong) 12%, transparent);
+}
+
+@media (max-width: 760px) {
+  html body #adminPanel .admin-header {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  html body #adminPanel .master-nav {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
+/* Unified organization-management layout based on the approved mock. */
+html body #adminPanel .admin-header {
+  min-height: 0;
+  align-items: flex-end;
+  border-bottom: 0;
+  padding: 24px 34px 0;
+}
+
+html body #adminPanel .admin-heading {
+  gap: 18px;
+}
+
+html body #adminPanel .admin-title-line {
+  align-items: flex-start;
+}
+
+html body #adminPanel .admin-eyebrow,
+html body #adminPanel .master-table-eyebrow {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: var(--font-10);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+html body #adminPanel .admin-title-line h2 {
+  color: var(--text-strong);
+  font-size: clamp(20px, 2vw, 26px);
+  font-weight: 700;
+}
+
+html body #adminPanel .admin-page-description {
+  max-width: 680px;
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-12);
+  line-height: 1.5;
+}
+
+html body #adminPanel .master-nav {
+  width: 100%;
+  min-height: 40px;
+  align-items: flex-end;
+  gap: 22px;
+  overflow-x: auto;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+html body #adminPanel .master-nav-button {
+  position: relative;
+  min-height: 40px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0 0 10px;
+  font-size: var(--font-12);
+  font-weight: 600;
+}
+
+html body #adminPanel .master-nav-button::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: transparent;
+  content: "";
+}
+
+html body #adminPanel .master-nav-button:hover,
+html body #adminPanel .master-nav-button:focus-visible,
+html body #adminPanel .master-nav-button.is-active {
+  border: 0;
+  background: transparent;
+  color: var(--text-strong);
+  box-shadow: none;
+}
+
+html body #adminPanel .master-nav-button.is-active::after {
+  background: var(--text-strong);
+}
+
+html body #adminPanel .master-table-pane,
+html body #adminPanel .master-inspector {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow-color);
+}
+
+html body #adminPanel .admin-workspace {
+  gap: 14px;
+  background: var(--surface-soft);
+  padding: 18px 34px 34px;
+}
+
+html body #adminPanel .master-table-toolbar {
+  min-height: 72px;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom-color: var(--border);
+  padding: 14px 16px;
+}
+
+html body #adminPanel .master-table-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+html body #adminPanel .master-table-heading h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--font-16);
+  font-weight: 700;
+}
+
+html body #adminPanel .master-table-eyebrow {
+  margin-bottom: 3px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+html body #adminPanel .master-table-count,
+html body #adminPanel .team-browser-count {
+  color: var(--text-muted);
+  font-size: var(--font-11);
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+html body #adminPanel .master-table-tools {
+  flex: 0 0 auto;
+}
+
+html body #adminPanel .master-search {
+  width: min(210px, 22vw);
+}
+
+html body #adminPanel .master-search input {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+html body #adminPanel .master-search input:hover {
+  border-color: var(--border-strong);
+}
+
+html body #adminPanel .master-search input:focus {
+  border-color: var(--text-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-strong) 10%, transparent);
+}
+
+html body #adminPanel .admin-add-button {
+  border-color: var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--primary-on);
+  font-weight: 600;
+}
+
+html body #adminPanel .admin-add-button:hover,
+html body #adminPanel .admin-add-button:focus-visible {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+}
+
+html body #adminPanel .admin-table-wrap {
+  background: var(--surface);
+}
+
+html body #adminPanel .team-browser {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+html body #adminPanel .team-browser-heading {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+}
+
+html body #adminPanel .team-browser-heading h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--font-15);
+  font-weight: 700;
+}
+
+html body #adminPanel .team-browser .team-tree {
+  display: grid;
+  gap: 2px;
+  overflow: auto;
+  padding: 12px 10px 20px;
+}
+
+html body #adminPanel .team-tree > .team-tree-branch + .team-tree-branch {
+  margin-top: 2px;
+}
+
+html body #adminPanel .team-tree-children {
+  margin-left: 18px;
+  padding-left: 0;
+}
+
+html body #adminPanel .team-tree-children::before,
+html body #adminPanel .team-tree-children > .team-tree-branch > .team-tree-row::before {
+  display: none;
+}
+
+html body #adminPanel .team-tree-row {
+  min-height: 39px;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+html body #adminPanel .team-tree-row:hover,
+html body #adminPanel .team-tree-row.is-selected {
+  border: 0;
+  background: var(--surface-active);
+}
+
+html body #adminPanel .team-tree-toggle,
+html body #adminPanel .team-tree-toggle-spacer {
+  width: 26px;
+  height: 30px;
+  flex-basis: 26px;
+}
+
+html body #adminPanel .team-tree-toggle:hover,
+html body #adminPanel .team-tree-toggle:focus-visible {
+  background: transparent;
+  color: var(--text-strong);
+}
+
+html body #adminPanel .team-tree-select {
+  display: grid;
+  min-height: 39px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  padding: 4px 10px 4px 1px;
+}
+
+html body #adminPanel .team-tree-select strong {
+  grid-row: 1 / 3;
+  color: var(--text);
+  font-size: var(--font-12);
+  font-weight: 500;
+}
+
+html body #adminPanel .team-tree-select > span {
+  margin: 0;
+  gap: 4px;
+}
+
+html body #adminPanel .team-tree-select .team-level-label {
+  display: none;
+}
+
+html body #adminPanel .team-member-count {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  color: var(--text-muted);
+  font-size: var(--font-11);
+  font-weight: normal;
+}
+
+html body #adminPanel .team-tree-row.is-selected .team-tree-select strong,
+html body #adminPanel .team-tree-row:hover .team-tree-select strong {
+  color: var(--text-strong);
+}
+
+html body #adminPanel .team-browser-empty {
+  min-height: 160px;
+}
+
+html body #adminPanel .master-inspector {
+  overflow: auto;
+  border-left: 1px solid var(--border);
+}
+
+html body #adminPanel .inspector-form {
+  padding: 22px;
+}
+
+html body #adminPanel .admin-workspace.is-team-master .inspector-form {
+  padding: 22px;
+}
+
+html body #adminPanel .team-inspector-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 18px;
+}
+
+html body #adminPanel .team-inspector-breadcrumb {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: var(--font-11);
+}
+
+html body #adminPanel .team-inspector-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html body #adminPanel .team-inspector-title-row h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--font-20);
+  font-weight: 700;
+}
+
+html body #adminPanel .team-inspector-title-row p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-12);
+  line-height: 1.45;
+}
+
+html body #adminPanel .team-status {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  padding: 0 9px;
+  font-size: var(--font-11);
+  white-space: nowrap;
+}
+
+html body #adminPanel .team-status::before {
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  content: "";
+}
+
+html body #adminPanel .team-status.is-inactive::before {
+  background: var(--text-muted);
+}
+
+html body #adminPanel .team-assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+html body #adminPanel .team-assignment-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 14px;
+}
+
+html body #adminPanel .team-assignment-card .inspector-section-heading {
+  margin-bottom: 10px;
+}
+
+html body #adminPanel .team-assignment-card .inspector-section-heading h4 {
+  font-size: var(--font-13);
+}
+
+html body #adminPanel .team-assignment-card .inspector-section-heading p {
+  min-height: 0;
+  font-size: var(--font-10);
+}
+
+html body #adminPanel .team-assignment-card .section-count-badge {
+  min-width: 0;
+  min-height: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0;
+  font-size: var(--font-11);
+  font-weight: normal;
+}
+
+html body #adminPanel .team-member-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+html body #adminPanel .team-member-row {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+html body #adminPanel .team-member-row:last-child {
+  border-bottom: 0;
+}
+
+html body #adminPanel .team-member-avatar {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-active);
+  color: var(--text-strong);
+  font-size: var(--font-10);
+  font-weight: 600;
+}
+
+html body #adminPanel .team-member-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+}
+
+html body #adminPanel .team-member-meta strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-11);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .team-member-meta small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .team-assignment-remove {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 2px 0 2px 5px;
+  font-size: 9px;
+}
+
+html body #adminPanel .team-assignment-remove:hover,
+html body #adminPanel .team-assignment-remove:focus-visible {
+  color: var(--error);
+}
+
+html body #adminPanel .team-assignment-empty {
+  margin: 0;
+  color: var(--text-muted);
+  padding: 12px 10px;
+  font-size: var(--font-10);
+}
+
+html body #adminPanel .team-assignment-add {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: var(--font-10);
+}
+
+html body #adminPanel .team-assignment-add select {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 8px;
+  font-size: var(--font-11);
+}
+
+html body #adminPanel .team-assignment-add select:focus {
+  border-color: var(--text-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-strong) 10%, transparent);
+  outline: 0;
+}
+
+html body #adminPanel .team-assignment-add select:disabled {
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+html body #adminPanel .admin-data-table.is-user-table th:nth-child(1),
+html body #adminPanel .admin-data-table.is-user-table td:nth-child(1) {
+  width: 9%;
+}
+
+html body #adminPanel .admin-data-table.is-user-table th:nth-child(2),
+html body #adminPanel .admin-data-table.is-user-table td:nth-child(2) {
+  width: 36%;
+}
+
+html body #adminPanel .admin-data-table.is-user-table th:nth-child(3),
+html body #adminPanel .admin-data-table.is-user-table td:nth-child(3) {
+  width: 27%;
+}
+
+html body #adminPanel .admin-data-table.is-user-table th:nth-child(4),
+html body #adminPanel .admin-data-table.is-user-table td:nth-child(4) {
+  width: 28%;
+}
+
+@media (max-width: 980px) {
+  html body #adminPanel .admin-header {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  html body #adminPanel .admin-workspace {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  html body #adminPanel .team-assignment-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  html body #adminPanel .admin-header {
+    padding-top: 18px;
+  }
+
+  html body #adminPanel .admin-page-description {
+    max-width: none;
+  }
+
+  html body #adminPanel .admin-workspace {
+    gap: 12px;
+    overflow: auto;
+    padding: 12px 16px 20px;
+  }
+
+  html body #adminPanel .master-table-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  html body #adminPanel .master-table-tools,
+  html body #adminPanel .master-search,
+  html body #adminPanel .admin-add-button {
+    width: 100%;
+  }
+
+  html body #adminPanel .master-table-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* Approved unified organization-management mock: production layout source. */
+html body #adminPanel {
+  --org-canvas: #f7f7f8;
+  --org-surface: #fff;
+  --org-subtle: #f1f1f2;
+  --org-hover: #ebebed;
+  --org-active: #e4e4e6;
+  --org-ink: #242424;
+  --org-ink-strong: #111;
+  --org-muted: #686868;
+  --org-rule: #dedee1;
+  --org-rule-strong: #b8b8bc;
+  --org-action: #181818;
+  --org-action-hover: #303030;
+  --org-action-ink: #fff;
+  --org-disabled: #d7d7d9;
+  --org-disabled-ink: #77777b;
+  --org-control-border: rgb(17 17 17 / 16%);
+  --org-control-border-hover: rgb(17 17 17 / 24%);
+  --org-control-inset: rgb(17 17 17 / 4%);
+  --org-danger: #9e3838;
+  --org-danger-soft: #fff7f7;
+  --org-calendar-holiday: #dceaff;
+  --org-calendar-holiday-hover: #cfe2fc;
+  --org-calendar-holiday-ink: #194f8a;
+  --org-calendar-workday-mark: #b56716;
+  --org-focus: #56565b;
+  --org-radius-sm: 8px;
+  --org-radius-md: 12px;
+  --org-shadow: 0 8px 28px rgb(20 20 20 / 7%);
+  display: block;
+  min-height: 100%;
+  overflow: auto;
+  background: var(--org-canvas);
+  color: var(--org-ink);
+  padding: 30px clamp(20px, 4vw, 56px) 56px;
+}
+
+html[data-theme="dark"] body #adminPanel {
+  --org-canvas: #212121;
+  --org-surface: #212121;
+  --org-subtle: #282828;
+  --org-hover: #292929;
+  --org-active: #303030;
+  --org-ink: #dcdcdc;
+  --org-ink-strong: #f3f3f3;
+  --org-muted: #afafaf;
+  --org-rule: rgb(255 255 255 / 12%);
+  --org-rule-strong: rgb(255 255 255 / 25%);
+  --org-action: #f3f3f3;
+  --org-action-hover: #fff;
+  --org-action-ink: #131313;
+  --org-disabled: #383838;
+  --org-disabled-ink: #888;
+  --org-control-border: rgb(255 255 255 / 12%);
+  --org-control-border-hover: rgb(255 255 255 / 25%);
+  --org-control-inset: rgb(255 255 255 / 4%);
+  --org-danger: #ff8a8a;
+  --org-danger-soft: #3d1d1d;
+  --org-calendar-holiday: #25415e;
+  --org-calendar-holiday-hover: #2d4d6d;
+  --org-calendar-holiday-ink: #d2e7ff;
+  --org-calendar-workday-mark: #f2b869;
+  --org-focus: #d0d0d0;
+  --org-shadow: 0 10px 30px rgb(0 0 0 / 24%);
+}
+
+html body #adminPanel :is(button, input, select, summary):focus-visible {
+  outline: 2px solid var(--org-focus);
+  outline-offset: 2px;
+}
+
+html body #adminPanel .admin-header,
+html body #adminPanel .admin-workspace,
+html body #adminPanel .admin-loading {
+  width: min(1180px, 100%);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+html body #adminPanel .admin-header {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 20px;
+  border: 0;
+  padding: 0;
+}
+
+html body #adminPanel .admin-heading {
+  display: contents;
+}
+
+html body #adminPanel .admin-title-line {
+  display: block;
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
+  margin-bottom: 22px;
+}
+
+html body #adminPanel .admin-eyebrow {
+  margin: 0 0 3px;
+  color: var(--org-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+html body #adminPanel .admin-title-line h2 {
+  margin: 0 0 5px;
+  color: var(--org-ink-strong);
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.2;
+}
+
+html body #adminPanel .admin-page-description {
+  max-width: 690px;
+  margin: 0;
+  color: var(--org-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+html body #adminPanel .admin-header-actions {
+  grid-column: 2;
+  grid-row: 1;
+  align-items: flex-start;
+}
+
+html body #adminPanel .admin-page-save {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--org-radius-sm);
+  background: var(--org-action);
+  color: var(--org-action-ink);
+  padding: 0 13px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html body #adminPanel .admin-page-save:hover:not(:disabled) {
+  background: var(--org-action-hover);
+}
+
+html body #adminPanel .admin-page-save:disabled {
+  background: var(--org-disabled);
+  color: var(--org-disabled-ink);
+}
+
+html body #adminPanel .master-nav {
+  display: flex;
+  min-width: 0;
+  grid-column: 1 / 3;
+  grid-row: 2;
+  align-items: center;
+  gap: 20px;
+  overflow: visible;
+  border-bottom: 1px solid var(--org-rule);
+  margin-bottom: 18px;
+}
+
+html body #adminPanel .master-nav-button {
+  position: relative;
+  min-width: 0;
+  min-height: 39px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--org-muted);
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+html body #adminPanel .master-nav-button:hover,
+html body #adminPanel .master-nav-button:focus-visible,
+html body #adminPanel .master-nav-button.is-active {
+  border: 0;
+  background: transparent;
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .master-nav-button::after {
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 0;
+  background: transparent;
+}
+
+html body #adminPanel .master-nav-button.is-active::after {
+  background: var(--org-ink-strong);
+}
+
+html body #adminPanel .admin-loading {
+  min-height: 420px;
+}
+
+html body #adminPanel .admin-workspace {
+  display: grid;
+  min-height: 590px;
+  flex: none;
+  gap: 14px;
+  overflow: visible;
+  background: transparent;
+  padding: 0;
+}
+
+html body #adminPanel .admin-workspace.is-team-master {
+  grid-template-columns: 270px minmax(0, 1fr);
+}
+
+html body #adminPanel .admin-workspace.is-user-master {
+  grid-template-columns: minmax(0, 1fr) 310px;
+}
+
+html body #adminPanel .admin-workspace.is-calendar-master {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html body #adminPanel .admin-workspace.is-calendar-master .master-inspector {
+  display: none;
+}
+
+html body #adminPanel .master-table-pane,
+html body #adminPanel .master-inspector {
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-md);
+  background: var(--org-surface);
+  box-shadow: var(--org-shadow);
+}
+
+html body #adminPanel .master-table-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+html body #adminPanel .master-table-toolbar {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  padding: 18px 18px 15px;
+}
+
+html body #adminPanel .master-table-heading {
+  align-items: center;
+  gap: 8px;
+}
+
+html body #adminPanel .master-table-eyebrow {
+  display: none;
+}
+
+html body #adminPanel .master-table-heading h3,
+html body #adminPanel .team-browser-heading h2 {
+  margin: 0;
+  color: var(--org-ink-strong);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+html body #adminPanel .master-table-count,
+html body #adminPanel .team-browser-count {
+  color: var(--org-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+html body #adminPanel .master-table-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+html body #adminPanel .master-search {
+  width: min(300px, 34vw);
+}
+
+html body #adminPanel .master-search svg {
+  display: none;
+}
+
+html body #adminPanel .master-search input,
+html body #adminPanel .team-browser-search,
+html body #adminPanel .inspector-field :is(input, select),
+html body #adminPanel .team-assignment-picker select,
+html body #adminPanel .user-team-picker select {
+  width: 100%;
+  height: 35px;
+  border: 1px solid var(--org-control-border);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-surface);
+  color: var(--org-ink);
+  padding: 0 10px;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+html body #adminPanel .master-search input {
+  height: 34px;
+}
+
+html body #adminPanel :is(.master-search input, .team-browser-search, .inspector-field input, .inspector-field select, .team-assignment-picker select, .user-team-picker select):hover {
+  border-color: var(--org-control-border-hover);
+}
+
+html body #adminPanel :is(.master-search input, .team-browser-search, .inspector-field input, .inspector-field select, .team-assignment-picker select, .user-team-picker select):focus {
+  border-color: var(--org-rule-strong);
+  outline: 0;
+  box-shadow: none;
+}
+
+html body #adminPanel .admin-add-button,
+html body #adminPanel .team-browser-add {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: var(--org-radius-sm);
+  background: var(--org-action);
+  color: var(--org-action-ink);
+  padding: 0 13px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html body #adminPanel :is(.admin-add-button, .team-browser-add):hover,
+html body #adminPanel :is(.admin-add-button, .team-browser-add):focus-visible {
+  border-color: transparent;
+  background: var(--org-action-hover);
+  color: var(--org-action-ink);
+}
+
+html body #adminPanel .admin-table-wrap {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: visible;
+  background: transparent;
+}
+
+html body #adminPanel .is-team-master .master-table-toolbar {
+  display: none;
+}
+
+html body #adminPanel .admin-workspace.is-calendar-master .master-table-tools {
+  display: none;
+}
+
+html body #adminPanel .team-browser {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  background: transparent;
+  padding: 16px 12px;
+}
+
+html body #adminPanel .team-browser-heading {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  margin-bottom: 12px;
+  padding: 0;
+}
+
+html body #adminPanel .team-browser-search {
+  height: 34px;
+}
+
+html body #adminPanel .team-browser .team-tree {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  align-content: start;
+  overflow: visible;
+  margin-top: 14px;
+  padding: 0;
+}
+
+html body #adminPanel .team-item {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: var(--org-radius-sm);
+  background: transparent;
+  color: var(--org-ink);
+  padding: 0 9px 0 calc(9px + var(--team-depth, 0) * 21px);
+  text-align: left;
+}
+
+html body #adminPanel .team-item:hover,
+html body #adminPanel .team-item.is-active {
+  background: var(--org-active);
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .team-mark {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+html body #adminPanel .team-item.is-active .team-mark {
+  background: currentColor;
+}
+
+html body #adminPanel .team-name {
+  overflow: hidden;
+  flex: 1 1 auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .team-count {
+  color: var(--org-muted);
+  font-size: 12px;
+}
+
+html body #adminPanel .team-browser-add {
+  width: 100%;
+  margin-top: 15px;
+  border-color: var(--org-control-border);
+  background: var(--org-surface);
+  color: var(--org-ink);
+  box-shadow: inset 0 0 0 1px var(--org-control-inset);
+}
+
+html body #adminPanel .team-browser-add:hover,
+html body #adminPanel .team-browser-add:focus-visible {
+  border-color: var(--org-control-border-hover);
+  background: var(--org-hover);
+  color: var(--org-ink);
+}
+
+html body #adminPanel .inspector-form {
+  min-height: 100%;
+  padding: 18px;
+}
+
+html body #adminPanel .admin-workspace.is-team-master .inspector-form {
+  padding: 22px;
+}
+
+html body #adminPanel .team-inspector-header {
+  border-bottom: 1px solid var(--org-rule);
+  padding-bottom: 18px;
+}
+
+html body #adminPanel .team-inspector-breadcrumb {
+  margin-bottom: 7px;
+  color: var(--org-muted);
+  font-size: 12px;
+}
+
+html body #adminPanel .team-inspector-title-row {
+  gap: 16px;
+}
+
+html body #adminPanel .team-inspector-title-row h3 {
+  margin: 0 0 3px;
+  color: var(--org-ink-strong);
+  font-size: 23px;
+  line-height: 1.2;
+}
+
+html body #adminPanel .team-inspector-title-row p {
+  margin: 0;
+  color: var(--org-muted);
+  font-size: 13px;
+}
+
+html body #adminPanel .team-status {
+  min-height: 25px;
+  border-color: var(--org-rule);
+  color: var(--org-muted);
+  font-size: 12px;
+}
+
+html body #adminPanel .team-assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+html body #adminPanel .team-assignment-card {
+  min-width: 0;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-surface);
+  padding: 16px;
+}
+
+html body #adminPanel .team-assignment-card .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+html body #adminPanel .team-assignment-card .section-heading h3 {
+  margin: 0;
+  color: var(--org-ink-strong);
+  font-size: 15px;
+}
+
+html body #adminPanel .team-assignment-card > p {
+  min-height: 42px;
+  margin: 0 0 12px;
+  color: var(--org-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+html body #adminPanel .team-member-list {
+  display: grid;
+  gap: 2px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  margin-bottom: 13px;
+}
+
+html body #adminPanel .team-member-row {
+  min-height: 45px;
+  gap: 9px;
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 5px;
+}
+
+html body #adminPanel .team-member-row:hover {
+  background: var(--org-hover);
+}
+
+html body #adminPanel .team-member-avatar {
+  width: 27px;
+  height: 27px;
+  flex-basis: 27px;
+  background: var(--org-active);
+  color: var(--org-ink-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+html body #adminPanel .team-member-meta strong {
+  color: var(--org-ink-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+html body #adminPanel .team-member-meta small {
+  color: var(--org-muted);
+  font-size: 11px;
+}
+
+html body #adminPanel .team-member-group-heading {
+  margin: 8px 5px 2px;
+  color: var(--org-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+html body #adminPanel .team-member-group-heading:first-child {
+  margin-top: 0;
+}
+
+html body #adminPanel .team-member-order-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+html body #adminPanel .team-member-order-button {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--org-rule);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--org-muted);
+  padding: 0;
+}
+
+html body #adminPanel .team-member-order-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+html body #adminPanel .team-member-order-button:hover,
+html body #adminPanel .team-member-order-button:focus-visible {
+  border-color: var(--org-rule-strong);
+  background: var(--org-active);
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .team-member-order-button:disabled {
+  border-color: transparent;
+  color: var(--org-rule-strong);
+  cursor: default;
+}
+
+html body #adminPanel .team-assignment-remove {
+  border: 0;
+  background: transparent;
+  color: var(--org-muted);
+  font-size: 12px;
+}
+
+html body #adminPanel .team-assignment-remove:hover,
+html body #adminPanel .team-assignment-remove:focus-visible {
+  color: var(--org-danger);
+}
+
+html body #adminPanel .team-assignment-empty {
+  min-height: 45px;
+  margin: 0;
+  color: var(--org-muted);
+  padding: 10px 5px;
+  font-size: 12px;
+}
+
+html body #adminPanel :is(.team-assignment-picker, .user-team-picker) > summary {
+  list-style: none;
+}
+
+html body #adminPanel :is(.team-assignment-picker, .user-team-picker) > summary::-webkit-details-marker {
+  display: none;
+}
+
+html body #adminPanel .team-assignment-picker .add-link {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: var(--org-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+html body #adminPanel .team-assignment-picker:not(.is-disabled) .add-link:hover {
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .team-assignment-picker.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+html body #adminPanel .team-assignment-picker select {
+  margin-top: 9px;
+}
+
+html body #adminPanel .team-detail-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  border-radius: var(--org-radius-sm);
+  background: var(--org-subtle);
+  color: var(--org-muted);
+  padding: 11px 13px;
+  font-size: 12px;
+}
+
+html body #adminPanel .team-detail-note strong {
+  color: var(--org-ink);
+}
+
+html body #adminPanel .team-detail-note-mark {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  border: 1px solid var(--org-rule-strong);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+html body #adminPanel .team-settings,
+html body #adminPanel .user-advanced-settings {
+  margin-top: 16px;
+  border-top: 1px solid var(--org-rule);
+  color: var(--org-muted);
+  padding-top: 13px;
+  font-size: 12px;
+}
+
+html body #adminPanel :is(.team-settings, .user-advanced-settings) > summary {
+  color: var(--org-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+html body #adminPanel .team-settings-body {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+
+html body #adminPanel .team-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+html body #adminPanel .team-editor-actions {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+html body #adminPanel .organization-user-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+html body #adminPanel .organization-user-table :is(th, td) {
+  border: 0;
+  border-bottom: 1px solid var(--org-rule);
+  padding: 11px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+html body #adminPanel .organization-user-table th {
+  background: transparent;
+  color: var(--org-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+html body #adminPanel .organization-user-table td {
+  color: var(--org-ink);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+html body #adminPanel .organization-user-table tbody tr {
+  cursor: pointer;
+}
+
+html body #adminPanel .organization-user-table tbody tr:hover,
+html body #adminPanel .organization-user-table tbody tr.is-selected {
+  background: var(--org-active);
+}
+
+html body #adminPanel .user-editor-header h2,
+html body #adminPanel .inspector-form-header h3 {
+  margin: 0 0 4px;
+  color: var(--org-ink-strong);
+  font-size: 16px;
+}
+
+html body #adminPanel .editor-caption,
+html body #adminPanel .inspector-form-header > span {
+  margin: 0 0 17px;
+  color: var(--org-muted);
+  font-size: 12px;
+}
+
+html body #adminPanel .user-editor-fields,
+html body #adminPanel .inspector-fields {
+  display: grid;
+  gap: 0;
+}
+
+html body #adminPanel .inspector-field,
+html body #adminPanel .user-managed-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+html body #adminPanel .inspector-field.admin-flag-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+}
+
+html body #adminPanel .admin-flag-field .inspector-field-label {
+  grid-column: 1;
+}
+
+html body #adminPanel .admin-flag-field input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  grid-column: 2;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--org-ink-strong);
+}
+
+html body #adminPanel .admin-flag-field .inspector-field-hint {
+  grid-column: 1 / -1;
+}
+
+html body #adminPanel .inspector-field-label,
+html body #adminPanel .user-managed-label {
+  color: var(--org-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+html body #adminPanel .user-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+html body #adminPanel .user-team-tag {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border: 1px solid var(--org-rule);
+  border-radius: 999px;
+  background: var(--org-subtle);
+  color: var(--org-ink);
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+html body #adminPanel button.user-team-tag:hover,
+html body #adminPanel .user-team-picker > summary:hover {
+  border-color: var(--org-rule-strong);
+  background: var(--org-hover);
+}
+
+html body #adminPanel .user-team-picker {
+  position: relative;
+}
+
+html body #adminPanel .user-team-picker select {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 230px;
+  box-shadow: var(--org-shadow);
+}
+
+html body #adminPanel .user-tag-empty {
+  color: var(--org-muted);
+  font-size: 12px;
+}
+
+html body #adminPanel .user-advanced-settings {
+  margin-top: 2px;
+}
+
+html body #adminPanel .user-advanced-settings .user-editor-fields {
+  padding-top: 14px;
+}
+
+html body #adminPanel .user-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--org-rule);
+  margin-top: 20px;
+  padding-top: 16px;
+}
+
+html body #adminPanel .inspector-save-button,
+html body #adminPanel .inspector-delete-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--org-radius-sm);
+  padding: 0 13px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+html body #adminPanel .inspector-save-button {
+  background: var(--org-action);
+  color: var(--org-action-ink);
+}
+
+html body #adminPanel .inspector-save-button:hover:not(:disabled) {
+  background: var(--org-action-hover);
+}
+
+html body #adminPanel .inspector-save-button:disabled {
+  background: var(--org-disabled);
+  color: var(--org-disabled-ink);
+}
+
+html body #adminPanel .inspector-delete-button {
+  border-color: var(--org-control-border);
+  background: var(--org-surface);
+  color: var(--org-ink);
+  box-shadow: inset 0 0 0 1px var(--org-control-inset);
+}
+
+html body #adminPanel .inspector-delete-button:hover {
+  border-color: rgb(158 56 56 / 35%);
+  background: var(--org-danger-soft);
+  color: var(--org-danger);
+}
+
+html body #adminPanel .fiscal-calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid var(--org-rule);
+  border-bottom: 1px solid var(--org-rule);
+  padding: 12px 18px;
+}
+
+html body #adminPanel .fiscal-year-navigation,
+html body #adminPanel .fiscal-calendar-legend,
+html body #adminPanel .calendar-legend-item {
+  display: flex;
+  align-items: center;
+}
+
+html body #adminPanel .fiscal-year-navigation {
+  gap: 10px;
+}
+
+html body #adminPanel .fiscal-year-label {
+  min-width: 76px;
+  color: var(--org-ink-strong);
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+html body #adminPanel .fiscal-year-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--org-control-border);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-surface);
+  color: var(--org-ink);
+  font-size: 19px;
+}
+
+html body #adminPanel .fiscal-year-button:hover {
+  border-color: var(--org-control-border-hover);
+  background: var(--org-hover);
+}
+
+html body #adminPanel .fiscal-calendar-legend {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  color: var(--org-muted);
+  font-size: 12px;
+}
+
+html body #adminPanel .calendar-legend-item {
+  gap: 5px;
+}
+
+html body #adminPanel .calendar-holiday-swatch {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  background: var(--org-calendar-holiday);
+}
+
+html body #adminPanel .calendar-workday-swatch {
+  width: 15px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--org-calendar-workday-mark);
+}
+
+html body #adminPanel .fiscal-calendar-summary {
+  color: var(--org-ink);
+}
+
+html body #adminPanel .fiscal-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+  gap: 12px;
+  padding: 14px 18px 18px;
+}
+
+html body #adminPanel .fiscal-calendar-month {
+  min-width: 0;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-surface);
+  padding: 12px;
+}
+
+html body #adminPanel .fiscal-calendar-month h4 {
+  margin: 0 0 8px;
+  color: var(--org-ink-strong);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+html body #adminPanel .fiscal-calendar-weekdays,
+html body #adminPanel .fiscal-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+html body #adminPanel .fiscal-calendar-weekdays span {
+  padding: 2px 0 5px;
+  color: var(--org-muted);
+  text-align: center;
+  font-size: 11px;
+}
+
+html body #adminPanel .fiscal-calendar-weekdays .is-sunday {
+  color: var(--org-danger);
+}
+
+html body #adminPanel .fiscal-calendar-weekdays .is-saturday {
+  color: var(--org-calendar-holiday-ink);
+}
+
+html body #adminPanel .fiscal-calendar-day,
+html body #adminPanel .fiscal-calendar-day-empty {
+  aspect-ratio: 1;
+  min-width: 0;
+}
+
+html body #adminPanel .fiscal-calendar-day {
+  position: relative;
+  display: grid;
+  min-height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--org-ink);
+  padding: 0;
+  font-size: 12px;
+}
+
+html body #adminPanel .fiscal-calendar-day:hover {
+  background: var(--org-hover);
+}
+
+html body #adminPanel .fiscal-calendar-day.is-holiday {
+  background: var(--org-calendar-holiday);
+  color: var(--org-calendar-holiday-ink);
+  font-weight: 700;
+}
+
+html body #adminPanel .fiscal-calendar-day.is-holiday:hover {
+  background: var(--org-calendar-holiday-hover);
+}
+
+html body #adminPanel .fiscal-calendar-day.is-weekend-workday {
+  box-shadow: inset 0 -3px var(--org-calendar-workday-mark);
+}
+
+html body #adminPanel .admin-table-empty,
+html body #adminPanel .inspector-empty {
+  color: var(--org-muted);
+}
+
+@media (max-width: 900px) {
+  html body #adminPanel .admin-workspace:is(.is-team-master, .is-user-master, .is-calendar-master) {
+    grid-template-columns: 1fr;
+  }
+
+  html body #adminPanel .admin-workspace.is-team-master {
+    min-height: 0;
+  }
+
+  html body #adminPanel .team-browser {
+    min-height: 350px;
+  }
+}
+
+@media (max-width: 620px) {
+  html body #adminPanel {
+    padding: 22px 16px 36px;
+  }
+
+  html body #adminPanel .admin-header {
+    grid-template-columns: 1fr;
+  }
+
+  html body #adminPanel .admin-title-line,
+  html body #adminPanel .admin-header-actions,
+  html body #adminPanel .master-nav {
+    grid-column: 1;
+  }
+
+  html body #adminPanel .admin-header-actions {
+    grid-row: 2;
+    margin-bottom: 16px;
+  }
+
+  html body #adminPanel .master-nav {
+    grid-row: 3;
+  }
+
+  html body #adminPanel .admin-page-save {
+    width: 100%;
+  }
+
+  html body #adminPanel .master-table-toolbar,
+  html body #adminPanel .team-inspector-title-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  html body #adminPanel .master-table-tools,
+  html body #adminPanel .master-search,
+  html body #adminPanel .admin-add-button {
+    width: 100%;
+  }
+
+  html body #adminPanel .team-assignment-grid,
+  html body #adminPanel .team-editor-fields {
+    grid-template-columns: 1fr;
+  }
+
+  html body #adminPanel .organization-user-table :is(th, td):is(:nth-child(3), :nth-child(5)) {
+    display: none;
+  }
+
+  html body #adminPanel .fiscal-calendar-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  html body #adminPanel .fiscal-calendar-legend {
+    justify-content: flex-start;
+  }
+
+  html body #adminPanel .fiscal-calendar-grid {
+    grid-template-columns: 1fr;
+    padding: 12px;
   }
 }

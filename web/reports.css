@@ -1,4 +1,4 @@
-/* Hallmark · genre: modern-minimal · tone: utilitarian · macrostructure: Workbench · signature: rowspan member column · anchor hue: existing NIPPO green · pre-emit critique: P5 H5 E5 S5 R5 V4 · contrast: pass (40–41) · responsive: pass */
+/* Hallmark · genre: modern-minimal · tone: utilitarian · macrostructure: Workbench · signature: rowspan member column · anchor hue: ink blue · pre-emit critique: P5 H5 E5 S5 R5 V4 · contrast: pass (40–41) · responsive: pass */
 
 /* Command bar */
 
@@ -109,7 +109,7 @@ html body .toolbar-heading-row .toolbar-button:not(.primary) {
 html body .toolbar-button:hover {
   border-color: var(--primary-border);
   background: var(--surface-hover);
-  color: var(--primary);
+  color: var(--primary-ink);
 }
 
 html body .toolbar-button.primary {
@@ -189,7 +189,7 @@ html body .period-navigation {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--surface-alt);
+  background: var(--control-track-bg);
   padding: 4px;
 }
 
@@ -213,7 +213,7 @@ html body .period-shift-button {
 
 html body .period-shift-button:hover {
   background: var(--surface);
-  color: var(--primary);
+  color: var(--primary-ink);
   box-shadow: 0 1px 3px var(--shadow-color);
 }
 
@@ -238,6 +238,21 @@ html body .period-shift-button svg {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2;
+}
+
+html body .period-shift-step-label {
+  display: inline-flex;
+  min-width: 52px;
+  height: calc(var(--control-height) - 6px);
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  padding: 0 4px;
+  font-size: var(--font-12);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 html body .missing-filter-group {
@@ -270,6 +285,13 @@ html body .period-control input[type="date"] {
   font-size: var(--font-14);
   line-height: 1.2;
   text-align: center;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+html body .period-field-group {
+  cursor: pointer;
 }
 
 html body .period-separator {
@@ -284,16 +306,16 @@ html body .period-field-group:focus-within {
 
 html body .member-switch-button.is-active,
 html body .member-switch-button[aria-pressed="true"] {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-on);
+  border-color: var(--control-filter-selected-border);
+  background: var(--control-filter-selected-bg);
+  color: var(--control-filter-selected-text);
 }
 
 html body #showMissingCommentsButton.is-active,
 html body #showMissingCommentsButton[aria-pressed="true"] {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-on);
+  border-color: var(--control-filter-selected-border);
+  background: var(--control-filter-selected-bg);
+  color: var(--control-filter-selected-text);
 }
 
 html body #showMissingCommentsButton {
@@ -312,13 +334,13 @@ html body #showMissingCommentsButton {
 html body #showMissingCommentsButton:hover {
   border-color: var(--primary-border);
   background: var(--surface-hover);
-  color: var(--primary);
+  color: var(--primary-ink);
 }
 
 html body #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]):hover {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-on);
+  border-color: var(--control-filter-selected-border);
+  background: var(--control-filter-selected-bg);
+  color: var(--control-filter-selected-text);
 }
 
 html body .missing-filter-label {
@@ -399,6 +421,10 @@ html body .member-switch-button {
   white-space: nowrap;
 }
 
+html body .member-switch-button:not([data-id]) {
+  max-width: none;
+}
+
 html body .member-switch-button:is(.is-active, [aria-pressed="true"]) {
   font-weight: 600;
 }
@@ -406,13 +432,13 @@ html body .member-switch-button:is(.is-active, [aria-pressed="true"]) {
 html body .member-switch-button:hover {
   border-color: var(--primary-border);
   background: var(--surface-hover);
-  color: var(--primary);
+  color: var(--primary-ink);
 }
 
 html body .member-switch-button:is(.is-active, [aria-pressed="true"]):hover {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-on);
+  border-color: var(--primary-ink);
+  background: var(--control-filter-selected-bg);
+  color: var(--primary-ink);
 }
 
 /* Table */
@@ -433,6 +459,7 @@ html body .table-card {
 }
 
 html body .table-scroll {
+  position: relative;
   min-width: 0;
   min-height: 0;
   flex: 0 1 auto;
@@ -443,15 +470,11 @@ html body .table-scroll {
 
 html body table {
   width: 100%;
-  min-width: 1110px;
+  min-width: 0;
   border-collapse: separate;
   border-spacing: 0;
   color: var(--text);
   table-layout: fixed;
-}
-
-html body.is-boss-view table {
-  min-width: 1240px;
 }
 
 html body th,
@@ -546,7 +569,7 @@ html body .member-pending-badge {
   border: 1px solid var(--primary-border);
   border-radius: var(--radius-sm);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-ink);
   font-size: var(--font-12);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -555,7 +578,7 @@ html body .member-pending-badge {
 
 html body :is(th, td).date-col {
   position: sticky;
-  left: 144px;
+  left: var(--sticky-date-left, 144px);
   z-index: 4;
   background: var(--table-cell-bg);
 }
@@ -578,12 +601,11 @@ html body thead th.user-col {
 }
 
 html body :is(th, td).date-col {
-  border-right: 2px solid var(--table-border);
+  border-right: 1px solid var(--table-border);
 }
 
 html body .date-col {
-  width: var(--date-column-width);
-  min-width: var(--date-column-width);
+  min-width: 0;
   text-align: center;
   white-space: nowrap;
 }
@@ -600,37 +622,118 @@ html body .cell-frame.date-content {
 }
 
 html body .user-col {
-  width: 144px;
-  min-width: 144px;
+  min-width: 0;
 }
 
 html body .name-col {
-  width: 220px;
-  min-width: 180px;
+  min-width: 0;
 }
 
 html body .detail-col {
-  width: 420px;
-  min-width: 320px;
+  min-width: 0;
 }
 
 html body .comment-col {
-  width: auto;
-  min-width: 260px;
+  min-width: 0;
 }
 
-html body.is-boss-view .detail-col {
-  width: 380px;
+html body .column-header-label {
+  pointer-events: none;
+}
+
+html body .column-header-content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+html body #reportPanel table thead th .column-header-you,
+html body #reportPanel .date-today-label {
+  display: inline-flex;
+  width: 30.328125px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: oklab(0.683029 -0.16619 0.102668 / 0.15);
+  color: #008635;
+  font: 600 12px/20px "OpenAI Sans", Helvetica, Arial, sans-serif;
+  white-space: nowrap;
+}
+
+html body #reportPanel .date-today-label.is-empty {
+  visibility: hidden;
+}
+
+html[data-theme="dark"] body #reportPanel table thead th .column-header-you,
+html[data-theme="dark"] body #reportPanel .date-today-label {
+  color: #04b84c;
+}
+
+html body .column-resize-handle {
+  position: absolute;
+  z-index: 12;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+html body .column-resize-handle::before {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  content: "";
+}
+
+html body thead th:hover .column-resize-handle::before,
+html body .column-resize-handle:focus-visible::before,
+html body .column-resize-handle.is-active::before {
+  background: var(--text-muted);
+}
+
+html body .column-resize-guide {
+  position: fixed;
+  z-index: 100;
+  top: 0;
+  display: none;
+  width: 2px;
+  background: var(--text-muted);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-muted) 18%, transparent);
+  pointer-events: none;
+}
+
+html body .column-resize-guide.is-visible {
+  display: block;
+}
+
+html body.is-resizing-column,
+html body.is-resizing-column * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 html body .cell-frame,
 html body .editable-content {
   display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: calc(var(--table-row-height) - 1px);
   padding: var(--cell-padding-y) var(--cell-padding-x);
   color: var(--text);
   line-height: 1.35;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -640,6 +743,20 @@ html body .date-content {
 
 html body .date-content {
   text-align: center;
+}
+
+html body .date-primary {
+  display: block;
+  min-height: 19px;
+  line-height: 1.35;
+}
+
+html body .date-label-row {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 html body .date-weekday,
@@ -661,16 +778,6 @@ html body tr.holiday td:not(.date-col, .user-col) {
   background: var(--holiday-row-bg);
 }
 
-html body tr.is-today td.date-col {
-  background: var(--surface-active);
-}
-
-html body.is-boss-view th.self-comment-col {
-  background: var(--surface-active);
-  color: var(--text);
-  box-shadow: none;
-}
-
 html body .editable-content {
   cursor: default;
   background: transparent;
@@ -687,6 +794,12 @@ html body .editable-content.is-editable:hover {
 
 html body td:has(.editable-content.is-editable:hover) {
   background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+html body tr.holiday td:not(.date-col, .user-col):has(
+    .editable-content.is-editable:hover
+  ) {
+  background: var(--holiday-row-hover-bg);
 }
 
 html body td:has(.editable-content.is-editable:not(.is-editing):hover)::after {
@@ -724,6 +837,8 @@ html body .editable-content.is-editing::after {
 html body .editing-textarea {
   display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: calc(var(--table-row-height) - 1px);
   margin: 0;
   resize: none;
@@ -734,6 +849,8 @@ html body .editing-textarea {
   color: var(--text);
   padding: var(--cell-padding-y) var(--cell-padding-x);
   font-weight: inherit;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
   outline: none;
 }
 
@@ -761,6 +878,8 @@ html body tr.holiday td.is-dirty-cell:not(.date-col) {
 
 html body .comment-stack {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 5px;
   min-height: calc(var(--table-row-height) - 1px);
 }
@@ -789,23 +908,23 @@ html body .boss-comment-link {
 
 html body .boss-comment-link[data-action="sign-comment"],
 html body .reply-toggle-button {
-  border-color: var(--primary-border);
-  background: var(--primary-soft);
-  color: var(--primary);
+  border-color: var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
 }
 
 html body .boss-comment-link:hover {
   border-color: var(--primary-border);
   background: var(--surface-hover);
-  color: var(--primary-hover);
+  color: var(--primary-ink);
   text-decoration: none;
 }
 
 html body .boss-comment-link[data-action="sign-comment"]:hover,
 html body .reply-toggle-button:hover {
-  border-color: var(--primary);
-  background: var(--surface-active);
-  color: var(--primary-hover);
+  border-color: var(--primary-border);
+  background: var(--surface-hover);
+  color: var(--primary-ink);
 }
 
 html body .reply-toggle-button {
@@ -824,6 +943,8 @@ html body .reply-toggle-button:hover {
 }
 
 html body .reply-section {
+  min-width: 0;
+  max-width: 100%;
   margin: 0 8px 7px;
   border-top: 1px dashed var(--border-strong);
   padding-top: 5px;
@@ -831,6 +952,7 @@ html body .reply-section {
 
 html body .boss-reply-preview {
   display: flex;
+  min-width: 0;
   min-height: var(--compact-control-height);
   align-items: flex-start;
   gap: 5px;
@@ -843,9 +965,13 @@ html body .boss-reply-preview {
 }
 
 html body .boss-reply-text {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
   color: var(--text);
   font-size: var(--font-13);
   line-height: 1.35;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -870,7 +996,7 @@ html body .period-presets {
   flex: 0 0 auto;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--surface-alt);
+  background: var(--control-track-bg);
   padding: 4px;
 }
 
@@ -888,13 +1014,14 @@ html body .preset-button {
 
 html body .preset-button:hover {
   background: var(--surface);
-  color: var(--primary);
+  color: var(--primary-ink);
   box-shadow: 0 1px 3px var(--shadow-color);
 }
 
 html body .preset-button.is-active {
-  background: var(--primary);
-  color: var(--primary-on);
+  border-color: var(--control-selected-border);
+  background: var(--control-selected-bg);
+  color: var(--text-strong);
   box-shadow: 0 1px 3px var(--shadow-color);
 }
 
@@ -906,12 +1033,7 @@ html body .preset-button:disabled {
 /* Only the table scrolls; filters and navigation stay fixed to the viewport. */
 
 html body .table-content {
-  width: 100%;
-  min-width: var(--table-content-width, 1110px);
-}
-
-html body.is-boss-view .table-content {
-  min-width: var(--table-content-width, 1240px);
+  min-width: 0;
 }
 
 html body .table-content table {
@@ -1061,5 +1183,743 @@ html body .toolbar-button-icon svg.is-spinning {
   html body .period-main-controls {
     grid-column: 1;
     width: 100%;
+  }
+}
+
+/* Daily report table typography follows the common-master table. */
+html body #tableWrap table th,
+html body #tableWrap table td,
+html body #tableWrap table th *,
+html body #tableWrap table td * {
+  font-weight: normal;
+}
+
+html body #tableWrap table th,
+html body #tableWrap table th * {
+  color: var(--text-muted);
+}
+
+html body #tableWrap table th,
+html body #tableWrap table th * {
+  font-weight: 700;
+}
+
+/* Platform-style report controls and neutral table frame. */
+html body #reportPanel .toolbar-filter-row {
+  min-height: 58px;
+  padding: 12px 18px 10px;
+}
+
+html body #reportPanel .period-field-group {
+  min-height: var(--period-control-height, 28px);
+  height: var(--period-control-height, 28px);
+  border-color: transparent;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow 0.14s ease;
+}
+
+html body #reportPanel .period-field-group:hover,
+html body #reportPanel .period-field-group:active {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+html body #reportPanel .period-field-group:focus-within {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+html body #reportPanel .period-field-group:has(input:focus-visible) {
+  outline: 2px solid rgb(1 105 204);
+  outline-offset: 1px;
+}
+
+html body #reportPanel .period-field-group.is-pointer-focused:has(input:focus-visible) {
+  outline: none;
+}
+
+html body #reportPanel .period-field-group input:focus-visible {
+  outline: none;
+}
+
+html body #reportPanel .toolbar-button:not(.primary):hover,
+html body #reportPanel .period-shift-button:hover,
+html body #reportPanel .preset-button:hover,
+html body #reportPanel .member-switch-button:hover {
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+
+html body #reportPanel .member-switch-bar {
+  padding-right: 18px;
+  padding-bottom: 14px;
+  padding-left: 18px;
+}
+
+html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]) {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-on);
+}
+
+html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+  color: var(--primary-on);
+}
+
+html body #reportPanel .table-card {
+  padding-right: 14px;
+  padding-left: 14px;
+}
+
+html body #reportPanel .table-scroll {
+  border: 1px solid var(--table-border);
+  border-radius: var(--radius-md);
+}
+
+/* Member type filter-style period control. */
+html body #reportPanel {
+  --period-control-height: 28px;
+  --period-button-height: 24px;
+}
+
+html body[data-font-size="compact"] #reportPanel {
+  --period-control-height: 26px;
+  --period-button-height: 22px;
+}
+
+html body[data-font-size="medium"] #reportPanel {
+  --period-control-height: 32px;
+  --period-button-height: 28px;
+}
+
+html body[data-font-size="large"] #reportPanel {
+  --period-control-height: 36px;
+  --period-button-height: 32px;
+}
+
+html body[data-font-size="xlarge"] #reportPanel {
+  --period-control-height: 48px;
+  --period-button-height: 44px;
+}
+
+html body #reportPanel .period-presets {
+  --period-filter-group: #ededed;
+  --period-filter-indicator: #ffffff;
+  --period-filter-on: #0d0d0d;
+  --period-filter-off: #5d5d5d;
+  --period-filter-hover: #cdcdcd;
+  --period-filter-focus: #0169cc;
+  --period-filter-shadow: 0 1px 4px -1px rgb(0 0 0 / .2);
+  --period-filter-font: "OpenAI Sans", Helvetica, Arial, sans-serif;
+  position: relative;
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  height: auto;
+  min-height: 28px;
+  align-items: center;
+  gap: 2px;
+  overflow: auto;
+  padding: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--period-filter-group);
+  outline: none;
+  scrollbar-width: none;
+  white-space: nowrap;
+  -ms-overflow-style: none;
+}
+
+html[data-theme="dark"] body #reportPanel .period-presets {
+  --period-filter-group: #0d0d0d;
+  --period-filter-indicator: #303030;
+  --period-filter-on: #ffffff;
+  --period-filter-off: #afafaf;
+  --period-filter-hover: #303030;
+  --period-filter-focus: #0285ff;
+}
+
+html body #reportPanel .period-presets::-webkit-scrollbar { display: none; }
+
+html body #reportPanel .period-presets-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 0;
+  border-radius: 6px;
+  background: var(--period-filter-indicator);
+  box-shadow: var(--period-filter-shadow);
+  pointer-events: none;
+  transform: translate3d(2px, 0, 0);
+  transition: width 300ms cubic-bezier(.19, 1, .22, 1), transform 300ms cubic-bezier(.19, 1, .22, 1), opacity 150ms ease;
+}
+
+html body #reportPanel .period-presets > .preset-button {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  height: 24px;
+  min-height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--period-filter-off);
+  font: 600 14px/14px var(--period-filter-font);
+  cursor: pointer;
+  box-shadow: none;
+  transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+html body #reportPanel .period-presets > .preset-button .relative {
+  position: relative;
+  z-index: 2;
+}
+
+html body #reportPanel .period-presets > .preset-button::before {
+  position: absolute;
+  z-index: -1;
+  inset: 1px;
+  border-radius: inherit;
+  background: var(--period-filter-hover);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1);
+  transition: opacity 150ms ease, transform 150ms ease;
+  will-change: transform;
+}
+
+html body #reportPanel .period-presets > .preset-button[data-state="on"] {
+  color: var(--period-filter-on);
+}
+
+html body #reportPanel .period-presets > .preset-button:focus-visible,
+html body #reportPanel .period-presets:focus-visible {
+  outline: 2px solid var(--period-filter-focus);
+  outline-offset: 0;
+}
+
+html body #reportPanel .period-presets > .preset-button[data-state="off"]:focus-visible {
+  color: var(--period-filter-on);
+}
+
+html body #reportPanel .period-presets > .preset-button:active::before {
+  transform: scale(.96, .97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html body #reportPanel .period-presets > .preset-button[data-state="off"]:not([data-disabled]):not(:disabled):hover {
+    color: var(--period-filter-on);
+  }
+
+  html body #reportPanel .period-presets > .preset-button[data-state="off"]:not([data-disabled]):not(:disabled):hover::before {
+    opacity: .5;
+  }
+}
+
+html body #reportPanel .period-presets > .preset-button[data-disabled],
+html body #reportPanel .period-presets > .preset-button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+html body #reportPanel .period-presets > .preset-button[data-disabled]::before,
+html body #reportPanel .period-presets > .preset-button:disabled::before {
+  opacity: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body #reportPanel .period-presets-indicator,
+  html body #reportPanel .period-presets > .preset-button,
+  html body #reportPanel .period-presets > .preset-button::before {
+    transition-duration: 1ms;
+  }
+}
+
+html body #reportPanel .period-navigation {
+  --period-filter-group: #ededed;
+  --period-filter-on: #0d0d0d;
+  --period-filter-off: #5d5d5d;
+  --period-filter-hover: #cdcdcd;
+  --period-filter-focus: #0169cc;
+  --period-filter-font: "OpenAI Sans", Helvetica, Arial, sans-serif;
+  height: var(--period-control-height);
+  border: 0;
+  border-radius: 8px;
+  background: var(--period-filter-group);
+  padding: 2px;
+}
+
+html[data-theme="dark"] body #reportPanel .period-navigation {
+  --period-filter-group: #0d0d0d;
+  --period-filter-on: #ffffff;
+  --period-filter-off: #afafaf;
+  --period-filter-hover: #303030;
+  --period-filter-focus: #0285ff;
+}
+
+html body #reportPanel .period-navigation .period-shift-button,
+html body #reportPanel .period-navigation .period-shift-step-label {
+  height: var(--period-button-height);
+}
+
+html body #reportPanel .period-navigation .period-shift-button {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  background: transparent;
+  color: var(--period-filter-off);
+  font: 600 14px/14px var(--period-filter-font);
+  border-radius: 6px;
+  box-shadow: none;
+  transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+html body #reportPanel .period-navigation .period-shift-button::before {
+  position: absolute;
+  z-index: -1;
+  inset: 1px;
+  border-radius: inherit;
+  background: var(--period-filter-hover);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1);
+  transition: opacity 150ms ease, transform 150ms ease;
+  will-change: transform;
+}
+
+html body #reportPanel .period-navigation .period-shift-button:focus-visible,
+html body #reportPanel .period-navigation:focus-visible {
+  outline: 2px solid var(--period-filter-focus);
+  outline-offset: 0;
+}
+
+html body #reportPanel .period-navigation .period-shift-button:active::before {
+  transform: scale(.96, .97);
+}
+
+html body #reportPanel .period-navigation .period-shift-button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+html body #reportPanel .period-navigation .period-shift-button:disabled::before {
+  opacity: 0 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html body #reportPanel .period-navigation .period-shift-button:not([data-disabled]):not(:disabled):hover {
+    color: var(--period-filter-on);
+  }
+
+  html body #reportPanel .period-navigation .period-shift-button:not([data-disabled]):not(:disabled):hover::before {
+    opacity: .5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body #reportPanel .period-navigation .period-shift-button,
+  html body #reportPanel .period-navigation .period-shift-button::before {
+    transition-duration: 1ms;
+  }
+}
+
+html body #reportPanel .period-navigation .period-shift-step-label {
+  color: var(--period-filter-off);
+  font: 600 14px/14px var(--period-filter-font);
+}
+
+/* Logs-style report surface, horizontal dividers, and underline tabs. */
+html body #mainPanel,
+html body #mainPanel .report-toolbar,
+html body #mainPanel .member-switch-bar,
+html body #mainPanel .table-card,
+html body #mainPanel .table-scroll,
+html body #mainPanel .table-content {
+  background: var(--surface);
+}
+
+html body #reportPanel .table-card {
+  padding: 0;
+}
+
+html body #reportPanel .table-scroll {
+  border: 0;
+  border-radius: 0;
+  border-bottom-color: var(--table-border);
+}
+
+html body #reportPanel table :is(th, td) {
+  border-left: 0;
+  border-right: 1px solid var(--table-border);
+  border-bottom: 0;
+  border-bottom-color: var(--table-border);
+}
+
+html body #reportPanel table thead th {
+  border-top: 0;
+  border-bottom: 1px solid var(--table-border);
+  background: var(--table-header-bg);
+}
+
+html body #reportPanel table tbody tr + tr > :is(th, td) {
+  border-top: 1px solid var(--table-border);
+}
+
+html body #reportPanel table :is(th, td).date-col {
+  border-left: 0;
+  border-right: 1px solid var(--table-border);
+}
+
+html body #reportPanel table thead th:first-child,
+html body #reportPanel table tbody th.user-col {
+  border-left: 1px solid var(--table-border);
+}
+
+/* Service-account style secondary actions and member filters. */
+html body #reportPanel .member-switch-button {
+  min-height: var(--control-height);
+  height: var(--control-height);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-14);
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+html body #reportPanel .member-switch-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--text-strong) 12%, var(--surface));
+  color: var(--text-strong);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]) {
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--primary-on);
+  box-shadow: none;
+}
+
+html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--primary-hover);
+  color: var(--primary-on);
+  box-shadow: none;
+}
+
+/* Refresh-button style data reload action. */
+html body #reportPanel #refreshButton {
+  --realtime-soft-bg: oklab(0.159065 0 0 / 0.08);
+  --realtime-soft-fg: #0d0d0d;
+  --realtime-focus: #0169cc;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  display: inline-flex;
+  width: 42px;
+  height: 32px;
+  min-height: 32px;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--realtime-soft-fg);
+  font: 500 14px/14px var(--font-ui);
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform 100ms ease, color 150ms ease;
+}
+
+html[data-theme="dark"] body #reportPanel #refreshButton {
+  --realtime-soft-bg: oklab(1 0 0 / 0.08);
+  --realtime-soft-fg: #ffffff;
+  --realtime-focus: #0285ff;
+}
+
+html body #reportPanel #refreshButton::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--realtime-soft-bg);
+  content: "";
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+html body #reportPanel #refreshButton:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+html body #reportPanel #refreshButton:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+html body #reportPanel #refreshButton:focus-visible {
+  outline: 2px solid var(--realtime-focus);
+  outline-offset: 2px;
+}
+
+html body #reportPanel #refreshButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+html body #reportPanel #refreshButton:disabled::before {
+  opacity: 0 !important;
+}
+
+html body #reportPanel #refreshButton > .toolbar-button-icon {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 18px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+}
+
+html body #reportPanel #refreshButton > .toolbar-button-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+html body #reportPanel #refreshButton > .toolbar-button-icon svg.is-refresh-icon {
+  fill: currentColor;
+  stroke: none;
+}
+
+html body #reportPanel #refreshButton > .toolbar-button-icon svg.is-loader-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+/* Add-member style primary save action. */
+html body #reportPanel #saveButton {
+  --member-toolbar-primary-bg: #181818;
+  --member-toolbar-primary-fg: #ffffff;
+  --member-toolbar-primary-hover: #343434;
+  --member-filter-focus: #0169cc;
+  --member-toolbar-font: "OpenAI Sans", Helvetica, Arial, sans-serif;
+  --member-disabled: #8f8f8f;
+  --member-action-disabled-bg: oklab(0.159065 0 0 / 0.05);
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  display: inline-flex;
+  height: 32px;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--member-toolbar-primary-fg);
+  font: 500 14px/14px var(--member-toolbar-font);
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background-color 150ms ease, color 150ms ease, transform 100ms ease;
+}
+
+html[data-theme="dark"] body #reportPanel #saveButton {
+  --member-toolbar-primary-bg: #ffffff;
+  --member-toolbar-primary-fg: #0d0d0d;
+  --member-toolbar-primary-hover: #ededed;
+  --member-filter-focus: #0285ff;
+  --member-disabled: #5d5d5d;
+  --member-action-disabled-bg: oklab(1 0 0 / 0.05);
+}
+
+html body #reportPanel #saveButton::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--member-toolbar-primary-bg);
+  content: "";
+  pointer-events: none;
+}
+
+html body #reportPanel #saveButton > * {
+  position: relative;
+  z-index: 1;
+}
+
+html body #reportPanel #saveButton:hover:not(:disabled)::before {
+  background: var(--member-toolbar-primary-hover);
+}
+
+html body #reportPanel #saveButton:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+html body #reportPanel #saveButton:focus-visible {
+  outline: 2px solid var(--member-filter-focus);
+  outline-offset: 2px;
+}
+
+html body #reportPanel #saveButton:disabled {
+  cursor: not-allowed;
+  background: transparent;
+  color: var(--member-disabled);
+  opacity: 1;
+}
+
+html body #reportPanel #saveButton:disabled::before {
+  background: var(--member-action-disabled-bg);
+  opacity: 1;
+}
+
+/* Prompt-preset style comment-target filters. */
+html body #reportPanel .member-switch-list {
+  --comment-filter-font: "OpenAI Sans", Helvetica, Arial, sans-serif;
+  --comment-filter-soft-bg: oklab(0.159065 0 0 / 0.08);
+  --comment-filter-soft-fg: #0d0d0d;
+  --comment-filter-soft-hover: oklab(0.159065 0 0 / 0.12);
+  --comment-filter-primary-bg: #181818;
+  --comment-filter-primary-fg: #ffffff;
+  --comment-filter-primary-hover: #343434;
+  --comment-filter-focus: #0169cc;
+  gap: 8px;
+}
+
+html body #reportPanel .member-switch-divider {
+  width: 1px;
+  height: 24px;
+  flex: 0 0 1px;
+  align-self: center;
+  margin: 0 2px;
+  background: var(--border-strong);
+}
+
+html[data-theme="dark"] body #reportPanel .member-switch-list {
+  --comment-filter-soft-bg: oklab(1 0 0 / 0.08);
+  --comment-filter-soft-fg: #ffffff;
+  --comment-filter-soft-hover: oklab(1 0 0 / 0.12);
+  --comment-filter-primary-bg: #ffffff;
+  --comment-filter-primary-fg: #0d0d0d;
+  --comment-filter-primary-hover: #ededed;
+  --comment-filter-focus: #0285ff;
+}
+
+html body #reportPanel .member-switch-button {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  display: inline-flex;
+  width: max-content;
+  max-width: min(220px, 100%);
+  height: auto;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--comment-filter-soft-fg);
+  font: 500 14px/14px var(--comment-filter-font);
+  letter-spacing: -0.75px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 100ms ease, color 150ms ease;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+html body #reportPanel .member-switch-button::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--comment-filter-soft-bg);
+  content: "";
+  pointer-events: none;
+}
+
+html body #reportPanel .member-switch-button > .relative {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  height: auto;
+  min-height: 14px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  gap: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #reportPanel .member-switch-button:hover:not(:disabled)::before {
+  background: var(--comment-filter-soft-hover);
+}
+
+html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]) {
+  border: 0;
+  background: transparent;
+  color: var(--comment-filter-primary-fg);
+  box-shadow: none;
+}
+
+html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"])::before {
+  background: var(--comment-filter-primary-bg);
+}
+
+html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover:not(:disabled)::before {
+  background: var(--comment-filter-primary-hover);
+}
+
+html body #reportPanel .member-switch-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+html body #reportPanel .member-switch-button:focus-visible {
+  outline: 2px solid var(--comment-filter-focus);
+  outline-offset: 2px;
+}
+
+html body #reportPanel .member-switch-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+html body #reportPanel .member-switch-button:disabled::before {
+  opacity: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body #reportPanel .member-switch-button {
+    transition-duration: 1ms;
   }
 }

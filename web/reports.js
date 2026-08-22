@@ -13,6 +13,93 @@ const IME_DIAGNOSTIC_FLUSH_DELAY_MS = 1500;
 const IME_DIAGNOSTIC_BATCH_SIZE = 200;
 const IME_DIAGNOSTIC_MAX_BUFFERED_EVENTS = 1000;
 
+const TABLE_COLUMN_WIDTH_PROFILES = Object.freeze({
+  compact: { user: 112, date: 80, name: 170, detail: 300, comment: 230 },
+  standard: { user: 128, date: 86, name: 190, detail: 350, comment: 260 },
+  medium: { user: 136, date: 94, name: 205, detail: 390, comment: 280 },
+  large: { user: 144, date: 102, name: 220, detail: 420, comment: 300 },
+  xlarge: { user: 160, date: 114, name: 240, detail: 460, comment: 330 },
+});
+const TABLE_COLUMN_MIN_WIDTH_PROFILES = Object.freeze({
+  compact: { user: 88, date: 68, name: 112, detail: 160, comment: 145 },
+  standard: { user: 96, date: 72, name: 120, detail: 180, comment: 155 },
+  medium: { user: 104, date: 78, name: 130, detail: 195, comment: 165 },
+  large: { user: 112, date: 84, name: 140, detail: 210, comment: 175 },
+  xlarge: { user: 124, date: 110, name: 160, detail: 235, comment: 195 },
+});
+const TABLE_COLUMN_MAX_WIDTHS = Object.freeze({
+  user: 360,
+  date: 220,
+  name: 520,
+  detail: 720,
+  comment: 620,
+});
+const TABLE_FONT_SIZES = Object.freeze([
+  "compact",
+  "standard",
+  "medium",
+  "large",
+  "xlarge",
+]);
+let tableColumnResizeState = null;
+
+function getTableColumnKind(columnId) {
+  if (["user", "date", "name", "detail"].includes(columnId)) return columnId;
+  return String(columnId || "").startsWith("comment:") ? "comment" : "";
+}
+
+function clampTableColumnWidth(columnKind, width, fontSize = state.fontSize) {
+  const size = TABLE_COLUMN_WIDTH_PROFILES[fontSize] ? fontSize : "large";
+  const minimum = TABLE_COLUMN_MIN_WIDTH_PROFILES[size][columnKind];
+  const maximum = TABLE_COLUMN_MAX_WIDTHS[columnKind];
+  return Math.round(Math.min(maximum, Math.max(minimum, Number(width))));
+}
+
+function parseStoredColumnWidths(rawValue) {
+  let parsed = rawValue;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed || "{}");
+    } catch {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+  const normalized = {};
+  TABLE_FONT_SIZES.forEach((fontSize) => {
+    const profile = parsed[fontSize];
+    if (!profile || typeof profile !== "object" || Array.isArray(profile)) return;
+    const widths = {};
+    Object.entries(profile).forEach(([columnId, width]) => {
+      const columnKind = getTableColumnKind(columnId);
+      if (!columnKind || !Number.isFinite(Number(width))) return;
+      widths[columnId] = clampTableColumnWidth(columnKind, width, fontSize);
+    });
+    if (Object.keys(widths).length) normalized[fontSize] = widths;
+  });
+  return normalized;
+}
+
+function getTableColumnWidth(columnId, columnKind, fontSize = state.fontSize) {
+  const size = TABLE_COLUMN_WIDTH_PROFILES[fontSize] ? fontSize : "large";
+  const storedWidth = state.columnWidths?.[size]?.[columnId];
+  const width = Number.isFinite(Number(storedWidth))
+    ? Number(storedWidth)
+    : TABLE_COLUMN_WIDTH_PROFILES[size][columnKind];
+  return clampTableColumnWidth(columnKind, width, size);
+}
+
+function setTableColumnWidth(columnId, columnKind, width) {
+  const fontSize = TABLE_COLUMN_WIDTH_PROFILES[state.fontSize]
+    ? state.fontSize
+    : "large";
+  const profile = { ...(state.columnWidths?.[fontSize] || {}) };
+  profile[columnId] = clampTableColumnWidth(columnKind, width, fontSize);
+  state.columnWidths = { ...(state.columnWidths || {}), [fontSize]: profile };
+  return profile[columnId];
+}
+
 function createImeEditorState(textarea) {
   const editorState = {
     editorId: imeDiagnosticState.nextEditorId++,
@@ -220,23 +307,99 @@ function installImeProtectedEditor(textarea) {
     queueImeDiagnostic("blur", textarea, event);
   });
 }
+
+function isMemberFilterLevelEnabled(level) {
+  return Array.isArray(state.memberFilterLevels) &&
+    state.memberFilterLevels.includes(level);
+}
+
+function getCurrentTeamEntry(level) {
+  return (Array.isArray(state.currentTeam) ? state.currentTeam : []).find(
+    (team) => team?.team_level === level && team?.team_id,
+  );
+}
+
+function memberMatchesTeamEntry(member, teamEntry) {
+  return Array.isArray(member?.team_path) &&
+    member.team_path.some((team) => team?.team_id === teamEntry?.team_id);
+}
+
+function getAvailableTeamFilterScopes() {
+  if (state.restrictToSelf) return [];
+  return ["large", "medium", "small"]
+    .filter((level) => isMemberFilterLevelEnabled(level))
+    .map((level) => {
+      const team = getCurrentTeamEntry(level);
+      if (!team) return null;
+      const memberCount = state.viewableMembers.filter((member) =>
+        memberMatchesTeamEntry(member, team),
+      ).length;
+      return {
+        level,
+        scope: `team:${level}`,
+        team,
+        memberCount,
+      };
+    })
+    .filter((scope) => scope && scope.memberCount > 0);
+}
+
+function isAvailableMemberScope(scope) {
+  if (state.restrictToSelf) {
+    return scope === "self" && state.canInputOwnReport;
+  }
+  if (scope === "self") {
+    return state.canInputOwnReport;
+  }
+  if (scope === "member") return isMemberFilterLevelEnabled("member");
+  if (scope?.startsWith("team:")) {
+    return getAvailableTeamFilterScopes().some((item) => item.scope === scope);
+  }
+  return ["all", "team", "subordinates"].includes(scope);
+}
+
 function clearSubordinateFilters() {
-  state.memberScope = "all";
+  state.memberScope = getDefaultMemberScope();
   state.selectedSubordinateId = "";
   updateSubordinateFilterUi();
   renderTable();
 }
 
+function getDefaultMemberScope() {
+  if (state.restrictToSelf) return "self";
+  if (hasCommentTargetMembers()) return "all";
+  if (state.canInputOwnReport) return "self";
+  return getAvailableTeamFilterScopes()[0]?.scope || "all";
+}
+
+function hasCommentTargetMembers() {
+  return state.viewableMembers.some((member) =>
+    Array.isArray(member.relations) &&
+    member.relations.includes("assigned_subordinate"),
+  );
+}
+
 function setMemberScope(scope) {
-  if (!["all", "self", "team", "subordinates"].includes(scope)) return;
-  state.memberScope = scope;
+  if (
+    !["all", "self", "team", "subordinates"].includes(scope) &&
+    !scope?.startsWith("team:")
+  ) return;
+  if (!isAvailableMemberScope(scope)) return;
+  state.memberScope =
+    scope === "all" && !hasCommentTargetMembers() && state.canInputOwnReport
+      ? getDefaultMemberScope()
+      : scope;
   state.selectedSubordinateId = "";
   updateSubordinateFilterUi();
   renderTable();
 }
 
 function toggleSubordinateFilter(employeeId) {
-  if (!employeeId) return;
+  if (
+    state.restrictToSelf ||
+    !employeeId ||
+    !isMemberFilterLevelEnabled("member")
+  ) return;
   const wasSelected = state.selectedSubordinateId === employeeId;
   state.selectedSubordinateId = wasSelected ? "" : employeeId;
   state.memberScope = wasSelected ? "all" : "member";
@@ -340,6 +503,108 @@ function syncMissingCommentCount() {
   button.removeAttribute("title");
 }
 
+function getPeriodPresetOptions() {
+  return [
+    ...document.querySelectorAll('.period-presets [role="radio"]'),
+  ];
+}
+
+function updatePeriodPresetIndicator() {
+  const group = document.querySelector(".period-presets");
+  const indicator = group?.querySelector(".period-presets-indicator");
+  const selected = getPeriodPresetOptions().find(
+    (option) => option.getAttribute("aria-checked") === "true",
+  );
+  if (!indicator) return;
+  if (!selected) {
+    indicator.style.opacity = "0";
+    return;
+  }
+  indicator.style.removeProperty("opacity");
+  indicator.style.width = `${selected.offsetWidth}px`;
+  indicator.style.transform = `translate3d(${selected.offsetLeft}px, 0, 0)`;
+}
+
+function updatePeriodPresetRovingTabindex(focusedIndex) {
+  getPeriodPresetOptions().forEach((option, index) => {
+    option.tabIndex = index === focusedIndex ? 0 : -1;
+  });
+}
+
+function initializePeriodPresetControl() {
+  const group = document.querySelector(".period-presets");
+  if (!group || group.dataset.initialized === "true") return;
+  group.dataset.initialized = "true";
+  const options = getPeriodPresetOptions();
+  options.forEach((option, index) => {
+    option.addEventListener("click", () => {
+      applyPreset(option.dataset.periodMode);
+    });
+    option.addEventListener("keydown", (event) => {
+      const optionCount = options.length;
+      let nextIndex = -1;
+      if (event.key === "ArrowRight") nextIndex = (index + 1) % optionCount;
+      if (event.key === "ArrowLeft") {
+        nextIndex = (index - 1 + optionCount) % optionCount;
+      }
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = optionCount - 1;
+      if (nextIndex >= 0) {
+        event.preventDefault();
+        movePeriodPresetFocus(nextIndex);
+      } else if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        applyPreset(option.dataset.periodMode);
+      }
+    });
+  });
+  group.addEventListener("keydown", (event) => {
+    if (event.target !== group) return;
+    const currentIndex = options.findIndex((option) => option.tabIndex === 0);
+    const selectedIndex = options.findIndex(
+      (option) => option.getAttribute("aria-checked") === "true",
+    );
+    const baseIndex = currentIndex >= 0 ? currentIndex : selectedIndex;
+    let nextIndex = -1;
+    if (event.key === "ArrowRight") nextIndex = (baseIndex + 1) % options.length;
+    if (event.key === "ArrowLeft") {
+      nextIndex = (baseIndex - 1 + options.length) % options.length;
+    }
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = options.length - 1;
+    if (nextIndex >= 0) {
+      event.preventDefault();
+      movePeriodPresetFocus(nextIndex);
+    } else if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      const option = options[baseIndex >= 0 ? baseIndex : options.length - 1];
+      if (option) applyPreset(option.dataset.periodMode);
+    }
+  });
+  window.addEventListener("resize", updatePeriodPresetIndicator, { passive: true });
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(updatePeriodPresetIndicator).observe(group);
+  }
+  syncPeriodPresets();
+  requestAnimationFrame(updatePeriodPresetIndicator);
+}
+
+function movePeriodPresetFocus(index) {
+  const options = getPeriodPresetOptions();
+  if (!options.length) return;
+  const step = index >= options.length ? 1 : -1;
+  let next = index;
+  for (let count = 0; count < options.length; count += 1) {
+    const option = options[next];
+    if (option && !option.hasAttribute("data-disabled") && !option.disabled) {
+      updatePeriodPresetRovingTabindex(next);
+      option.focus({ preventScroll: true });
+      return;
+    }
+    next = (next + step + options.length) % options.length;
+  }
+}
+
 function syncPeriodPresets() {
   const presets = {
     month: $("presetMonthButton"),
@@ -353,8 +618,21 @@ function syncPeriodPresets() {
       !state.showMissingCommentsOnly && state.activePeriodPreset === name;
     button.disabled = state.isBusy;
     button.classList.toggle("is-active", isActive);
+    button.dataset.state = isActive ? "on" : "off";
+    button.setAttribute("aria-checked", String(isActive));
     button.setAttribute("aria-pressed", String(isActive));
   });
+  const options = getPeriodPresetOptions();
+  const activeIndex = options.findIndex(
+    (option) => option.getAttribute("aria-checked") === "true",
+  );
+  const fallbackIndex = options.findIndex(
+    (option) => option.dataset.periodMode === state.activePeriodPreset,
+  );
+  updatePeriodPresetRovingTabindex(
+    activeIndex >= 0 ? activeIndex : fallbackIndex >= 0 ? fallbackIndex : options.length - 1,
+  );
+  updatePeriodPresetIndicator();
   const missingButton = $("showMissingCommentsButton");
   if (missingButton) {
     missingButton.disabled = state.isBusy;
@@ -372,6 +650,8 @@ function syncPeriodPresets() {
 }
 
 function syncPeriodShiftButtons() {
+  const stepLabel = $("periodShiftStepLabel");
+  if (stepLabel) stepLabel.textContent = getPeriodShiftStepLabel();
   [
     ["periodPrevButton", -1],
     ["periodNextButton", 1],
@@ -393,6 +673,12 @@ function syncPeriodShiftButtons() {
   });
 }
 
+function getPeriodShiftStepLabel() {
+  if (state.activePeriodPreset === "month") return "1か月";
+  if (state.activePeriodPreset === "week") return "1週間";
+  return "1日";
+}
+
 function getChromeModel() {
   const dirty = getDirtyCounts();
   return {
@@ -410,6 +696,7 @@ function getRefreshButtonModel() {
       disabled: true,
       icon: "loader",
       label: "取得中...",
+      ariaLabel: "最新データを取得中",
     };
   }
 
@@ -417,6 +704,7 @@ function getRefreshButtonModel() {
     disabled: state.isBusy,
     icon: "refresh",
     label: "最新データを取得",
+    ariaLabel: "最新データを取得",
   };
 }
 
@@ -424,16 +712,14 @@ function getSaveButtonModel(dirty) {
   if (state.busyAction === "save") {
     return {
       disabled: true,
-      icon: "loader",
       label: "保存中...",
+      ariaLabel: "保存中",
     };
   }
 
   return {
     disabled: state.isBusy || dirty.total === 0,
-    icon: "check",
     label: "保存",
-    badge: dirty.total > 0 ? String(dirty.total) : "",
     ariaLabel: dirty.total > 0 ? `保存 未保存${dirty.total}件` : "保存",
   };
 }
@@ -456,21 +742,18 @@ function renderActionButton(id, model) {
   actionButtonSignatures.set(id, signature);
   button.disabled = model.disabled;
 
-  const icon = document.createElement("span");
-  icon.className = "toolbar-button-icon";
-  icon.setAttribute("aria-hidden", "true");
-  icon.innerHTML = renderToolbarIcon(model.icon);
-
-  const label = document.createElement("span");
-  label.className = "toolbar-button-label";
-  label.textContent = model.label;
-  const children = [icon, label];
-  if (model.badge) {
-    const badge = document.createElement("span");
-    badge.className = "toolbar-button-badge";
-    badge.setAttribute("aria-hidden", "true");
-    badge.textContent = model.badge;
-    children.push(badge);
+  const children = [];
+  if (id === "refreshButton") {
+    const icon = document.createElement("span");
+    icon.className = "toolbar-button-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = renderToolbarIcon(model.icon);
+    children.push(icon);
+  } else {
+    const label = document.createElement("span");
+    label.className = "toolbar-button-label";
+    label.textContent = model.label;
+    children.push(label);
   }
   if (model.ariaLabel) {
     button.setAttribute("aria-label", model.ariaLabel);
@@ -482,16 +765,23 @@ function renderActionButton(id, model) {
 
 function renderToolbarIcon(icon) {
   const paths = {
-    refresh: '<path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v6h-6" />',
+    refresh:
+      '<path fill="currentColor" fill-rule="evenodd" d="M4.5 2.5a1 1 0 0 1 1 1v1.572A9.5 9.5 0 1 1 12 21.5c-4.87 0-8.882-3.663-9.435-8.384a1 1 0 0 1 1.986-.232A7.501 7.501 0 0 0 19.5 12 7.5 7.5 0 0 0 6.41 7H9a1 1 0 0 1 0 2H4.5a1 1 0 0 1-1-1.024V3.5a1 1 0 0 1 1-1Z" clip-rule="evenodd" />',
     check: '<path d="m5 12 4 4L19 6" />',
     loader: '<path d="M21 12a9 9 0 0 1-9 9" /><path d="M3 12a9 9 0 0 1 9-9" />',
   };
-  return `<svg class="${icon === "loader" ? "is-spinning" : ""}" viewBox="0 0 24 24">${paths[icon] || paths.check}</svg>`;
+  const className =
+    icon === "loader"
+      ? "is-spinning is-loader-icon"
+      : icon === "refresh"
+        ? "is-refresh-icon"
+        : "";
+  return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true">${paths[icon] || paths.check}</svg>`;
 }
 
 async function refreshData() {
   finishEditing();
-  if (!confirmDiscardUnsaved("最新データを取得しますか？")) return;
+  if (!(await confirmDiscardUnsaved("最新データを取得"))) return;
   discardDirtyEdits();
   await loadData({ preserveDirty: false });
 }
@@ -518,6 +808,10 @@ async function loadData({
   });
   setBusy(false);
   if (!result.ok) {
+    if (result.access_denied) {
+      showAccessDenied(result.message);
+      return;
+    }
     showMain(false);
     if (result.needs_settings) showSettings(true);
     notify({ text: result.message, type: "error" }); // エラーは silent でも必ず表示
@@ -525,6 +819,8 @@ async function loadData({
   }
   state.displayName = result.data.display_name || result.data.employee_id || "";
   syncCurrentUserName();
+  state.canInputOwnReport = result.data.can_input_own_report !== false;
+  state.restrictToSelf = result.data.restrict_to_self === true;
   state.isSuperior = Boolean(result.data.is_superior);
   if (!state.hasInitializedReportView) {
     state.activeView = "reports";
@@ -540,7 +836,8 @@ async function loadData({
               employee_id: row.employee_id,
               display_name: row.display_name || row.employee_id,
               relations:
-                row.employee_id === result.data.employee_id
+                row.employee_id === result.data.employee_id &&
+                state.canInputOwnReport
                   ? ["self", "same_small_team"]
                   : result.data.is_superior
                     ? ["assigned_subordinate"]
@@ -576,62 +873,82 @@ async function loadData({
 
   const container = $("bossSearchControl");
   if (container) {
+    const individualFilterEnabled =
+      state.restrictToSelf || isMemberFilterLevelEnabled("member");
+    const selfButton = $("showSelfButton");
+    selfButton?.classList.toggle("hidden", !state.canInputOwnReport);
     const subordinates = state.viewableMembers.map((member) => ({
       id: member.employee_id,
       name: member.display_name || member.employee_id,
       relations: Array.isArray(member.relations) ? member.relations : [],
     }));
+    const commentTargetMembers = subordinates.filter((member) =>
+      member.relations.includes("assigned_subordinate"),
+    );
 
-    const availableIds = new Set(subordinates.map((sub) => sub.id));
-    if (!availableIds.has(state.selectedSubordinateId)) {
+    const availableIds = new Set(commentTargetMembers.map((sub) => sub.id));
+    if (!individualFilterEnabled || !availableIds.has(state.selectedSubordinateId)) {
       state.selectedSubordinateId = "";
+      if (state.memberScope === "member") state.memberScope = "all";
+    }
+    if (!commentTargetMembers.length) {
+      state.memberScope = getDefaultMemberScope();
+      state.selectedSubordinateId = "";
+    } else if (!state.canInputOwnReport && state.memberScope === "self") {
+      state.memberScope = getDefaultMemberScope();
+    }
+    if (!isAvailableMemberScope(state.memberScope)) {
+      state.memberScope = getDefaultMemberScope();
     }
 
+    const existingTeamFilters = container.querySelectorAll("[data-team-filter]");
+    existingTeamFilters.forEach((button) => button.remove());
     const existingTags = container.querySelectorAll(
       ".member-switch-button[data-id]",
     );
     existingTags.forEach((t) => t.remove());
 
-    const familyNameCounts = new Map();
-    subordinates.forEach((sub) => {
-      const familyName = getFamilyName(sub.name);
-      familyNameCounts.set(
-        familyName,
-        (familyNameCounts.get(familyName) || 0) + 1,
-      );
+    getAvailableTeamFilterScopes().forEach(({ level, scope, team }) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "member-switch-button";
+      btn.dataset.memberScope = scope;
+      btn.dataset.teamFilter = level;
+      const label = document.createElement("span");
+      label.className = "relative";
+      const teamName = team.team_name || MEMBER_FILTER_LABELS[level];
+      label.textContent = `${MEMBER_FILTER_LABELS[level]}：${teamName}`;
+      btn.appendChild(label);
+      btn.setAttribute("aria-label", `${teamName}（${MEMBER_FILTER_LABELS[level]}）`);
+      btn.setAttribute("aria-pressed", "false");
+      container.appendChild(btn);
     });
 
-    subordinates.forEach((sub) => {
+    const individualMembers = individualFilterEnabled ? commentTargetMembers : [];
+    individualMembers.forEach((sub) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "member-switch-button";
       btn.dataset.id = sub.id;
-      const familyName = getFamilyName(sub.name);
-      btn.textContent =
-        familyNameCounts.get(familyName) === 1 ? familyName : sub.name;
+      const label = document.createElement("span");
+      label.className = "relative";
+      label.textContent = sub.name;
+      btn.appendChild(label);
       btn.setAttribute("aria-label", sub.name);
       btn.setAttribute("aria-pressed", "false");
       container.appendChild(btn);
     });
 
     const allButton = $("showAllSubordinatesButton");
-    if (allButton) allButton.textContent = `全員（${subordinates.length}人）`;
-    const teamCount = subordinates.filter((member) =>
-      member.relations.includes("same_small_team"),
-    ).length;
-    const teamButton = $("showTeamButton");
-    if (teamButton) {
-      teamButton.textContent = `自チーム（${teamCount}人）`;
-      teamButton.classList.toggle("hidden", teamCount === 0);
+    if (allButton) {
+      setMemberFilterButtonLabel(allButton, "全員");
+      allButton.classList.toggle("hidden", commentTargetMembers.length === 0);
     }
-    const subordinateCount = subordinates.filter((member) =>
-      member.relations.includes("assigned_subordinate"),
-    ).length;
-    const subordinateButton = $("showSubordinatesButton");
-    if (subordinateButton) {
-      subordinateButton.textContent = `担当部下（${subordinateCount}人）`;
-      subordinateButton.classList.toggle("hidden", subordinateCount === 0);
-    }
+    const memberFilterDivider = $("memberFilterDivider");
+    memberFilterDivider?.classList.toggle(
+      "hidden",
+      !allButton || allButton.classList.contains("hidden"),
+    );
 
     updateSubordinateFilterUi();
   }
@@ -653,9 +970,15 @@ async function loadData({
   }
 }
 
-function getFamilyName(displayName) {
-  const normalized = String(displayName || "").trim();
-  return normalized.split(/[\s　]+/)[0] || normalized;
+function setMemberFilterButtonLabel(button, text) {
+  if (!button) return;
+  let label = button.querySelector(":scope > .relative");
+  if (!label) {
+    label = document.createElement("span");
+    label.className = "relative";
+    button.replaceChildren(label);
+  }
+  label.textContent = text;
 }
 
 function reapplyDirtyEditsToRows() {
@@ -717,7 +1040,7 @@ async function handleDateChange() {
     );
     return;
   }
-  if (!confirmDiscardUnsaved("日付範囲を変更しますか？")) {
+  if (!(await confirmDiscardUnsaved("日付範囲を変更"))) {
     $("startDate").value = state.startDate;
     $("endDate").value = state.endDate;
     setFieldError("periodError", "", ["startDate", "endDate"]);
@@ -750,7 +1073,7 @@ async function shiftDateRange(direction) {
   );
   if (!startDate || !endDate) return;
 
-  if (!confirmDiscardUnsaved("表示する日付範囲を移動しますか？")) return;
+  if (!(await confirmDiscardUnsaved("日付範囲を変更"))) return;
   discardDirtyEdits();
   startInput.value = startDate;
   endInput.value = endDate;
@@ -798,7 +1121,8 @@ async function applyPreset(presetName) {
   if (presetName !== "missing" && !PERIOD_MODES.includes(presetName)) return;
   finishEditing();
   setFieldError("periodError", "", ["startDate", "endDate"]);
-  if (!confirmDiscardUnsaved("日付範囲を変更しますか？")) return;
+  const action = presetName === "missing" ? "表示を切り替え" : "日付範囲を変更";
+  if (!(await confirmDiscardUnsaved(action))) return;
   discardDirtyEdits();
 
   if (presetName === "missing" && state.showMissingCommentsOnly) {
@@ -929,7 +1253,7 @@ function renderTable({ preserveScroll = false } = {}) {
   wrap.innerHTML = renderTableShell({
     header: renderTableHeader(context),
     body: renderReportRows(rows, context),
-    minWidth: getTableContentWidth(context),
+    columns: context.columns,
   });
   restoreTableScrollState(wrap, scrollState);
   focusPendingReplyEditor();
@@ -998,43 +1322,74 @@ function createTableRenderContext(rows) {
 
   return {
     sampleComments,
+    columns: createTableColumnDefinitions(sampleComments),
   };
 }
 
-function renderTableShell({ header, body, minWidth }) {
-  return `<div class="table-scroll"><div class="table-content" style="--table-content-width:${minWidth}px"><table>${header}<tbody>${body}</tbody></table></div></div>`;
+function createTableColumnDefinitions(sampleComments) {
+  const columns = [
+    { id: "user", kind: "user", className: "user-col", label: "名前" },
+    { id: "date", kind: "date", className: "date-col", label: "日付" },
+    { id: "name", kind: "name", className: "name-col", label: "業務名" },
+    { id: "detail", kind: "detail", className: "detail-col", label: "業務詳細" },
+  ];
+  sampleComments.forEach((cell, index) => {
+    const isCurrentUser = cell.superior_employee_id === state.employeeId;
+    columns.push({
+      id: `comment:${index}`,
+      kind: "comment",
+      className: `comment-col${isCurrentUser ? " self-comment-col" : ""}`,
+      isCurrentUser,
+      label: cell.superior_name,
+    });
+  });
+  return columns.map((column) => ({
+    ...column,
+    width: getTableColumnWidth(column.id, column.kind),
+    minWidth: TABLE_COLUMN_MIN_WIDTH_PROFILES[state.fontSize][column.kind],
+    maxWidth: TABLE_COLUMN_MAX_WIDTHS[column.kind],
+  }));
 }
 
-function getTableContentWidth(context) {
-  const fixedColumns = 144 + 86 + 220 + 420;
-  const commentColumns = context.sampleComments.length * 300;
-  const fallback = 1240;
-  return Math.max(fallback, fixedColumns + commentColumns);
+function renderTableShell({ header, body, columns }) {
+  const totalWidth = columns.reduce((total, column) => total + column.width, 0);
+  const userColumn = columns.find((column) => column.kind === "user");
+  const columnMarkup = columns
+    .map(
+      (column) =>
+        `<col data-column-id="${escapeHtml(column.id)}" data-column-kind="${column.kind}" style="width:${column.width}px">`,
+    )
+    .join("");
+  return `<div class="table-scroll">
+    <div class="column-resize-guide" aria-hidden="true"></div>
+    <div class="table-content" style="width:${totalWidth}px;--sticky-date-left:${userColumn.width}px">
+      <table><colgroup>${columnMarkup}</colgroup>${header}<tbody>${body}</tbody></table>
+    </div>
+  </div>`;
 }
 
 function renderTableHeader(context) {
-  const superiorHeaders = context.sampleComments
-    .map(renderSuperiorHeader)
-    .join("");
-
-  return `<thead><tr>
-    <th class="user-col">名前</th>
-    <th class="date-col">日付</th>
-    <th class="name-col">業務名</th>
-    <th class="detail-col">業務詳細</th>
-    ${superiorHeaders}
-  </tr></thead>`;
+  return `<thead><tr>${context.columns.map(renderResizableHeader).join("")}</tr></thead>`;
 }
 
-function renderSuperiorHeader(cell) {
-  const isMe = cell.superior_employee_id === state.employeeId;
-  const selfClass = isMe ? " self-comment-col" : "";
-  return `<th class="comment-col${selfClass}">${escapeHtml(cell.superior_name)}</th>`;
+function renderResizableHeader(column) {
+  const columnId = escapeHtml(column.id);
+  const label = `<span class="column-header-label">${escapeHtml(column.label)}</span>`;
+  const headerContent = column.isCurrentUser
+    ? `<span class="column-header-content">${label}<span class="column-header-you" aria-label="You">You</span></span>`
+    : label;
+  return `<th class="${column.className}" data-column-id="${columnId}">
+    ${headerContent}
+    <span class="column-resize-handle" role="separator" aria-orientation="vertical" aria-label="${escapeHtml(column.label)}列の幅を変更" aria-valuemin="${column.minWidth}" aria-valuemax="${column.maxWidth}" aria-valuenow="${column.width}" data-column-id="${columnId}" data-column-kind="${column.kind}" tabindex="0"></span>
+  </th>`;
 }
 
 function getVisibleComments(comments = []) {
   if (!Array.isArray(comments)) return [];
-  return comments;
+  if (state.memberScope !== "self" || !state.isSuperior) return comments;
+  return comments.filter(
+    (cell) => cell?.superior_employee_id !== state.employeeId,
+  );
 }
 
 function renderReportRows(rows, context) {
@@ -1112,8 +1467,12 @@ function renderReportRowClass(row, idx, context) {
 }
 
 function renderDateCell(row, idx, context) {
+  const todayLabel = row.is_today
+    ? `<span class="date-today-label">今日</span>`
+    : `<span class="date-today-label is-empty" aria-hidden="true"></span>`;
   const content = renderCellFrame(
-    `${formatDisplayDateHTML(row.date)}${renderHolidayLabel(row)}`,
+    `<div class="date-primary">${formatDisplayDateHTML(row.date)}</div>
+      <div class="date-label-row">${todayLabel}${renderHolidayLabel(row)}</div>`,
     "cell-frame-static date-content",
   );
   return `<td class="date-col">${content}</td>`;
@@ -1121,7 +1480,7 @@ function renderDateCell(row, idx, context) {
 
 function renderHolidayLabel(row) {
   return row.holiday_description
-    ? `<div class="cell-sub-label">${escapeHtml(row.holiday_description)}</div>`
+    ? `<span class="cell-sub-label">${escapeHtml(row.holiday_description)}</span>`
     : "";
 }
 
@@ -1441,7 +1800,154 @@ function isEmpty(value) {
   return normalizeCellValue(value) === "";
 }
 
+function getRenderedTableColumn(columnId) {
+  return [...document.querySelectorAll("#tableWrap col[data-column-id]")].find(
+    (column) => column.dataset.columnId === columnId,
+  );
+}
+
+function getRenderedColumnResizeHandle(columnId) {
+  return [
+    ...document.querySelectorAll("#tableWrap .column-resize-handle[data-column-id]"),
+  ].find((handle) => handle.dataset.columnId === columnId);
+}
+
+function applyColumnWidthsToRenderedTable() {
+  const tableContent = document.querySelector("#tableWrap .table-content");
+  const columns = [
+    ...document.querySelectorAll("#tableWrap col[data-column-id][data-column-kind]"),
+  ];
+  if (!(tableContent instanceof HTMLElement) || !columns.length) return;
+
+  let totalWidth = 0;
+  let userWidth = 0;
+  columns.forEach((column) => {
+    const { columnId, columnKind } = column.dataset;
+    const width = getTableColumnWidth(columnId, columnKind);
+    column.style.width = `${width}px`;
+    totalWidth += width;
+    if (columnKind === "user") userWidth = width;
+    const handle = getRenderedColumnResizeHandle(columnId);
+    if (handle) {
+      handle.setAttribute(
+        "aria-valuemin",
+        String(TABLE_COLUMN_MIN_WIDTH_PROFILES[state.fontSize][columnKind]),
+      );
+      handle.setAttribute(
+        "aria-valuemax",
+        String(TABLE_COLUMN_MAX_WIDTHS[columnKind]),
+      );
+      handle.setAttribute("aria-valuenow", String(width));
+    }
+  });
+  tableContent.style.width = `${totalWidth}px`;
+  tableContent.style.setProperty("--sticky-date-left", `${userWidth}px`);
+}
+
+function positionColumnResizeGuide(clientX) {
+  const scroll = document.querySelector("#tableWrap .table-scroll");
+  const guide = document.querySelector("#tableWrap .column-resize-guide");
+  if (!(scroll instanceof HTMLElement) || !(guide instanceof HTMLElement)) return;
+  const bounds = scroll.getBoundingClientRect();
+  guide.style.left = `${clientX}px`;
+  guide.style.top = `${bounds.top}px`;
+  guide.style.height = `${bounds.height}px`;
+}
+
+function startColumnResize(event) {
+  const handle = event.target.closest(".column-resize-handle");
+  if (!(handle instanceof HTMLElement) || event.button !== 0) return;
+  const { columnId, columnKind } = handle.dataset;
+  const column = getRenderedTableColumn(columnId);
+  if (!column || !columnKind) return;
+
+  finishEditing();
+  const startWidth = getTableColumnWidth(columnId, columnKind);
+  tableColumnResizeState = {
+    pointerId: event.pointerId,
+    handle,
+    columnId,
+    columnKind,
+    startX: event.clientX,
+    startWidth,
+  };
+  handle.setPointerCapture(event.pointerId);
+  handle.classList.add("is-active");
+  document.body.classList.add("is-resizing-column");
+  document
+    .querySelector("#tableWrap .column-resize-guide")
+    ?.classList.add("is-visible");
+  positionColumnResizeGuide(event.clientX);
+  event.preventDefault();
+}
+
+function moveColumnResize(event) {
+  if (
+    !tableColumnResizeState ||
+    event.pointerId !== tableColumnResizeState.pointerId
+  ) {
+    return;
+  }
+  const width = setTableColumnWidth(
+    tableColumnResizeState.columnId,
+    tableColumnResizeState.columnKind,
+    tableColumnResizeState.startWidth + event.clientX - tableColumnResizeState.startX,
+  );
+  applyColumnWidthsToRenderedTable();
+  tableColumnResizeState.handle.setAttribute("aria-valuenow", String(width));
+  positionColumnResizeGuide(event.clientX);
+}
+
+function finishColumnResize(event) {
+  if (
+    !tableColumnResizeState ||
+    event.pointerId !== tableColumnResizeState.pointerId
+  ) {
+    return;
+  }
+  const { handle } = tableColumnResizeState;
+  if (handle.hasPointerCapture(event.pointerId)) {
+    handle.releasePointerCapture(event.pointerId);
+  }
+  handle.classList.remove("is-active");
+  document.body.classList.remove("is-resizing-column");
+  document
+    .querySelector("#tableWrap .column-resize-guide")
+    ?.classList.remove("is-visible");
+  tableColumnResizeState = null;
+  persistUiState();
+}
+
+function handleColumnResizeKeydown(event, handle) {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return false;
+  const { columnId, columnKind } = handle.dataset;
+  const direction = event.key === "ArrowRight" ? 1 : -1;
+  const step = event.shiftKey ? 24 : 8;
+  setTableColumnWidth(
+    columnId,
+    columnKind,
+    getTableColumnWidth(columnId, columnKind) + direction * step,
+  );
+  applyColumnWidthsToRenderedTable();
+  persistUiState();
+  event.preventDefault();
+  return true;
+}
+
+function resetCurrentColumnWidths() {
+  const fontSize = TABLE_COLUMN_WIDTH_PROFILES[state.fontSize]
+    ? state.fontSize
+    : "large";
+  const nextWidths = { ...(state.columnWidths || {}) };
+  delete nextWidths[fontSize];
+  state.columnWidths = nextWidths;
+  applyColumnWidthsToRenderedTable();
+  persistUiState();
+  notify({ text: "現在の文字サイズの列幅をリセットしました。", type: "info" });
+}
+
 function handleTableClick(event) {
+  if (event.target.closest(".column-resize-handle")) return;
   const signComment = event.target.closest('[data-action="sign-comment"]');
   if (signComment) {
     applyBossCommentSignature(signComment);
@@ -1464,6 +1970,11 @@ function handleTableClick(event) {
 function handleTableKeydown(event) {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+  const resizeHandle = target.closest(".column-resize-handle");
+  if (resizeHandle instanceof HTMLElement) {
+    handleColumnResizeKeydown(event, resizeHandle);
+    return;
+  }
   if (target.matches("textarea")) return;
 
   const editable = target.closest(".editable-content");
@@ -1780,9 +2291,23 @@ function getFilteredRows() {
     state.viewableMembers
       .filter((member) => {
         const relations = Array.isArray(member.relations) ? member.relations : [];
-        if (state.memberScope === "self") return member.employee_id === state.employeeId;
+        if (state.restrictToSelf) {
+          return state.canInputOwnReport && member.employee_id === state.employeeId;
+        }
+        if (state.memberScope === "self") {
+          return state.canInputOwnReport && member.employee_id === state.employeeId;
+        }
+        if (member.employee_id === state.employeeId) return false;
+        if (state.memberScope?.startsWith("team:")) {
+          const level = state.memberScope.slice("team:".length);
+          const team = getCurrentTeamEntry(level);
+          return Boolean(team && memberMatchesTeamEntry(member, team));
+        }
         if (state.memberScope === "team") return relations.includes("same_small_team");
         if (state.memberScope === "subordinates") {
+          return relations.includes("assigned_subordinate");
+        }
+        if (state.memberScope === "all") {
           return relations.includes("assigned_subordinate");
         }
         if (state.memberScope === "member") return member.employee_id === selectedId;

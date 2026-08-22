@@ -1,4 +1,21 @@
 // Settings screen behavior and validation.
+function setSettingsTab(tabName = "general") {
+  const tabs = [...document.querySelectorAll("[data-settings-tab]")];
+  const panels = [...document.querySelectorAll("[data-settings-panel]")];
+  const activeTab = tabs.find((tab) => tab.dataset.settingsTab === tabName) || tabs[0];
+  const activeName = activeTab?.dataset.settingsTab || "general";
+  tabs.forEach((tab) => {
+    const isActive = tab === activeTab;
+    tab.classList.toggle("is-active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+  });
+  panels.forEach((panel) => {
+    const isActive = panel.dataset.settingsPanel === activeName;
+    panel.classList.toggle("hidden", !isActive);
+    panel.hidden = !isActive;
+  });
+}
+
 function fillSettings(settings) {
   $("usersDir").value = settings.users_dir || "";
   $("commentsDir").value = settings.comments_dir || "";
@@ -14,12 +31,27 @@ function fillSettings(settings) {
     settings.include_today_in_missing_comments,
   );
   $("commentSignature").value = settings.comment_signature || "";
+  const colorTheme = normalizeColorTheme(settings.ui_color_theme);
+  document
+    .querySelectorAll('input[name="uiColorTheme"]')
+    .forEach((input) => {
+      input.checked = input.value === colorTheme;
+    });
+  const memberFilterLevels = normalizeMemberFilterLevels(
+    settings.ui_member_filter_levels,
+  );
+  document
+    .querySelectorAll("[data-member-filter-level]")
+    .forEach((input) => {
+      input.checked = memberFilterLevels.includes(input.value);
+    });
   state.missingCommentStartDate = settings.missing_comment_start_date || "";
   state.includeTodayInMissingComments = Boolean(
     settings.include_today_in_missing_comments,
   );
   state.commentSignature = settings.comment_signature || "";
   updateDefaultRangePreview();
+  markSettingsClean();
 }
 
 function clampNumber(value, min, max) {
@@ -123,7 +155,31 @@ function getSettingsPayload() {
     missing_comment_start_date: $("missingCommentStartDate").value,
     include_today_in_missing_comments: $("includeTodayInMissingComments").checked,
     comment_signature: $("commentSignature").value,
+    ui_color_theme:
+      document.querySelector('input[name="uiColorTheme"]:checked')?.value ||
+      "light",
+    ui_member_filter_levels: [
+      ...document.querySelectorAll("[data-member-filter-level]:checked"),
+    ].map((input) => input.value),
   };
+}
+
+function getSettingsDraftSnapshot() {
+  return JSON.stringify(getSettingsPayload());
+}
+
+function isSettingsDirty() {
+  return Boolean(state.settingsSnapshot) &&
+    state.settingsSnapshot !== getSettingsDraftSnapshot();
+}
+
+function markSettingsClean() {
+  state.settingsSnapshot = getSettingsDraftSnapshot();
+  syncChrome();
+}
+
+function syncSettingsDirtyState() {
+  syncChrome();
 }
 
 async function saveSettings() {
@@ -157,6 +213,11 @@ async function saveSettings() {
         payload.include_today_in_missing_comments,
     );
     state.commentSignature = result.settings?.comment_signature || "";
+    state.memberFilterLevels = normalizeMemberFilterLevels(
+      result.settings?.ui_member_filter_levels ?? payload.ui_member_filter_levels,
+    );
+    applyColorTheme(result.settings?.ui_color_theme ?? payload.ui_color_theme);
+    markSettingsClean();
     showSettings(false);
     await loadData();
     persistUiState();

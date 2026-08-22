@@ -304,3 +304,294 @@ html body .actions {
     grid-template-columns: 1fr;
   }
 }
+
+/* Graphite settings surface. Keep navigation compact and content unframed. */
+html body .settings-panel {
+  background: var(--surface);
+  padding: 28px 34px 40px;
+}
+
+html body .settings-card {
+  max-width: 760px;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  padding: 0;
+}
+
+html body .settings-header {
+  display: none;
+}
+
+html body .settings-tabs {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  padding: 3px;
+}
+
+html body .settings-tab {
+  min-height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0 12px;
+  font-size: var(--font-12);
+  font-weight: 600;
+}
+
+html body .settings-tab:hover,
+html body .settings-tab.is-active {
+  background: var(--surface);
+  color: var(--text-strong);
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+html body .settings-tab-panel {
+  min-width: 0;
+}
+
+html body .appearance-setting {
+  margin: 0 0 22px;
+}
+
+html body .appearance-setting .settings-section-heading {
+  margin-bottom: 12px;
+}
+
+html body .member-filter-setting {
+  margin: 0 0 22px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+html body .member-filter-setting .settings-section-heading {
+  margin-bottom: 12px;
+}
+
+html body .member-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+html body .settings-card .member-filter-option {
+  display: inline-flex;
+  min-width: 84px;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 14px;
+  color: var(--text-strong);
+  cursor: pointer;
+  font-size: var(--font-13);
+  font-weight: 600;
+}
+
+html body .settings-card .member-filter-option:hover,
+html body .settings-card .member-filter-option:has(input:checked) {
+  border-color: var(--text-strong);
+  background: var(--surface-hover);
+}
+
+html body .member-filter-option input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+html body .member-filter-option:has(input:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--text-strong) 42%, transparent);
+  outline-offset: 2px;
+}
+
+html body .color-theme-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+html body .settings-card .color-theme-option {
+  position: relative;
+  display: grid;
+  width: 136px;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  padding: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+html body .settings-card .color-theme-option:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+html body .settings-card .color-theme-option:has(input:checked) {
+  border-color: var(--text-strong);
+  box-shadow: inset 0 0 0 1px var(--text-strong);
+}
+
+html body .color-theme-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html body .color-theme-option:has(input:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--text-strong) 42%, transparent);
+  outline-offset: 2px;
+}
+
+html body .color-theme-preview {
+  position: relative;
+  display: block;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid rgb(17 17 17 / 16%);
+  border-radius: 7px;
+}
+
+html body .color-theme-preview::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 25%;
+  content: "";
+}
+
+html body .color-theme-preview i {
+  position: absolute;
+  top: 11px;
+  right: 9px;
+  bottom: 9px;
+  left: calc(25% + 8px);
+  border-radius: 4px;
+}
+
+html body .color-theme-preview.is-light {
+  background: #f7f7f8;
+}
+
+html body .color-theme-preview.is-light::before {
+  background: #f1f1f2;
+}
+
+html body .color-theme-preview.is-light i {
+  border: 1px solid #dedee1;
+  background: #ffffff;
+}
+
+html body .color-theme-preview.is-dark {
+  border-color: rgb(255 255 255 / 18%);
+  background: #212121;
+}
+
+html body .color-theme-preview.is-dark::before {
+  background: #0d0d0d;
+}
+
+html body .color-theme-preview.is-dark i {
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: #282828;
+}
+
+html body .color-theme-option-copy {
+  color: var(--text-strong);
+  font-size: var(--font-13);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+html body .settings-card > .settings-tab-panel > .settings-field,
+html body .settings-card > .settings-tab-panel > .missing-comment-setting,
+html body .settings-card > .settings-tab-panel > .default-range-setting {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+html body .settings-card > .settings-tab-panel > .settings-field {
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 20px;
+  margin-top: 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+
+html body .settings-card > .settings-tab-panel > .settings-field > span:first-child {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+html body .settings-card input[type="text"],
+html body .settings-card input[type="date"] {
+  min-height: 38px;
+  height: 38px;
+  border-color: var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-strong);
+}
+
+html body .settings-card input:focus {
+  border-color: var(--text-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-strong) 12%, transparent);
+}
+
+html body .settings-card .default-range-setting,
+html body .settings-card .missing-comment-setting {
+  margin-top: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+html body .settings-card .settings-check-option {
+  border-top-color: var(--border);
+}
+
+html body .settings-card > .actions {
+  justify-content: flex-end;
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+@media (max-width: 760px) {
+  html body .settings-panel {
+    padding: 20px 16px 28px;
+  }
+
+  html body .settings-tabs {
+    display: flex;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  html body .settings-card > .settings-tab-panel > .settings-field {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  html body .settings-card .color-theme-option {
+    width: min(148px, calc(50% - 6px));
+  }
+}

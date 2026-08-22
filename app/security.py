@@ -16,12 +16,16 @@ MAX_PATH_LENGTH = 4_096
 MAX_IME_DIAGNOSTIC_EVENTS = 200
 MAX_COMMON_MASTER_ROWS = 20_000
 MAX_COMMON_FIELD_LENGTH = 20_000
+MEMBER_FILTER_LEVELS = frozenset({"large", "medium", "small", "member"})
+
 
 COMMON_MASTER_COLUMNS = {
     "user_master": (
         "employee_id",
         "display_name",
-        "superior_rank",
+        "can_input_own_report",
+        "employment_type",
+        "is_admin",
         "small_team_id",
         "display_order",
     ),
@@ -32,10 +36,17 @@ COMMON_MASTER_COLUMNS = {
         "parent_team_id",
         "sort_order",
         "is_active",
+        "commenter_employee_ids",
     ),
-    "superior_config": ("superior_employee_id", "subordinate_employee_id"),
-    "calendar": ("date", "is_holiday", "description"),
+    "calendar": ("date",),
 }
+
+USER_MASTER_DEFAULTS = {
+    "can_input_own_report": "1",
+    "employment_type": "regular",
+    "is_admin": "0",
+}
+USER_EMPLOYMENT_TYPES = frozenset({"regular", "temporary"})
 
 TEAM_LEVELS = frozenset({"large", "medium", "small"})
 
@@ -191,13 +202,15 @@ def validate_common_master_save_request(
             ).strip()
             for column in columns
         }
+        if master == "team_master":
+            # Kept in the CSV for backward compatibility; teams are always active.
+            row["is_active"] = "1"
         _validate_common_master_row(master, row, index)
         rows.append(row)
 
     key_columns = {
         "user_master": ("employee_id",),
         "team_master": ("team_id",),
-        "superior_config": ("superior_employee_id", "subordinate_employee_id"),
         "calendar": ("date",),
     }[master]
     _reject_duplicate_values(
@@ -217,18 +230,17 @@ def validate_administration_save_request(
 ) -> tuple[
     list[dict[str, str]],
     list[dict[str, str]],
-    list[dict[str, str]],
     dict[str, str],
 ]:
     source = require_request_mapping(payload, "組織・ユーザー管理")
     _reject_unknown_keys(
-        source, {"teams", "users", "relationships", "revisions"}
+        source, {"teams", "users", "revisions"}
     )
     revisions_source = require_request_mapping(
         source.get("revisions", {}), "データの版"
     )
     _reject_unknown_keys(
-        revisions_source, {"team_master", "user_master", "superior_config"}
+        revisions_source, {"team_master", "user_master"}
     )
 
     _, teams, team_revision = validate_common_master_save_request(
@@ -238,57 +250,76 @@ def validate_administration_save_request(
             "revision": revisions_source.get("team_master", ""),
         }
     )
-    users, relationships, user_revisions = (
+    users, user_revisions = (
         validate_user_administration_save_request(
             {
                 "users": source.get("users"),
-                "relationships": source.get("relationships"),
                 "revisions": {
                     "user_master": revisions_source.get("user_master", ""),
-                    "superior_config": revisions_source.get(
-                        "superior_config", ""
-                    ),
                 },
             }
         )
     )
 
-    teams_by_id = {row["team_id"]: row for row in teams}
-    for index, user in enumerate(users):
-        small_team_id = user["small_team_id"]
-        if not small_team_id:
-            continue
-        team = teams_by_id.get(small_team_id)
-        if team is None:
-            raise RequestValidationError(
-                f"{index + 1}人目の所属小チームがチームマスターにありません。"
-            )
-        if team["team_level"] != "small":
-            raise RequestValidationError(
-                f"{index + 1}人目の所属先には小チームを指定してください。"
-            )
-        if team["is_active"] != "1":
-            raise RequestValidationError(
-                f"{index + 1}人目の所属先には有効な小チームを指定してください。"
-            )
+    validate_user_team_references(users, teams)
 
     return (
         teams,
         users,
-        relationships,
         {"team_master": team_revision, **user_revisions},
     )
 
 
+def validate_user_team_references(
+    users: list[dict[str, str]], teams: list[dict[str, str]]
+) -> None:
+    teams_by_id = {str(row.get("team_id", "")): row for row in teams}
+    users_by_id = {str(row.get("employee_id", "")): row for row in users}
+    for index, user in enumerate(users):
+        team_id = user["small_team_id"]
+        if not team_id:
+            continue
+        team = teams_by_id.get(team_id)
+        if team is None:
+            raise RequestValidationError(
+                f"{index + 1}人目の所属チームがチームマスターにありません。"
+            )
+        if team["team_level"] not in {"large", "medium", "small"}:
+            raise RequestValidationError(
+                f"{index + 1}人目の所属先には課・係またはチームを指定してください。"
+            )
+        if team["is_active"] != "1":
+            raise RequestValidationError(
+                f"{index + 1}人目の所属先には有効なチームを指定してください。"
+            )
+
+    for index, team in enumerate(teams):
+        commenter_ids = _split_team_ids(team["commenter_employee_ids"])
+        unknown_ids = [employee_id for employee_id in commenter_ids if employee_id not in users_by_id]
+        if unknown_ids:
+            raise RequestValidationError(
+                f"{index + 1}件目のコメント担当者がユーザーマスターにありません。"
+            )
+        temporary_ids = [
+            employee_id
+            for employee_id in commenter_ids
+            if users_by_id[employee_id]["employment_type"] == "temporary"
+        ]
+        if temporary_ids:
+            raise RequestValidationError(
+                f"{index + 1}件目のコメント担当者に派遣社員は設定できません。"
+            )
+        team["commenter_employee_ids"] = ";".join(dict.fromkeys(commenter_ids))
+
 def validate_user_administration_save_request(
     payload: Any,
-) -> tuple[list[dict[str, str]], list[dict[str, str]], dict[str, str]]:
+) -> tuple[list[dict[str, str]], dict[str, str]]:
     source = require_request_mapping(payload, "ユーザー管理")
-    _reject_unknown_keys(source, {"users", "relationships", "revisions"})
+    _reject_unknown_keys(source, {"users", "revisions"})
     revisions_source = require_request_mapping(
         source.get("revisions", {}), "データの版"
     )
-    _reject_unknown_keys(revisions_source, {"user_master", "superior_config"})
+    _reject_unknown_keys(revisions_source, {"user_master"})
 
     _, users, user_revision = validate_common_master_save_request(
         {
@@ -297,44 +328,9 @@ def validate_user_administration_save_request(
             "revision": revisions_source.get("user_master", ""),
         }
     )
-    _, relationships, relationship_revision = validate_common_master_save_request(
-        {
-            "master": "superior_config",
-            "rows": source.get("relationships"),
-            "revision": revisions_source.get("superior_config", ""),
-        }
-    )
-
-    users_by_id = {row["employee_id"]: row for row in users}
-    supervisors_with_subordinates: set[str] = set()
-    for index, relationship in enumerate(relationships):
-        superior_id = relationship["superior_employee_id"]
-        subordinate_id = relationship["subordinate_employee_id"]
-        if superior_id not in users_by_id or subordinate_id not in users_by_id:
-            raise RequestValidationError(
-                f"{index + 1}件目の担当関係に未登録の社員IDが含まれています。"
-            )
-        if superior_id == subordinate_id:
-            raise RequestValidationError("自分自身を担当部下には設定できません。")
-        supervisors_with_subordinates.add(superior_id)
-
-    missing_rank = [
-        users_by_id[employee_id]["display_name"] or employee_id
-        for employee_id in supervisors_with_subordinates
-        if not users_by_id[employee_id]["superior_rank"]
-    ]
-    if missing_rank:
-        raise RequestValidationError(
-            f"{missing_rank[0]}は担当部下がいるため、上司ランクを入力してください。"
-        )
-
     return (
         users,
-        relationships,
-        {
-            "user_master": user_revision,
-            "superior_config": relationship_revision,
-        },
+        {"user_master": user_revision},
     )
 
 
@@ -344,7 +340,6 @@ def _validate_common_master_row(
     label = f"{index + 1}行目"
     employee_columns = {
         "user_master": ("employee_id",),
-        "superior_config": ("superior_employee_id", "subordinate_employee_id"),
     }.get(master, ())
     for column in employee_columns:
         try:
@@ -355,9 +350,19 @@ def _validate_common_master_row(
     if master == "user_master" and not row["display_name"]:
         raise RequestValidationError(f"{label}の表示名を入力してください。")
     if master == "user_master":
-        rank = row["superior_rank"]
-        if rank and (not rank.isdigit() or not 0 <= int(rank) <= 9999):
-            raise RequestValidationError(f"{label}の上司ランクが不正です。")
+        for column, default in USER_MASTER_DEFAULTS.items():
+            if not row[column]:
+                row[column] = default
+        if row["can_input_own_report"] not in {"0", "1"}:
+            raise RequestValidationError(
+                f"{label}の自分の日報入力フラグが不正です。"
+            )
+        if row["employment_type"] not in USER_EMPLOYMENT_TYPES:
+            raise RequestValidationError(f"{label}の雇用区分が不正です。")
+        if row["is_admin"] not in {"0", "1"}:
+            raise RequestValidationError(f"{label}の管理者フラグが不正です。")
+        if row["employment_type"] == "temporary" and row["is_admin"] == "1":
+            raise RequestValidationError(f"{label}の派遣社員は管理者に設定できません。")
         display_order = row["display_order"]
         if display_order and (
             not display_order.isdigit() or not 0 <= int(display_order) <= 999999
@@ -377,37 +382,48 @@ def _validate_common_master_row(
             raise RequestValidationError(f"{label}の有効区分が不正です。")
     if master == "calendar":
         _required_iso_date(row["date"], f"{label}の日付")
-        if row["is_holiday"] not in {"0", "1"}:
-            raise RequestValidationError(f"{label}の休日区分が不正です。")
+
+
+def _split_team_ids(value: str) -> list[str]:
+    return [team_id.strip() for team_id in value.split(";") if team_id.strip()]
 
 
 def _validate_team_hierarchy(rows: list[dict[str, str]]) -> None:
     teams = {row["team_id"]: row for row in rows}
-    expected_parent_level = {"medium": "large", "small": "medium"}
+    sibling_names: set[tuple[str, str]] = set()
     for row in rows:
         team_id = row["team_id"]
         level = row["team_level"]
         parent_id = row["parent_team_id"]
-        if level == "large":
-            if parent_id:
+        team_name = row["team_name"]
+        sibling_key = (parent_id, team_name.casefold())
+        if sibling_key in sibling_names:
+            location = "最上位" if not parent_id else f"「{teams.get(parent_id, {}).get('team_name', parent_id)}」の直下"
+            raise RequestValidationError(
+                f"{location}に同じチーム名「{team_name}」を複数登録できません。"
+            )
+        sibling_names.add(sibling_key)
+
+        if not parent_id:
+            if level != "large":
                 raise RequestValidationError(
-                    f"大チーム「{team_id}」には親チームを設定できません。"
+                    f"チーム「{team_name}」には親組織を指定してください。"
                 )
             continue
-        if not parent_id:
-            raise RequestValidationError(
-                f"チーム「{team_id}」の親チームを入力してください。"
-            )
         parent = teams.get(parent_id)
         if parent is None:
             raise RequestValidationError(
-                f"チーム「{team_id}」の親チームが見つかりません。"
+                f"チーム「{team_name}」の親チームが見つかりません。"
             )
-        if parent["team_level"] != expected_parent_level[level]:
+        allowed_parent_levels = {
+            "large": set(),
+            "medium": {"large"},
+            "small": {"medium"},
+        }[level]
+        if parent["team_level"] not in allowed_parent_levels:
             raise RequestValidationError(
-                f"チーム「{team_id}」の親チーム階層が不正です。"
+                f"チーム「{team_name}」の親チーム階層が不正です。"
             )
-
 
 def validate_employee_id(value: Any, label: str = "社員ID") -> str:
     if not isinstance(value, str):
@@ -460,6 +476,7 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
             "include_today_in_missing_comments",
             "comment_signature",
             "ui_color_theme",
+            "ui_member_filter_levels",
         },
     )
     for key in ("users_dir", "comments_dir", "common_dir"):
@@ -473,20 +490,38 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
     include_today = source.get("include_today_in_missing_comments", False)
     if not isinstance(include_today, bool):
         raise RequestValidationError("当日を含める設定が不正です。")
-    color_theme = source.get("ui_color_theme", "green")
-    if not isinstance(color_theme, str) or color_theme not in {
-        "green",
-        "blue",
-        "orange",
-    }:
+    color_theme = source.get("ui_color_theme", "light")
+    if not isinstance(color_theme, str) or color_theme not in {"light", "dark"}:
         raise RequestValidationError("配色の指定が不正です。")
+    member_filter_levels = source.get(
+        "ui_member_filter_levels", ["large", "medium", "small", "member"]
+    )
+    if (
+        not isinstance(member_filter_levels, list)
+        or len(member_filter_levels) > len(MEMBER_FILTER_LEVELS)
+        or any(
+            not isinstance(level, str) or level not in MEMBER_FILTER_LEVELS
+            for level in member_filter_levels
+        )
+        or len(set(member_filter_levels)) != len(member_filter_levels)
+    ):
+        raise RequestValidationError("日報フィルターの表示設定が不正です。")
     return source
 
 
 def validate_ui_state_request(payload: Any) -> Mapping[str, Any]:
     source = require_request_mapping(payload, "表示状態")
     _reject_unknown_keys(
-        source, {"sidebar_open", "period_preset", "start_date", "end_date", "font_size"}
+        source,
+        {
+            "sidebar_open",
+            "period_preset",
+            "start_date",
+            "end_date",
+            "font_size",
+            "column_widths",
+            "ui_color_theme",
+        },
     )
     validate_load_request(
         {
@@ -506,6 +541,32 @@ def validate_ui_state_request(payload: Any) -> Mapping[str, Any]:
         "xlarge",
     }:
         raise RequestValidationError("文字サイズの指定が不正です。")
+    color_theme = source.get("ui_color_theme", "light")
+    if not isinstance(color_theme, str) or color_theme not in {"light", "dark"}:
+        raise RequestValidationError("配色の指定が不正です。")
+    column_widths = source.get("column_widths", {})
+    if not isinstance(column_widths, Mapping) or len(column_widths) > 5:
+        raise RequestValidationError("列幅の表示状態が不正です。")
+    supported_sizes = {"compact", "standard", "medium", "large", "xlarge"}
+    for size, profile in column_widths.items():
+        if size not in supported_sizes or not isinstance(profile, Mapping):
+            raise RequestValidationError("列幅の表示状態が不正です。")
+        if len(profile) > 64:
+            raise RequestValidationError("保存できる列幅が多すぎます。")
+        for column_id, width in profile.items():
+            if (
+                not isinstance(column_id, str)
+                or not column_id
+                or len(column_id) > 256
+                or any(ord(character) < 32 for character in column_id)
+            ):
+                raise RequestValidationError("列幅の列指定が不正です。")
+            if (
+                isinstance(width, bool)
+                or not isinstance(width, (int, float))
+                or not 40 <= width <= 1000
+            ):
+                raise RequestValidationError("列幅の値が不正です。")
     return source
 
 

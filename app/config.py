@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 
-COLOR_THEMES = frozenset({"green", "blue", "orange"})
+COLOR_THEMES = frozenset({"light", "dark"})
+MEMBER_FILTER_LEVELS = ("large", "medium", "small", "member")
+DEFAULT_MEMBER_FILTER_LEVELS = ",".join(MEMBER_FILTER_LEVELS)
 
 
 def to_int(value: Any, default: int) -> int:
@@ -28,10 +30,32 @@ def to_bool(value: Any, default: bool) -> bool:
     return default
 
 
-def normalize_color_theme(value: Any, default: str = "green") -> str:
-    fallback = default if default in COLOR_THEMES else "green"
+def normalize_color_theme(value: Any, default: str = "light") -> str:
+    fallback = default if default in COLOR_THEMES else "light"
     color_theme = str(value or "").strip().lower()
     return color_theme if color_theme in COLOR_THEMES else fallback
+
+
+def normalize_member_filter_levels(
+    value: Any, default: str = DEFAULT_MEMBER_FILTER_LEVELS
+) -> str:
+    def parse_levels(raw: Any) -> list[str]:
+        if isinstance(raw, (list, tuple, set)):
+            return [str(item).strip() for item in raw]
+        return [item.strip() for item in str(raw or "").replace(";", ",").split(",")]
+
+    fallback = [
+        level for level in MEMBER_FILTER_LEVELS if level in parse_levels(default)
+    ]
+    if value is None:
+        return ",".join(fallback)
+    raw_levels = parse_levels(value)
+    normalized = [
+        level for level in MEMBER_FILTER_LEVELS if level in raw_levels
+    ]
+    if normalized or not any(raw_levels):
+        return ",".join(normalized)
+    return ",".join(fallback)
 
 
 @dataclass
@@ -49,7 +73,9 @@ class AppSettings:
     ui_start_date: str = ""
     ui_end_date: str = ""
     ui_font_size: str = "large"
-    ui_color_theme: str = "green"
+    ui_column_widths: str = ""
+    ui_color_theme: str = "light"
+    ui_member_filter_levels: str = DEFAULT_MEMBER_FILTER_LEVELS
 
     @property
     def is_complete(self) -> bool:
@@ -64,6 +90,8 @@ class AppSettings:
             raw_value = source.get(field.name, default)
             if field.name == "ui_color_theme":
                 values[field.name] = normalize_color_theme(raw_value, default)
+            elif field.name == "ui_member_filter_levels":
+                values[field.name] = normalize_member_filter_levels(raw_value, default)
             elif isinstance(default, bool):
                 values[field.name] = to_bool(raw_value, default)
             elif isinstance(default, int):

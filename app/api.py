@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import getpass
+import json
 import logging
 import os
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from app.config import (
     SettingsManager,
+    normalize_member_filter_levels,
     normalize_color_theme,
     to_bool,
     to_int,
@@ -25,12 +27,14 @@ from app.security import (
     validate_ime_diagnostic_request,
     validate_save_request,
     validate_settings_request,
+    validate_user_team_references,
     validate_ui_state_request,
     validate_user_administration_save_request,
 )
 
 
 logger = logging.getLogger(__name__)
+UNREGISTERED_EMPLOYEE_MESSAGE = "このアプリは使用できません。管理者に連絡してください。"
 
 
 class DailyReportApi:
@@ -40,6 +44,7 @@ class DailyReportApi:
         self._settings = self._settings_manager.load()
         self._employee_id = self._get_employee_id()
         self._has_unsaved_changes = False
+        self._close_window_callback: Callable[[], None] | None = None
         self._ime_diagnostic_recorder = ImeDiagnosticRecorder(base_dir)
 
     @property
@@ -52,6 +57,16 @@ class DailyReportApi:
 
     def set_unsaved_changes(self, value: Any) -> dict[str, bool]:
         self._has_unsaved_changes = to_bool(value, False)
+        return {"ok": True}
+
+    def _set_close_window_callback(self, callback: Callable[[], None]) -> None:
+        self._close_window_callback = callback
+
+    def close_window(self) -> dict[str, bool]:
+        callback = getattr(self, "_close_window_callback", None)
+        if callback is None:
+            return {"ok": False}
+        callback()
         return {"ok": True}
 
     def record_ime_diagnostics(self, payload: Any) -> dict[str, Any]:
@@ -70,10 +85,27 @@ class DailyReportApi:
             return {"ok": False, "message": "IME診断ログの保存に失敗しました。"}
 
     def get_initial_state(self) -> dict[str, Any]:
+        employee_registered: bool | None = None
+        if self._settings.is_complete:
+            try:
+                employee_registered = self._is_employee_registered()
+            except Exception:
+                logger.exception("Failed to check employee registration")
+        is_admin = self._is_admin()
+        if employee_registered is False:
+            is_admin = False
         return {
             "employee_id": self._employee_id,
+            "is_admin": is_admin,
             "settings": self._settings.to_dict(),
             "settings_complete": self._settings.is_complete,
+            "employee_registered": employee_registered,
+            "access_denied": employee_registered is False,
+            "access_denied_message": (
+                UNREGISTERED_EMPLOYEE_MESSAGE
+                if employee_registered is False
+                else ""
+            ),
         }
 
     def save_settings(self, payload: Any) -> dict[str, Any]:
@@ -101,6 +133,10 @@ class DailyReportApi:
                 ui_color_theme=normalize_color_theme(
                     payload.get("ui_color_theme"),
                     self._settings.ui_color_theme,
+                ),
+                ui_member_filter_levels=normalize_member_filter_levels(
+                    payload.get("ui_member_filter_levels"),
+                    self._settings.ui_member_filter_levels,
                 ),
             )
             field_errors = validate_settings_paths(candidate)
@@ -140,6 +176,19 @@ class DailyReportApi:
                 ui_start_date=str(payload.get("start_date", "")).strip(),
                 ui_end_date=str(payload.get("end_date", "")).strip(),
                 ui_font_size=self._validated_font_size(payload.get("font_size")),
+                ui_color_theme=normalize_color_theme(
+                    payload.get("ui_color_theme"), self._settings.ui_color_theme
+                ),
+                ui_column_widths=(
+                    json.dumps(
+                        payload["column_widths"],
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    )
+                    if "column_widths" in payload
+                    else self._settings.ui_column_widths
+                ),
             )
             self._settings_manager.save(self._settings)
             return {"ok": True}
@@ -160,6 +209,9 @@ class DailyReportApi:
                 }
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
+            access_denied = self._registered_employee_access_denied(repo)
+            if access_denied:
+                return access_denied
             data = repo.load_view_data(
                 self._employee_id,
                 start_date=payload.get("start_date"),
@@ -175,6 +227,11 @@ class DailyReportApi:
 
     def load_common_masters(self) -> dict[str, Any]:
         try:
+            if not self._is_admin():
+                return self._admin_access_denied()
+            access_denied = self._registered_employee_access_denied()
+            if access_denied:
+                return access_denied
             if not self._settings.is_complete:
                 return {
                     "ok": False,
@@ -189,7 +246,9 @@ class DailyReportApi:
                 "data": data,
                 "revisions": repo.get_common_master_revisions(),
                 "migration_required": {
-                    "user_master": repo.legacy_rank_migration_required
+                    "user_master": repo.legacy_rank_migration_required,
+                    "team_master": repo.commenter_assignment_migration_required,
+                    "calendar": repo.calendar_migration_required,
                 },
             }
         except Exception:
@@ -198,6 +257,11 @@ class DailyReportApi:
 
     def save_common_master(self, payload: Any) -> dict[str, Any]:
         try:
+            if not self._is_admin():
+                return self._admin_access_denied()
+            access_denied = self._registered_employee_access_denied()
+            if access_denied:
+                return access_denied
             master, rows, revision = validate_common_master_save_request(payload)
             if master != "calendar":
                 raise RequestValidationError(
@@ -230,23 +294,28 @@ class DailyReportApi:
 
     def save_user_administration(self, payload: Any) -> dict[str, Any]:
         try:
+            if not self._is_admin():
+                return self._admin_access_denied()
+            access_denied = self._registered_employee_access_denied()
+            if access_denied:
+                return access_denied
             if isinstance(payload, dict) and "teams" in payload:
-                teams, users, relationships, revisions = (
-                    validate_administration_save_request(payload)
-                )
+                teams, users, revisions = validate_administration_save_request(payload)
             else:
-                users, relationships, revisions = (
-                    validate_user_administration_save_request(payload)
-                )
+                users, revisions = validate_user_administration_save_request(payload)
                 teams = None
             if not self._settings.is_complete:
                 return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
+            if teams is None:
+                validate_user_team_references(
+                    users, repo.load_common_masters().get("team_master", [])
+                )
             new_revisions = (
-                repo.save_administration(teams, users, relationships, revisions)
+                repo.save_administration(teams, users, revisions)
                 if teams is not None
-                else repo.save_user_administration(users, relationships, revisions)
+                else repo.save_user_administration(users, revisions)
             )
             return {
                 "ok": True,
@@ -270,6 +339,9 @@ class DailyReportApi:
             user_updates, comment_updates = validate_save_request(payload)
             if not self._settings.is_complete:
                 return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
+            access_denied = self._registered_employee_access_denied()
+            if access_denied:
+                return {**access_denied, "no_targets": False}
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
             result = repo.save_updates(self._employee_id, user_updates, comment_updates)
@@ -305,6 +377,70 @@ class DailyReportApi:
             "ok": False,
             "message": f"入力内容を確認してください。{exc}",
         }
+
+    @staticmethod
+    def _admin_access_denied() -> dict[str, Any]:
+        return {
+            "ok": False,
+            "forbidden": True,
+            "message": "管理者機能を利用する権限がありません。",
+        }
+
+    @staticmethod
+    def _employee_access_denied() -> dict[str, Any]:
+        return {
+            "ok": False,
+            "access_denied": True,
+            "employee_registered": False,
+            "message": UNREGISTERED_EMPLOYEE_MESSAGE,
+        }
+
+    def _registered_employee_access_denied(
+        self, repo: DailyReportRepository | None = None
+    ) -> dict[str, Any] | None:
+        if not self._settings.is_complete:
+            return None
+        if not self._is_employee_registered(repo):
+            return self._employee_access_denied()
+        return None
+
+    def _is_employee_registered(
+        self, repo: DailyReportRepository | None = None
+    ) -> bool:
+        return self._current_user_master_row(repo) is not None
+
+    def _current_user_master_row(
+        self, repo: DailyReportRepository | None = None
+    ) -> dict[str, Any] | None:
+        repository = repo or DailyReportRepository(self._settings, self._base_dir)
+        if repo is None:
+            repository.validate_paths()
+        employee_id = str(self._employee_id or "").strip()
+        if not employee_id:
+            return None
+        common = repository.load_common()
+        return next(
+            (
+                row
+                for row in common.get("user_master", [])
+                if str(row.get("employee_id", "")).strip() == employee_id
+            ),
+            None,
+        )
+
+    def _is_admin(self) -> bool:
+        if not self._settings.is_complete:
+            return False
+        try:
+            user = self._current_user_master_row()
+        except Exception:
+            logger.exception("Failed to check administrator permission")
+            return False
+        return bool(
+            user
+            and str(user.get("employment_type", "")).strip() == "regular"
+            and str(user.get("is_admin", "")).strip() == "1"
+        )
 
     def _validated_font_size(self, value: Any) -> str:
         font_size = str(value or "large").strip()

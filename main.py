@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
@@ -33,7 +34,7 @@ def get_asset_dir(base_dir: Path) -> Path:
 
 
 def confirm_discard_unsaved() -> bool:
-    message = "未保存の変更があります。保存せずに終了しますか？"
+    message = "未保存の変更があります。\n\nはい：破棄して終了\nいいえ：終了しない"
     if os.name == "nt":
         import ctypes
 
@@ -53,11 +54,15 @@ def confirm_discard_unsaved() -> bool:
 
 
 def build_closing_handler(
-    api: DailyReportApi, confirm: Callable[[], bool] = confirm_discard_unsaved
+    api: DailyReportApi,
+    confirm: Callable[[], bool] = confirm_discard_unsaved,
+    request_confirmation: Callable[[], bool] | None = None,
 ) -> Callable[..., bool]:
     def on_closing(*_: object) -> bool:
         if not api.has_unsaved_changes:
             return True
+        if request_confirmation is not None:
+            return bool(request_confirmation())
         return confirm()
 
     return on_closing
@@ -160,7 +165,43 @@ def main() -> None:
             height=800,
             min_size=(960, 600),
         )
-        window.events.closing += build_closing_handler(api)
+
+        close_approved = False
+
+        def approve_close() -> None:
+            nonlocal close_approved
+            close_approved = True
+            window.destroy()
+
+        api._set_close_window_callback(approve_close)
+
+        def request_close_confirmation() -> bool:
+            if close_approved:
+                return True
+
+            def show_close_confirmation() -> None:
+                try:
+                    # pywebview waits for the JavaScript evaluation result even
+                    # for run_js. Run it after this closing handler returns so
+                    # the GUI event loop can process the request and button
+                    # input normally.
+                    window.run_js(
+                        "if (typeof window.requestNativeCloseConfirmation === 'function') "
+                        "window.requestNativeCloseConfirmation();"
+                    )
+                except Exception:
+                    logger.exception("WebViewの終了確認ダイアログを表示できませんでした")
+
+            threading.Thread(
+                target=show_close_confirmation,
+                name="nippo-close-confirmation",
+                daemon=True,
+            ).start()
+            return False
+
+        window.events.closing += build_closing_handler(
+            api, request_confirmation=request_close_confirmation
+        )
 
         def install_navigation_guard() -> None:
             if install_webview_navigation_guard(window, app_url):

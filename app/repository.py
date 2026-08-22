@@ -16,6 +16,7 @@ import polars as pl
 from app.config import AppSettings, validate_settings_paths
 from app.security import (
     COMMON_MASTER_COLUMNS,
+    USER_MASTER_DEFAULTS,
     safe_employee_csv_path,
     validate_employee_id,
 )
@@ -55,6 +56,8 @@ class DailyReportRepository:
         self.load_warnings: list[dict[str, str]] = []
         self.backup_limit = DEFAULT_BACKUP_LIMIT
         self.legacy_rank_migration_required = False
+        self.commenter_assignment_migration_required = False
+        self.calendar_migration_required = False
 
     @staticmethod
     def now_jst() -> datetime:
@@ -71,28 +74,57 @@ class DailyReportRepository:
 
     def load_common(self) -> dict[str, list[dict[str, Any]]]:
         common_dir = Path(self.settings.common_dir)
+        users, teams = self._load_organization_masters(common_dir)
         return {
-            "superior_config": self._read_csv(common_dir / "superior_config.csv"),
-            "user_master": self._load_user_master(common_dir),
-            "team_master": self._read_csv_or_empty(
-                common_dir / "team_master.csv",
-                list(COMMON_MASTER_COLUMNS["team_master"]),
-            ).to_dicts(),
-            "calendar": self._read_csv(common_dir / "calendar.csv"),
+            "user_master": users,
+            "team_master": teams,
+            "calendar": self._load_calendar(common_dir),
         }
 
     def load_common_masters(self) -> dict[str, list[dict[str, Any]]]:
         common_dir = Path(self.settings.common_dir)
+        users, teams = self._load_organization_masters(common_dir)
         return {
-            master: (
-                self._load_user_master(common_dir)
-                if master == "user_master"
-                else self._read_csv_or_empty(
-                    common_dir / f"{master}.csv", list(columns)
-                ).to_dicts()
-            )
-            for master, columns in COMMON_MASTER_COLUMNS.items()
+            "user_master": users,
+            "team_master": teams,
+            "calendar": self._load_calendar(common_dir),
         }
+
+    def _load_organization_masters(
+        self, common_dir: Path
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        user_path = common_dir / "user_master.csv"
+        team_path = common_dir / "team_master.csv"
+        try:
+            user_source = self._read_csv_frame(user_path)
+        except Exception as exc:
+            self._record_load_warning(user_path, exc)
+            user_source = self._empty_df(list(COMMON_MASTER_COLUMNS["user_master"]))
+        if team_path.exists():
+            try:
+                team_source = self._read_csv_frame(team_path)
+            except Exception as exc:
+                self._record_load_warning(team_path, exc)
+                team_source = self._empty_df(
+                    list(COMMON_MASTER_COLUMNS["team_master"])
+                )
+        else:
+            team_source = self._empty_df(list(COMMON_MASTER_COLUMNS["team_master"]))
+
+        raw_users = user_source.to_dicts()
+        users = self._normalize_user_rows(user_source)
+        teams = self._ensure_columns(
+            team_source, list(COMMON_MASTER_COLUMNS["team_master"])
+        ).to_dicts()
+
+        deprecated_user_columns = {"superior_rank", "managed_team_ids"}
+        self.legacy_rank_migration_required = bool(
+            deprecated_user_columns.intersection(user_source.columns)
+        )
+        if "commenter_employee_ids" not in team_source.columns:
+            self.commenter_assignment_migration_required = True
+            self._migrate_commenter_assignments(common_dir, raw_users, teams)
+        return users, teams
 
     def _load_user_master(self, common_dir: Path) -> list[dict[str, Any]]:
         path = common_dir / "user_master.csv"
@@ -106,23 +138,91 @@ class DailyReportRepository:
             self._record_load_warning(path, exc)
             return []
 
-        has_integrated_rank = "superior_rank" in source.columns
-        rows = self._ensure_columns(source, columns).to_dicts()
-        legacy_path = common_dir / "superior_master.csv"
-        if has_integrated_rank or not legacy_path.exists():
-            return rows
+        return self._normalize_user_rows(source)
 
-        self.legacy_rank_migration_required = True
+    def _normalize_user_rows(self, source: pl.DataFrame) -> list[dict[str, Any]]:
+        columns = list(COMMON_MASTER_COLUMNS["user_master"])
+        rows = self._ensure_columns(source, columns).to_dicts()
+        for row in rows:
+            for column, default in USER_MASTER_DEFAULTS.items():
+                if not str(row.get(column, "")).strip():
+                    row[column] = default
+            if row.get("employment_type") == "temporary":
+                row["is_admin"] = "0"
+        return rows
+
+    def _migrate_commenter_assignments(
+        self,
+        common_dir: Path,
+        raw_users: list[dict[str, Any]],
+        teams: list[dict[str, Any]],
+    ) -> None:
+        legacy_path = common_dir / "superior_master.csv"
+        legacy_rows = self._read_csv(legacy_path) if legacy_path.exists() else []
         legacy_ranks = {
             str(row.get("employee_id", "")): str(row.get("rank", ""))
-            for row in self._read_csv(legacy_path)
+            for row in legacy_rows
             if row.get("employee_id")
         }
-        for row in rows:
-            row["superior_rank"] = legacy_ranks.get(
-                str(row.get("employee_id", "")), ""
+
+        def order_key(row: dict[str, Any]) -> tuple[int, int, str]:
+            employee_id = str(row.get("employee_id", ""))
+            raw_rank = str(row.get("superior_rank", "")).strip()
+            if not raw_rank:
+                raw_rank = legacy_ranks.get(employee_id, "")
+            rank = int(raw_rank) if raw_rank.isdigit() else 9999
+            raw_display_order = str(row.get("display_order", "")).strip()
+            display_order = (
+                int(raw_display_order) if raw_display_order.isdigit() else 999999
             )
-        return rows
+            return rank, display_order, employee_id
+
+        team_commenters: dict[str, list[str]] = {
+            str(row.get("team_id", "")): [] for row in teams
+        }
+        for user in sorted(raw_users, key=order_key):
+            employee_id = str(user.get("employee_id", "")).strip()
+            if not employee_id:
+                continue
+            managed_ids = {
+                team_id.strip()
+                for team_id in str(user.get("managed_team_ids", "")).split(";")
+                if team_id.strip()
+            }
+            for team_id in managed_ids:
+                commenters = team_commenters.get(team_id)
+                if commenters is not None and employee_id not in commenters:
+                    commenters.append(employee_id)
+        for team in teams:
+            team_id = str(team.get("team_id", ""))
+            team["commenter_employee_ids"] = ";".join(
+                team_commenters.get(team_id, [])
+            )
+
+    def _load_calendar(self, common_dir: Path) -> list[dict[str, Any]]:
+        path = common_dir / "calendar.csv"
+        if not path.exists():
+            self._record_load_warning(path, FileNotFoundError("ファイルがありません"))
+            return []
+        try:
+            source = self._read_csv_frame(path)
+        except Exception as exc:
+            self._record_load_warning(path, exc)
+            return []
+
+        self.calendar_migration_required = source.columns != ["date"]
+        has_legacy_flag = "is_holiday" in source.columns
+        dates: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for row in source.to_dicts():
+            if has_legacy_flag and str(row.get("is_holiday", "0")).strip() != "1":
+                continue
+            date_text = str(row.get("date", "")).strip()
+            if not date_text or date_text in seen:
+                continue
+            seen.add(date_text)
+            dates.append({"date": date_text})
+        return dates
 
     def get_common_master_revisions(self) -> dict[str, str]:
         common_dir = Path(self.settings.common_dir)
@@ -163,13 +263,11 @@ class DailyReportRepository:
     def save_user_administration(
         self,
         users: list[dict[str, str]],
-        relationships: list[dict[str, str]],
         expected_revisions: dict[str, str],
     ) -> dict[str, str]:
         common_dir = Path(self.settings.common_dir)
         targets = {
             "user_master": common_dir / "user_master.csv",
-            "superior_config": common_dir / "superior_config.csv",
         }
         for master, target_path in targets.items():
             expected = expected_revisions.get(master, "")
@@ -178,16 +276,7 @@ class DailyReportRepository:
                     "共通マスターが別の場所で更新されています。"
                 )
 
-        frames = [
-            (
-                self._common_master_frame("user_master", users),
-                targets["user_master"],
-            ),
-            (
-                self._common_master_frame("superior_config", relationships),
-                targets["superior_config"],
-            ),
-        ]
+        frames = [(self._common_master_frame("user_master", users), targets["user_master"])]
         self._write_csv_frames_atomically(frames, "common")
         return {
             master: self._common_master_revision(path)
@@ -198,14 +287,12 @@ class DailyReportRepository:
         self,
         teams: list[dict[str, str]],
         users: list[dict[str, str]],
-        relationships: list[dict[str, str]],
         expected_revisions: dict[str, str],
     ) -> dict[str, str]:
         common_dir = Path(self.settings.common_dir)
         targets = {
             "team_master": common_dir / "team_master.csv",
             "user_master": common_dir / "user_master.csv",
-            "superior_config": common_dir / "superior_config.csv",
         }
         for master, target_path in targets.items():
             expected = expected_revisions.get(master, "")
@@ -219,7 +306,6 @@ class DailyReportRepository:
             for master, rows in (
                 ("team_master", teams),
                 ("user_master", users),
-                ("superior_config", relationships),
             )
         ]
         self._write_csv_frames_atomically(frames, "common")
@@ -236,6 +322,11 @@ class DailyReportRepository:
             {column: str(row.get(column, "")) for column in columns}
             for row in rows
         ]
+        if master == "user_master":
+            for row in normalized:
+                for column, default in USER_MASTER_DEFAULTS.items():
+                    if not row[column].strip():
+                        row[column] = default
         return (
             pl.DataFrame(normalized, schema=columns, orient="row")
             if normalized
@@ -301,14 +392,16 @@ class DailyReportRepository:
             start_date = previous_working_date.isoformat()
             end_date = start_date
         user_master = {row.get("employee_id", ""): row for row in common["user_master"]}
-        my_display = user_master.get(employee_id, {}).get("display_name") or employee_id
+        current_user = user_master.get(employee_id, {})
+        my_display = current_user.get("display_name") or employee_id
+        can_input_own_report = self._user_can_input_own_report(current_user)
 
-        assigned_subordinate_ids = {
-            str(row.get("subordinate_employee_id", ""))
-            for row in common["superior_config"]
-            if str(row.get("superior_employee_id", "")) == employee_id
-            and row.get("subordinate_employee_id")
-        }
+        is_temporary_user = self._is_temporary_user(current_user)
+        assigned_subordinate_ids = (
+            set()
+            if is_temporary_user
+            else self._assigned_subordinate_ids(common, employee_id)
+        )
         viewable_members = self._build_viewable_members(
             common, employee_id, assigned_subordinate_ids
         )
@@ -340,7 +433,9 @@ class DailyReportRepository:
         return {
             "employee_id": employee_id,
             "display_name": my_display,
+            "can_input_own_report": can_input_own_report,
             "is_superior": bool(assigned_subordinate_ids),
+            "restrict_to_self": is_temporary_user,
             "current_team": self._team_path(
                 common, str(user_master.get(employee_id, {}).get("small_team_id", ""))
             ),
@@ -365,20 +460,59 @@ class DailyReportRepository:
             if row.get("employee_id")
         }
         current_user = users.get(employee_id, {})
-        small_team_id = str(current_user.get("small_team_id", "")).strip()
-        same_team_ids = {
-            target_id
-            for target_id, row in users.items()
-            if small_team_id
-            and str(row.get("small_team_id", "")).strip() == small_team_id
-        }
-        target_ids = {employee_id, *same_team_ids, *assigned_subordinate_ids}
+        can_input_own_report = self._user_can_input_own_report(current_user)
+        if self._is_temporary_user(current_user):
+            target_ids = {employee_id} if can_input_own_report else set()
+            same_team_ids: set[str] = set()
+            assigned_subordinate_ids = set()
+        else:
+            small_team_id = str(current_user.get("small_team_id", "")).strip()
+            same_team_ids = {
+                target_id
+                for target_id, row in users.items()
+                if target_id != employee_id or can_input_own_report
+                if small_team_id
+                and str(row.get("small_team_id", "")).strip() == small_team_id
+            }
+            target_ids = {*same_team_ids, *assigned_subordinate_ids}
+            if can_input_own_report:
+                target_ids.add(employee_id)
 
         def display_order(row: dict[str, Any]) -> int:
             try:
                 return int(row.get("display_order") or 999999)
             except (TypeError, ValueError):
                 return 999999
+
+        teams_by_id = {
+            str(row.get("team_id", "")): row
+            for row in common.get("team_master", [])
+            if row.get("team_id")
+        }
+
+        def team_order(row: dict[str, Any]) -> tuple[tuple[int, str, str], ...]:
+            team_id = str(row.get("small_team_id", "")).strip()
+            orders: list[tuple[int, str, str]] = []
+            visited: set[str] = set()
+            while team_id and team_id not in visited:
+                visited.add(team_id)
+                team = teams_by_id.get(team_id)
+                if team is None:
+                    break
+                try:
+                    order = int(team.get("sort_order") or 999999)
+                except (TypeError, ValueError):
+                    order = 999999
+                orders.insert(
+                    0,
+                    (
+                        order,
+                        str(team.get("team_name") or ""),
+                        team_id,
+                    ),
+                )
+                team_id = str(team.get("parent_team_id", "")).strip()
+            return tuple(orders or [(999999, "", "")])
 
         members: list[dict[str, Any]] = []
         for target_id in target_ids:
@@ -407,11 +541,7 @@ class DailyReportRepository:
 
         members.sort(
             key=lambda member: (
-                0
-                if member["employee_id"] == employee_id
-                else 1
-                if "same_small_team" in member["relations"]
-                else 2,
+                team_order(users.get(member["employee_id"], {})),
                 member["display_order"],
                 member["display_name"],
                 member["employee_id"],
@@ -457,7 +587,7 @@ class DailyReportRepository:
         holiday_dates = {
             calendar_date
             for row in calendar_rows
-            if str(row.get("is_holiday", "0")) == "1"
+            if self._calendar_row_is_holiday(row)
             and (calendar_date := self._to_date(row.get("date"))) is not None
         }
         candidate = (reference_date or self.today_jst()) - timedelta(days=1)
@@ -465,10 +595,32 @@ class DailyReportRepository:
             candidate -= timedelta(days=1)
         return candidate
 
+    @staticmethod
+    def _calendar_row_is_holiday(row: dict[str, Any]) -> bool:
+        return "is_holiday" not in row or str(row.get("is_holiday", "0")) == "1"
+
     def _get_my_rank(self, common: dict[str, Any], employee_id: str) -> int:
         return self._superior_rank_map(common).get(employee_id, -1)
 
     def _superior_rank_map(self, common: dict[str, Any]) -> dict[str, int]:
+        ordered_ids: list[str] = []
+        teams = sorted(
+            common.get("team_master", []),
+            key=lambda row: (
+                int(str(row.get("sort_order", "")))
+                if str(row.get("sort_order", "")).isdigit()
+                else 999999,
+                str(row.get("team_id", "")),
+            ),
+        )
+        for team in teams:
+            for employee_id in self._team_commenter_ids(team):
+                if employee_id not in ordered_ids:
+                    ordered_ids.append(employee_id)
+        if ordered_ids:
+            return {employee_id: index for index, employee_id in enumerate(ordered_ids)}
+
+        # Transitional support for pre-migration data supplied by tests or callers.
         ranks: dict[str, int] = {}
         for row in common.get("user_master", []):
             employee_id = str(row.get("employee_id", ""))
@@ -492,6 +644,191 @@ class DailyReportRepository:
             except (TypeError, ValueError):
                 ranks[employee_id] = 9999
         return ranks
+
+    @staticmethod
+    def _managed_team_ids(row: dict[str, Any]) -> set[str]:
+        return {
+            team_id.strip()
+            for team_id in str(row.get("managed_team_ids", "")).split(";")
+            if team_id.strip()
+        }
+
+    @staticmethod
+    def _team_commenter_ids(row: dict[str, Any]) -> list[str]:
+        return list(
+            dict.fromkeys(
+                employee_id.strip()
+                for employee_id in str(
+                    row.get("commenter_employee_ids", "")
+                ).split(";")
+                if employee_id.strip()
+            )
+        )
+
+    def _commenter_team_ids(
+        self, common: dict[str, list[dict[str, Any]]], employee_id: str
+    ) -> set[str]:
+        managed_ids = {
+            str(team.get("team_id", "")).strip()
+            for team in common.get("team_master", [])
+            if employee_id in self._team_commenter_ids(team)
+        }
+        if managed_ids:
+            return managed_ids
+        # Transitional support for old in-memory fixtures until their CSV is saved.
+        supervisor = next(
+            (
+                row
+                for row in common.get("user_master", [])
+                if str(row.get("employee_id", "")) == employee_id
+            ),
+            {},
+        )
+        return self._managed_team_ids(supervisor)
+
+    def _commenter_ids_for_target(
+        self,
+        common: dict[str, list[dict[str, Any]]],
+        target_employee_id: str,
+    ) -> list[str]:
+        user = next(
+            (
+                row
+                for row in common.get("user_master", [])
+                if str(row.get("employee_id", "")) == target_employee_id
+            ),
+            {},
+        )
+        teams = {
+            str(row.get("team_id", "")): row
+            for row in common.get("team_master", [])
+            if row.get("team_id")
+        }
+        team_id = str(user.get("small_team_id", "")).strip()
+        ordered_ids: list[str] = []
+        visited: set[str] = set()
+        while team_id and team_id not in visited:
+            visited.add(team_id)
+            team = teams.get(team_id)
+            if team is None:
+                break
+            for employee_id in self._team_commenter_ids(team):
+                if employee_id not in ordered_ids:
+                    ordered_ids.append(employee_id)
+            team_id = str(team.get("parent_team_id", "")).strip()
+        return ordered_ids
+
+    def _commenter_ids_for_targets(
+        self,
+        common: dict[str, list[dict[str, Any]]],
+        target_employee_ids: list[str],
+    ) -> list[str]:
+        users = {
+            str(row.get("employee_id", "")): row
+            for row in common.get("user_master", [])
+            if row.get("employee_id")
+        }
+        teams = {
+            str(row.get("team_id", "")): row
+            for row in common.get("team_master", [])
+            if row.get("team_id")
+        }
+        relevant_team_ids: set[str] = set()
+        for target_employee_id in target_employee_ids:
+            team_id = str(
+                users.get(target_employee_id, {}).get("small_team_id", "")
+            ).strip()
+            visited: set[str] = set()
+            while team_id and team_id not in visited:
+                visited.add(team_id)
+                team = teams.get(team_id)
+                if team is None:
+                    break
+                relevant_team_ids.add(team_id)
+                team_id = str(team.get("parent_team_id", "")).strip()
+
+        def hierarchy_key(team: dict[str, Any]) -> tuple[tuple[int, str, str], ...]:
+            path: list[tuple[int, str, str]] = []
+            team_id = str(team.get("team_id", ""))
+            visited: set[str] = set()
+            while team_id and team_id not in visited:
+                visited.add(team_id)
+                current = teams.get(team_id)
+                if current is None:
+                    break
+                raw_order = str(current.get("sort_order", ""))
+                order = int(raw_order) if raw_order.isdigit() else 999999
+                path.insert(
+                    0,
+                    (
+                        order,
+                        str(current.get("team_name", "")),
+                        team_id,
+                    ),
+                )
+                team_id = str(current.get("parent_team_id", "")).strip()
+            return tuple(path)
+
+        ordered_ids: list[str] = []
+        for level in ("small", "medium", "large"):
+            level_teams = sorted(
+                (
+                    teams[team_id]
+                    for team_id in relevant_team_ids
+                    if str(teams[team_id].get("team_level", "")) == level
+                ),
+                key=hierarchy_key,
+            )
+            for team in level_teams:
+                for employee_id in self._team_commenter_ids(team):
+                    if employee_id not in ordered_ids:
+                        ordered_ids.append(employee_id)
+        return ordered_ids
+
+    @staticmethod
+    def _user_can_input_own_report(row: dict[str, Any]) -> bool:
+        return str(
+            row.get(
+                "can_input_own_report",
+                USER_MASTER_DEFAULTS["can_input_own_report"],
+            )
+        ).strip() != "0"
+
+    @staticmethod
+    def _is_temporary_user(row: dict[str, Any]) -> bool:
+        return str(row.get("employment_type", "")).strip() == "temporary"
+
+    def _assigned_subordinate_ids(
+        self, common: dict[str, list[dict[str, Any]]], employee_id: str
+    ) -> set[str]:
+        users = {
+            str(row.get("employee_id", "")): row
+            for row in common.get("user_master", [])
+            if row.get("employee_id")
+        }
+        managed_ids = self._commenter_team_ids(common, employee_id)
+        if not managed_ids:
+            return set()
+        children: dict[str, set[str]] = {}
+        for team in common.get("team_master", []):
+            parent_id = str(team.get("parent_team_id", "")).strip()
+            team_id = str(team.get("team_id", "")).strip()
+            if team_id:
+                children.setdefault(parent_id, set()).add(team_id)
+        covered_ids = set(managed_ids)
+        pending = list(managed_ids)
+        while pending:
+            team_id = pending.pop()
+            for child_id in children.get(team_id, set()):
+                if child_id not in covered_ids:
+                    covered_ids.add(child_id)
+                    pending.append(child_id)
+        return {
+            target_id
+            for target_id, row in users.items()
+            if target_id != employee_id
+            and str(row.get("small_team_id", "")).strip() in covered_ids
+        }
 
     def _build_missing_comment_summary(
         self,
@@ -533,7 +870,7 @@ class DailyReportRepository:
         holiday_dates = {
             calendar_date
             for row in common["calendar"]
-            if str(row.get("is_holiday", "0")) == "1"
+            if self._calendar_row_is_holiday(row)
             and (calendar_date := self._to_date(row.get("date"))) is not None
         }
         comments = {
@@ -606,13 +943,24 @@ class DailyReportRepository:
         user_updates: list[dict[str, Any]],
         comment_updates: list[dict[str, Any]],
     ) -> None:
+        common = self.load_common() if user_updates or comment_updates else None
+        current_user = next(
+            (
+                row
+                for row in (common or {}).get("user_master", [])
+                if str(row.get("employee_id", "")) == employee_id
+            ),
+            {},
+        )
+        if user_updates and not self._user_can_input_own_report(
+            current_user
+        ):
+            raise PermissionError("自分の日報入力が無効になっています。")
+
         if comment_updates:
-            common = self.load_common()
-            allowed_subordinates = {
-                str(row.get("subordinate_employee_id", ""))
-                for row in common["superior_config"]
-                if str(row.get("superior_employee_id", "")) == employee_id
-            }
+            if self._is_temporary_user(current_user):
+                raise PermissionError("派遣社員は他の利用者へのコメントを更新できません。")
+            allowed_subordinates = self._assigned_subordinate_ids(common, employee_id)
             for update in comment_updates:
                 subordinate_id = validate_employee_id(
                     update.get("subordinate_employee_id"), "コメント対象者ID"
@@ -711,21 +1059,36 @@ class DailyReportRepository:
         end_date: str | None = None,
     ) -> tuple[list[dict[str, Any]], date | None, date | None]:
         user_master = {row.get("employee_id", ""): row for row in common["user_master"]}
-        calendar = {row.get("date", ""): row for row in common["calendar"]}
-        superior_ranks = self._superior_rank_map(common)
-        superior_ids = sorted(
-            superior_ranks.keys(),
-            key=lambda item: superior_ranks.get(item, 9999),
-            reverse=False,
+        holiday_dates = {
+            str(row.get("date", ""))
+            for row in common["calendar"]
+            if self._calendar_row_is_holiday(row) and row.get("date")
+        }
+        superior_ids = self._commenter_ids_for_targets(
+            common, target_employee_ids
         )
-        if not superior_ids and comments_df.height:
+        if not superior_ids:
+            legacy_ranks = self._superior_rank_map(common)
             superior_ids = sorted(
+                legacy_ranks,
+                key=lambda item: legacy_ranks.get(item, 9999),
+            )
+        if comments_df.height:
+            historical_ids = sorted(
                 {
                     str(row.get("superior_employee_id", ""))
                     for row in comments_df.to_dicts()
                     if row.get("superior_employee_id")
                 }
             )
+            superior_ids.extend(
+                employee_id
+                for employee_id in historical_ids
+                if employee_id not in superior_ids
+            )
+        superior_ranks = {
+            superior_id: index for index, superior_id in enumerate(superior_ids)
+        }
 
         today = self.today_jst()
 
@@ -779,8 +1142,7 @@ class DailyReportRepository:
                         "rank": superior_ranks.get(superior_id, 9999),
                     }
                 )
-            cal = calendar.get(date_text, {})
-            is_holiday = str(cal.get("is_holiday", "0")) == "1"
+            is_holiday = date_text in holiday_dates
             my_comment = comment_map.get((employee_id, target_employee_id, d), "")
             needs_review = (
                 target_employee_id in assigned_subordinate_ids
@@ -801,7 +1163,7 @@ class DailyReportRepository:
                     (source_row or {}).get("business_detail") or ""
                 ),
                 "is_holiday": is_holiday,
-                "holiday_description": cal.get("description", ""),
+                "holiday_description": "",
                 "is_today": d == today,
                 "can_edit_report": target_employee_id == employee_id,
                 "can_edit_my_comment": target_employee_id in assigned_subordinate_ids,

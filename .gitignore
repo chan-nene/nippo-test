@@ -1,5 +1,6 @@
 # Local settings and runtime data
 settings.ini
+nippo-admin.key
 issue.md
 cache/
 logs/

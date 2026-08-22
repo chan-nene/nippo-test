@@ -6,6 +6,7 @@ cache/
 logs/
 test_data/
 .agent/
+.hallmark/
 
 # Python-generated files
 __pycache__/

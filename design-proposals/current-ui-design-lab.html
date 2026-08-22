@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NIPPO 現行UIデザインラボ</title>
+    <link rel="stylesheet" href="./current-ui-design-lab.css" />
+  </head>
+  <body>
+    <input class="state-input" id="sidebarCollapsed" type="checkbox" />
+    <input class="state-input" id="pageReports" name="currentPage" type="radio" checked />
+    <input class="state-input" id="pageAdmin" name="currentPage" type="radio" />
+    <input class="state-input" id="pageSettings" name="currentPage" type="radio" />
+    <input class="state-input" id="themeLight" name="currentTheme" type="radio" checked />
+    <input class="state-input" id="themeDark" name="currentTheme" type="radio" />
+    <input class="state-input" id="settingsGeneral" name="settingsTab" type="radio" checked />
+    <input class="state-input" id="settingsDisplay" name="settingsTab" type="radio" />
+    <input class="state-input" id="settingsNotification" name="settingsTab" type="radio" />
+    <input class="state-input" id="masterUsers" name="masterTab" type="radio" checked />
+    <input class="state-input" id="masterTeams" name="masterTab" type="radio" />
+    <input class="state-input" id="masterCalendar" name="masterTab" type="radio" />
+
+    <div class="design-app">
+      <header class="title-bar">
+        <div class="title-bar-leading">
+          <label class="header-icon-button sidebar-toggle" for="sidebarCollapsed" aria-label="サイドバーを切り替える">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M9 4v16" />
+              <path d="m16 9-3 3 3 3" />
+            </svg>
+          </label>
+          <span class="brand">NIPPO</span>
+        </div>
+        <div class="title-actions" aria-label="アプリ操作">
+          <button class="header-icon-button font-size-button" type="button" aria-label="文字サイズ">Aa</button>
+          <button class="header-icon-button" type="button" aria-label="列幅をリセット">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5h10M4 12h16M4 19h10" />
+              <path d="m17 4 3 3-3 3" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="app-shell">
+        <aside class="sidebar" aria-label="メインメニュー">
+          <nav class="sidebar-main">
+            <label class="sidebar-item sidebar-reports" for="pageReports">
+              <span class="sidebar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+              </span>
+              <span class="sidebar-label">日報</span>
+            </label>
+          </nav>
+
+          <nav class="sidebar-secondary">
+            <label class="sidebar-item sidebar-admin" for="pageAdmin">
+              <span class="sidebar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></svg>
+              </span>
+              <span class="sidebar-label">共通マスター</span>
+            </label>
+            <label class="sidebar-item sidebar-settings" for="pageSettings">
+              <span class="sidebar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.5 1a8 8 0 0 0-2-.9L14 3h-4l-.4 2.9a8 8 0 0 0-2 .9l-2.5-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.5-1a8 8 0 0 0 2 .9L10 21h4l.4-2.9a8 8 0 0 0 2-.9l2.5 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z" /></svg>
+              </span>
+              <span class="sidebar-label">設定</span>
+            </label>
+          </nav>
+
+          <div class="sidebar-user">
+            <span class="user-avatar" aria-hidden="true">山</span>
+            <span class="user-copy"><strong>山田 太郎</strong><small>ログイン中</small></span>
+          </div>
+        </aside>
+
+        <main class="main-area">
+          <section class="page page-reports" aria-label="日報">
+            <div class="report-toolbar">
+              <div class="report-toolbar-row">
+                <div class="period-controls">
+                  <div class="date-field"><span>2026/08/18</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg></div>
+                  <span class="date-separator">〜</span>
+                  <div class="date-field"><span>2026/08/21</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg></div>
+                  <div class="segmented period-presets">
+                    <button type="button">月</button><button type="button">週</button><button type="button">日</button><button class="is-active" type="button">設定範囲</button>
+                  </div>
+                  <div class="segmented period-navigation">
+                    <button class="icon-only" type="button">‹</button><span>1日</span><button class="icon-only" type="button">›</button>
+                  </div>
+                  <button class="secondary-button missing-button" type="button">未確認のみ<span class="count-badge">3日</span></button>
+                </div>
+                <div class="report-actions">
+                  <button class="secondary-button" type="button"><span aria-hidden="true">↻</span> 最新データを取得</button>
+                  <button class="primary-button" type="button"><span aria-hidden="true">✓</span> 保存<span class="save-badge">1</span></button>
+                </div>
+              </div>
+              <div class="member-filters" aria-label="表示メンバー">
+                <button class="filter-button is-active" type="button">全員（21人）</button>
+                <button class="filter-button" type="button">自分</button>
+                <button class="filter-button" type="button">自チーム（21人）</button>
+                <button class="filter-button" type="button">担当部下（20人）</button>
+                <button class="filter-button" type="button">山田 太郎</button>
+                <button class="filter-button" type="button">佐藤</button>
+                <button class="filter-button" type="button">鈴木</button>
+                <button class="filter-button" type="button">高橋</button>
+                <button class="filter-button" type="button">田中</button>
+                <button class="filter-button" type="button">伊藤</button>
+                <button class="filter-button" type="button">渡辺</button>
+                <button class="filter-button" type="button">山本</button>
+                <button class="filter-button" type="button">中村</button>
+              </div>
+            </div>
+
+            <div class="report-table-wrap">
+              <table class="report-table">
+                <colgroup><col class="name-width" /><col class="date-width" /><col class="work-width" /><col class="detail-width" /><col class="comment-width" /><col class="comment-width" /></colgroup>
+                <thead><tr><th>名前</th><th>日付</th><th>業務名</th><th>業務詳細</th><th>上司1</th><th>上司2</th></tr></thead>
+                <tbody>
+                  <tr><th rowspan="4">山田 太郎</th><td><strong>8/18（火）</strong><small>社休日</small></td><td>管理画面の調整</td><td>組織・ユーザー管理画面を更新しました</td><td class="comment-cell"></td><td></td></tr>
+                  <tr><td><strong>8/19（水）</strong></td><td>フロントエンド作成</td><td class="is-dirty">テーマ切り替えを実装しました</td><td></td><td></td></tr>
+                  <tr class="holiday-row"><td><strong>8/20（木）</strong><small>祝日</small></td><td></td><td></td><td></td><td></td></tr>
+                  <tr><td><strong>8/21（金）</strong></td><td></td><td></td><td></td><td></td></tr>
+                  <tr><th rowspan="4">佐藤 花子</th><td><strong>8/18（火）</strong><small>社休日</small></td><td>バックエンド作成</td><td>保存処理のテストを追加しました</td><td><button class="cell-button" type="button">サイン</button><button class="cell-button" type="button">コメントを追加</button></td><td></td></tr>
+                  <tr><td><strong>8/19（水）</strong></td><td>フロントエンド作成</td><td>CSSを調整しました</td><td><button class="cell-button" type="button">サイン</button><button class="cell-button" type="button">コメントを追加</button></td><td></td></tr>
+                  <tr class="holiday-row"><td><strong>8/20（木）</strong><small>祝日</small></td><td></td><td></td><td></td><td></td></tr>
+                  <tr><td><strong>8/21（金）</strong></td><td></td><td></td><td><button class="cell-button" type="button">サイン</button><button class="cell-button" type="button">コメントを追加</button></td><td></td></tr>
+                  <tr><th rowspan="4">鈴木 一郎</th><td><strong>8/18（火）</strong><small>社休日</small></td><td>バックエンド作成</td><td>データ取得処理を確認しました</td><td><button class="cell-button" type="button">サイン</button><button class="cell-button" type="button">コメントを追加</button></td><td></td></tr>
+                  <tr><td><strong>8/19（水）</strong></td><td>フロントエンド作成</td><td>表の表示を確認しました</td><td><button class="cell-button" type="button">サイン</button><button class="cell-button" type="button">コメントを追加</button></td><td></td></tr>
+                  <tr class="holiday-row"><td><strong>8/20（木）</strong><small>祝日</small></td><td></td><td></td><td></td><td></td></tr>
+                  <tr><td><strong>8/21（金）</strong></td><td></td><td></td><td><button class="cell-button" type="button">サイン</button><button class="cell-button" type="button">コメントを追加</button></td><td></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="page page-admin" aria-label="共通マスター">
+            <div class="admin-container">
+              <header class="admin-header">
+                <div><p class="eyebrow">ADMINISTRATION</p><h1>組織・ユーザー管理</h1><p>ユーザー情報を正として、ユーザー側・チーム側のどちらからでも所属とコメント担当を変更できます。</p></div>
+                <button class="admin-save-button" type="button">変更を保存</button>
+              </header>
+              <nav class="master-tabs" aria-label="マスターの種類">
+                <label class="master-tab master-users-tab" for="masterUsers">ユーザー</label>
+                <label class="master-tab master-teams-tab" for="masterTeams">チーム</label>
+                <label class="master-tab master-calendar-tab" for="masterCalendar">カレンダー設定</label>
+              </nav>
+
+              <div class="master-view users-master-view">
+                <section class="master-list-panel">
+                  <div class="master-toolbar"><strong>ユーザー <small>5人</small></strong><div><input type="search" placeholder="ユーザーを検索" /><button class="admin-primary-button" type="button">＋ ユーザーを追加</button></div></div>
+                  <table class="master-table"><thead><tr><th>No</th><th>社員ID</th><th>氏名</th><th>所属チーム</th><th>権限</th></tr></thead><tbody>
+                    <tr class="is-selected"><td>1</td><td>u001</td><td>山田 太郎</td><td>開発チーム</td><td>管理者</td></tr>
+                    <tr><td>2</td><td>u002</td><td>佐藤 花子</td><td>開発チーム</td><td>一般</td></tr>
+                    <tr><td>3</td><td>u003</td><td>鈴木 一郎</td><td>営業チーム</td><td>上司</td></tr>
+                    <tr><td>4</td><td>u004</td><td>高橋 美咲</td><td>営業チーム</td><td>一般</td></tr>
+                    <tr><td>5</td><td>u005</td><td>田中 健</td><td>管理チーム</td><td>一般</td></tr>
+                  </tbody></table>
+                </section>
+                <aside class="editor-panel">
+                  <div class="editor-heading"><div><h2>山田 太郎</h2><p>ユーザー情報を編集</p></div><span class="editor-avatar">山</span></div>
+                  <div class="field-grid"><label><span>社員ID</span><input value="u001" /></label><label><span>氏名</span><input value="山田 太郎" /></label><label><span>権限</span><select><option>管理者</option></select></label><label><span>表示順</span><input value="1" /></label></div>
+                  <div class="assignment-section"><h3>所属チーム</h3><div class="tag-row"><button type="button">開発チーム ×</button><button class="add-tag" type="button">＋ チームを追加</button></div></div>
+                  <div class="assignment-section"><h3>コメント対象チーム</h3><div class="tag-row"><button type="button">開発チーム ×</button><button type="button">営業チーム ×</button><button class="add-tag" type="button">＋ チームを追加</button></div></div>
+                  <div class="editor-actions"><button class="delete-button" type="button">削除</button><button class="admin-save-button" type="button">変更を保存</button></div>
+                </aside>
+              </div>
+
+              <div class="master-view teams-master-view">
+                <aside class="team-browser master-list-panel">
+                  <div class="team-browser-title"><strong>チーム</strong><span>3件</span></div><input type="search" placeholder="チームを検索" />
+                  <div class="team-list"><label class="team-item is-selected">開発チーム <span>8</span></label><label class="team-item">営業チーム <span>6</span></label><label class="team-item">管理チーム <span>3</span></label></div>
+                  <button class="secondary-button block-button" type="button">＋ チームを追加</button>
+                </aside>
+                <section class="team-editor editor-panel">
+                  <div class="editor-heading"><div><h2>開発チーム</h2><p>所属ユーザーとコメント担当を編集</p></div></div>
+                  <div class="field-grid two-columns"><label><span>チームID</span><input value="development" /></label><label><span>チーム名</span><input value="開発チーム" /></label></div>
+                  <div class="team-assignment-grid">
+                    <section><h3>所属ユーザー</h3><p>このチームに所属するユーザー</p><div class="member-list"><div><span class="mini-avatar">山</span><span><strong>山田 太郎</strong><small>u001</small></span><button>削除</button></div><div><span class="mini-avatar">佐</span><span><strong>佐藤 花子</strong><small>u002</small></span><button>削除</button></div></div><button class="add-link">＋ ユーザーを追加</button></section>
+                    <section><h3>コメント担当</h3><p>このチームの日報へコメントできるユーザー</p><div class="member-list"><div><span class="mini-avatar">山</span><span><strong>山田 太郎</strong><small>u001</small></span><button>削除</button></div><div><span class="mini-avatar">鈴</span><span><strong>鈴木 一郎</strong><small>u003</small></span><button>削除</button></div></div><button class="add-link">＋ ユーザーを追加</button></section>
+                  </div>
+                  <div class="editor-actions"><button class="delete-button" type="button">削除</button><button class="admin-save-button" type="button">変更を保存</button></div>
+                </section>
+              </div>
+
+              <div class="master-view calendar-master-view">
+                <section class="master-list-panel">
+                  <div class="master-toolbar"><strong>カレンダー設定 <small>4件</small></strong><button class="admin-primary-button" type="button">＋ 日付を追加</button></div>
+                  <div class="calendar-list"><div class="calendar-row is-selected"><strong>2026/08/11</strong><span>山の日</span><small>祝日</small></div><div class="calendar-row"><strong>2026/08/13</strong><span>夏季休業</span><small>社休日</small></div><div class="calendar-row"><strong>2026/08/14</strong><span>夏季休業</span><small>社休日</small></div><div class="calendar-row"><strong>2026/09/21</strong><span>敬老の日</span><small>祝日</small></div></div>
+                </section>
+                <aside class="editor-panel">
+                  <div class="editor-heading"><div><h2>2026/08/11</h2><p>カレンダー情報を編集</p></div></div>
+                  <div class="field-grid"><label><span>日付</span><input type="date" value="2026-08-11" /></label><label><span>名称</span><input value="山の日" /></label><label><span>種類</span><select><option>祝日</option><option>社休日</option></select></label></div>
+                  <div class="editor-actions"><button class="delete-button" type="button">削除</button><button class="admin-save-button" type="button">変更を保存</button></div>
+                </aside>
+              </div>
+            </div>
+          </section>
+
+          <section class="page page-settings" aria-label="設定">
+            <div class="settings-container">
+              <nav class="settings-tabs" aria-label="設定の種類">
+                <label class="settings-tab settings-general-tab" for="settingsGeneral">一般</label>
+                <label class="settings-tab settings-display-tab" for="settingsDisplay">表示</label>
+                <label class="settings-tab settings-notification-tab" for="settingsNotification">通知</label>
+              </nav>
+
+              <div class="settings-view general-settings-view">
+                <label class="settings-field"><span>ユーザー日報フォルダ</span><input value="C:\NIPPO\users" /></label>
+                <label class="settings-field"><span>上司コメントフォルダ</span><input value="C:\NIPPO\comments" /></label>
+                <label class="settings-field"><span>共通マスターフォルダ</span><input value="C:\NIPPO\common" /></label>
+                <label class="settings-field"><span>サインの文字</span><input value="確認済み・山田" /></label>
+              </div>
+
+              <div class="settings-view display-settings-view">
+                <section class="appearance-setting"><h2>外観</h2><div class="theme-options">
+                  <label class="theme-option theme-light-option" for="themeLight"><span class="theme-preview is-light"><i></i></span><strong>ライト</strong></label>
+                  <label class="theme-option theme-dark-option" for="themeDark"><span class="theme-preview is-dark"><i></i></span><strong>ダーク</strong></label>
+                </div></section>
+                <section class="range-setting"><div class="range-heading"><h2>標準の表示範囲</h2><div><strong>今日より1日前</strong><strong>今日より2日後</strong></div></div><div class="range-controls"><label><span>開始</span><input type="range" min="0" max="14" value="1" /></label><div class="today-marker"><strong>今日</strong><small>2026/8/19</small></div><label><span>終了</span><input type="range" min="0" max="7" value="2" /></label></div><div class="range-scale"><span>14日前</span><span>7日前</span><span>今日</span><span>7日後</span></div><p class="range-preview">表示期間：2026/8/18〜2026/8/21（今日を含む4日間）</p></section>
+              </div>
+
+              <div class="settings-view notification-settings-view">
+                <section class="notification-setting"><h2>未確認の集計</h2><p>「未確認のみ」の集計期間と、当日分の扱いを設定します。</p><label class="settings-field"><span>集計を開始する日</span><input type="date" value="2026-06-01" /></label><label class="check-option"><input type="checkbox" checked /><span><strong>当日分を未確認日数に含める</strong><small>今日の日報も未確認バッジと絞り込みの対象にします。</small></span></label></section>
+              </div>
+              <div class="settings-actions"><button class="primary-button" type="button">設定を保存</button></div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

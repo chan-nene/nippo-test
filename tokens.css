@@ -1,0 +1,103 @@
+:root {
+  --color-paper: oklch(98.5% 0.006 250);
+  --color-paper-2: oklch(96% 0.007 250);
+  --color-paper-3: oklch(92% 0.008 250);
+  --color-paper-raised: oklch(99.2% 0.005 250);
+  --color-ink: oklch(19% 0.012 250);
+  --color-ink-2: oklch(31% 0.012 250);
+  --color-muted: oklch(46% 0.01 250);
+  --color-neutral: oklch(38% 0.01 250);
+  --color-rule: oklch(80% 0.009 250);
+  --color-rule-2: oklch(88% 0.008 250);
+  --color-accent: oklch(22% 0.014 250);
+  --color-accent-hover: oklch(16% 0.014 250);
+  --color-accent-ink: oklch(97% 0.006 250);
+  --color-focus: oklch(52% 0.12 158);
+  --color-focus-soft: oklch(92% 0.035 158);
+  --color-success: oklch(48% 0.105 158);
+  --color-success-soft: oklch(94% 0.028 158);
+  --color-warning: oklch(55% 0.12 76);
+  --color-warning-soft: oklch(97% 0.018 76);
+  --color-warning-band: oklch(93% 0.038 76);
+  --color-danger: oklch(52% 0.16 28);
+  --color-danger-soft: oklch(95% 0.028 28);
+  --color-selection: oklch(90% 0.012 250);
+  --color-overlay: oklch(12% 0.01 250 / 0.48);
+  --color-shadow: oklch(18% 0.012 250 / 0.08);
+  --color-transparent: oklch(0% 0 0 / 0);
+
+  --font-display: "Zen Kaku Gothic New", "Yu Gothic UI", sans-serif;
+  --font-body: "BIZ UDPGothic", "Yu Gothic UI", sans-serif;
+  --font-data: "IBM Plex Mono", "BIZ UDPGothic", monospace;
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5625rem;
+  --text-2xl: 1.953rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+
+  --rule-thin: 1px;
+  --rule-strong: 2px;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999rem;
+
+  --size-control: 2.75rem;
+  --size-sidebar: 14.5rem;
+  --size-sidebar-collapsed: 4.75rem;
+  --size-queue: 19rem;
+  --z-base: 1;
+  --z-raised: 10;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+[data-theme="dark"] {
+  --color-paper: oklch(18% 0.01 250);
+  --color-paper-2: oklch(21% 0.011 250);
+  --color-paper-3: oklch(25% 0.012 250);
+  --color-paper-raised: oklch(23% 0.011 250);
+  --color-ink: oklch(94% 0.006 250);
+  --color-ink-2: oklch(84% 0.007 250);
+  --color-muted: oklch(70% 0.008 250);
+  --color-neutral: oklch(77% 0.008 250);
+  --color-rule: oklch(38% 0.012 250);
+  --color-rule-2: oklch(31% 0.012 250);
+  --color-accent: oklch(92% 0.006 250);
+  --color-accent-hover: oklch(98% 0.005 250);
+  --color-accent-ink: oklch(17% 0.011 250);
+  --color-focus: oklch(73% 0.105 158);
+  --color-focus-soft: oklch(28% 0.035 158);
+  --color-success: oklch(72% 0.1 158);
+  --color-success-soft: oklch(27% 0.028 158);
+  --color-warning: oklch(78% 0.11 76);
+  --color-warning-soft: oklch(23% 0.02 76);
+  --color-warning-band: oklch(26% 0.035 76);
+  --color-danger: oklch(72% 0.14 28);
+  --color-danger-soft: oklch(28% 0.035 28);
+  --color-selection: oklch(29% 0.013 250);
+  --color-overlay: oklch(8% 0.009 250 / 0.7);
+  --color-shadow: oklch(8% 0.01 250 / 0.3);
+}

@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NIPPO グレーテーマ提案</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Hallmark · genre: modern-minimal · macrostructure: Workbench (preserved) · theme: Graphite
+       * scope: colour-only proposal · audience: daily-report users · use: review and update reports · tone: austere
+       * pre-emit critique: P5 H5 E5 S5 R5 V4 · contrast: pass (40–41) · responsive: pass
+       */
+      :root {
+        color-scheme: light;
+        --font-ui: "Segoe UI", Arial, "IBM Plex Sans JP", "Yu Gothic UI", sans-serif;
+
+        --canvas: oklch(96.5% 0.006 255);
+        --surface: oklch(99.2% 0.004 255);
+        --surface-subtle: oklch(94.7% 0.007 255);
+        --surface-muted: oklch(91.8% 0.009 255);
+        --surface-hover: oklch(92.8% 0.009 255);
+        --surface-selected: oklch(88.5% 0.011 255);
+        --surface-today: oklch(89.8% 0.012 255);
+        --surface-holiday: oklch(95.2% 0.005 80);
+        --surface-dirty: oklch(93.6% 0.025 86);
+
+        --ink: oklch(25% 0.014 255);
+        --ink-strong: oklch(17% 0.012 255);
+        --ink-muted: oklch(48% 0.014 255);
+        --ink-faint: oklch(60% 0.012 255);
+        --rule: oklch(84% 0.009 255);
+        --rule-strong: oklch(68% 0.012 255);
+
+        --action: oklch(31% 0.014 255);
+        --action-hover: oklch(24% 0.014 255);
+        --action-ink: oklch(98% 0.004 255);
+        --focus: oklch(42% 0.018 255);
+        --danger: oklch(52% 0.19 25);
+        --danger-ink: oklch(98% 0.005 25);
+        --saturday: oklch(45% 0.055 255);
+        --sunday: oklch(47% 0.12 25);
+
+        --shadow-soft: 0 1px 3px oklch(20% 0.01 255 / 0.12);
+        --shadow-menu: 0 12px 28px oklch(18% 0.01 255 / 0.16);
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 9px;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; overflow-x: clip; }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: var(--font-ui);
+        font-size: 14px;
+      }
+      button, input { font: inherit; }
+      button { cursor: pointer; }
+      button:focus-visible, input:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+      button:active { transform: translateY(1px); }
+      button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+      .app { display: grid; min-height: 100vh; grid-template-rows: 54px minmax(0, 1fr); }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--rule);
+        background: var(--surface);
+        padding: 0 20px;
+      }
+      .brand, .top-actions, .user, .icon-button { display: inline-flex; align-items: center; }
+      .brand { gap: 10px; color: var(--ink-strong); font-weight: 700; letter-spacing: 0.08em; }
+      .brand-mark {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: var(--radius-sm);
+        background: var(--action);
+        color: var(--action-ink);
+      }
+      .brand-mark svg, .icon-button svg, .side-icon svg, .button-icon svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .top-actions { gap: 6px; }
+      .user { gap: 6px; margin-right: 2px; color: var(--ink-strong); font-weight: 600; }
+      .icon-button {
+        width: 32px;
+        height: 32px;
+        justify-content: center;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--ink-muted);
+      }
+      .icon-button:hover { border-color: var(--rule); background: var(--surface-hover); color: var(--ink-strong); }
+      .font-button { font-size: 13px; font-weight: 600; letter-spacing: -0.04em; }
+
+      .shell { display: grid; min-height: 0; grid-template-columns: 206px minmax(0, 1fr); }
+      .sidebar {
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+        border-right: 1px solid var(--rule);
+        background: var(--surface-subtle);
+        padding: 10px 8px 8px;
+      }
+      .side-nav { display: grid; gap: 4px; }
+      .side-item {
+        display: flex;
+        min-height: 36px;
+        align-items: center;
+        gap: 9px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--ink);
+        padding: 0 10px;
+        font-weight: 600;
+        text-align: left;
+        white-space: nowrap;
+      }
+      .side-item:hover { background: var(--surface-hover); }
+      .side-item.active {
+        border-color: var(--rule-strong);
+        background: var(--surface-selected);
+        color: var(--ink-strong);
+      }
+      .side-icon { display: inline-flex; width: 17px; align-items: center; justify-content: center; }
+      .sidebar-bottom { display: grid; gap: 4px; margin-top: auto; }
+      .fold { margin: 8px -8px -8px; border-top: 1px solid var(--rule); border-radius: 0; }
+
+      .main { min-width: 0; min-height: 0; overflow: hidden; }
+      .workspace { display: flex; height: 100%; min-width: 0; flex-direction: column; }
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(360px, auto) minmax(360px, 1fr) auto;
+        align-items: start;
+        gap: 12px;
+        padding: 10px 14px 8px;
+      }
+      .date-range, .period-tools, .actions, .segmented, .navigation { display: flex; align-items: center; }
+      .date-range { gap: 10px; }
+      .date-field {
+        width: 150px;
+        height: 38px;
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--ink-strong);
+        padding: 0 12px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .range-separator { color: var(--ink-muted); font-weight: 600; }
+      .period-tools { gap: 12px; }
+      .segmented, .navigation {
+        height: 38px;
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-sm);
+        background: var(--surface-muted);
+        padding: 4px;
+      }
+      .segment, .arrow {
+        height: 28px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-xs);
+        background: transparent;
+        color: var(--ink-muted);
+        padding: 0 12px;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .segment:hover, .arrow:hover { background: var(--surface); color: var(--ink-strong); }
+      .segment.active {
+        border-color: var(--rule);
+        background: var(--surface);
+        color: var(--ink-strong);
+        box-shadow: var(--shadow-soft);
+      }
+      .navigation { gap: 0; }
+      .arrow { width: 36px; padding: 0; font-size: 18px; }
+      .arrow svg {
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .step { min-width: 52px; color: var(--ink); font-size: 13px; font-weight: 600; text-align: center; white-space: nowrap; }
+      .divider { width: 1px; height: 24px; background: var(--rule-strong); }
+      .filter-button, .plain-button, .primary-button {
+        display: inline-flex;
+        height: 38px;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--ink);
+        padding: 0 14px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .filter-button:hover, .plain-button:hover { border-color: var(--rule-strong); background: var(--surface-hover); }
+      .filter-button { position: relative; }
+      .badge {
+        position: absolute;
+        top: -7px;
+        right: -7px;
+        display: grid;
+        min-width: 19px;
+        height: 19px;
+        place-items: center;
+        border: 2px solid var(--canvas);
+        border-radius: 999px;
+        background: var(--danger);
+        color: var(--danger-ink);
+        padding: 0 4px;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .actions { justify-content: flex-end; gap: 8px; }
+      .button-icon { display: inline-flex; }
+      .primary-button { border-color: var(--action); background: var(--action); color: var(--action-ink); }
+      .primary-button:hover { border-color: var(--action-hover); background: var(--action-hover); }
+
+      .people {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 4px 14px 12px;
+      }
+      .person-chip {
+        min-height: 34px;
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--ink);
+        padding: 4px 13px;
+        font-weight: 600;
+        text-align: center;
+        white-space: nowrap;
+      }
+      .person-chip:hover { border-color: var(--rule-strong); background: var(--surface-hover); }
+      .person-chip.active {
+        border-color: var(--action);
+        background: var(--surface-selected);
+        color: var(--ink-strong);
+      }
+
+      .table-card { min-height: 0; flex: 1 1 auto; padding: 0 10px 10px; }
+      .table-scroll {
+        height: 100%;
+        overflow: auto;
+        border-bottom: 1px solid var(--rule);
+      }
+      table {
+        width: 1280px;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+        background: var(--surface);
+      }
+      th, td {
+        position: relative;
+        border-right: 1px solid var(--rule);
+        border-bottom: 1px solid var(--rule);
+        padding: 9px 10px;
+        text-align: left;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+      th:first-child, td:first-child { border-left: 1px solid var(--rule); }
+      thead th {
+        position: sticky;
+        z-index: 5;
+        top: 0;
+        height: 38px;
+        background: var(--surface-muted);
+        color: var(--ink-strong);
+        font-weight: 700;
+      }
+      tbody td { height: 48px; background: var(--surface); }
+      .name-col { position: sticky; z-index: 3; left: 0; width: 130px; font-weight: 700; }
+      .date-col { position: sticky; z-index: 3; left: 130px; width: 88px; text-align: center; }
+      thead .name-col, thead .date-col { z-index: 7; }
+      .date-col { border-right: 2px solid var(--rule) !important; }
+      .business-col { width: 190px; }
+      .detail-col { width: 350px; }
+      .comment-col { width: 260px; }
+      .today .date-col { background: var(--surface-today); }
+      .holiday td:not(.name-col, .date-col) { background: var(--surface-holiday); }
+      .dirty { background: var(--surface-dirty) !important; }
+      .weekday { display: block; color: var(--ink-muted); font-size: 12px; }
+      .sat { color: var(--saturday); }
+      .sun { color: var(--sunday); }
+      .cell-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+      .mini-button {
+        min-height: 28px;
+        border: 1px solid var(--rule-strong);
+        border-radius: var(--radius-xs);
+        background: var(--surface-subtle);
+        color: var(--ink);
+        padding: 2px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .mini-button.emphasis { border-color: var(--action); background: var(--surface-selected); color: var(--ink-strong); }
+      .resize-handle {
+        position: absolute;
+        top: 0;
+        right: -4px;
+        bottom: 0;
+        z-index: 8;
+        width: 8px;
+        cursor: col-resize;
+      }
+      .resize-handle::after {
+        position: absolute;
+        top: 8px;
+        right: 3px;
+        bottom: 8px;
+        width: 1px;
+        background: transparent;
+        content: "";
+      }
+      .resize-handle:hover::after { background: var(--focus); }
+
+      @media (max-width: 1100px) {
+        .shell { grid-template-columns: 62px minmax(0, 1fr); }
+        .side-item { justify-content: center; padding-inline: 0; }
+        .side-label { display: none; }
+        .toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+        .period-tools { grid-column: 1; flex-wrap: wrap; }
+        .actions { grid-column: 2; grid-row: 1 / span 2; }
+      }
+      @media (max-width: 760px) {
+        .topbar { padding-inline: 12px; }
+        .shell { grid-template-columns: 48px minmax(0, 1fr); }
+        .sidebar { padding-inline: 6px; }
+        .toolbar { display: flex; flex-direction: column; align-items: stretch; }
+        .date-range, .period-tools, .actions { flex-wrap: wrap; justify-content: flex-start; }
+        .date-range { width: 100%; }
+        .date-field { width: auto; min-width: 0; flex: 1 1 0; padding-inline: 8px; font-size: 12px; }
+        .actions { align-self: flex-end; }
+        .people { flex-wrap: nowrap; overflow-x: auto; }
+        .user span:last-child { display: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; }
+        button:active { transform: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 7h8M8 11h8M8 15h5" /></svg>
+          </span>
+          <span>NIPPO</span>
+        </div>
+        <div class="top-actions">
+          <span class="user">
+            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="1.8" /><path d="M4 21a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.8" /></svg>
+            <span>山田 太郎</span>
+          </span>
+          <button class="icon-button font-button" type="button" aria-label="文字サイズを変更">Aa</button>
+          <button class="icon-button" type="button" aria-label="現在の文字サイズの列幅をリセット">
+            <svg viewBox="0 0 24 24"><path d="M4 5h10M4 12h16M4 19h10M17 4l3 3-3 3" /></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="shell">
+        <aside class="sidebar" aria-label="メインメニュー">
+          <nav class="side-nav">
+            <button class="side-item active" type="button">
+              <span class="side-icon"><svg viewBox="0 0 24 24"><path d="m4 16 9-9 4 4-9 9H4v-4Z" /><path d="m14 6 2-2 4 4-2 2" /></svg></span>
+              <span class="side-label">日報</span>
+            </button>
+          </nav>
+          <div class="sidebar-bottom">
+            <button class="side-item" type="button"><span class="side-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3" /><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" /></svg></span><span class="side-label">共通マスター</span></button>
+            <button class="side-item" type="button"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></svg></span><span class="side-label">設定</span></button>
+            <button class="side-item fold" type="button"><span class="side-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M9 5v14M15 9l-3 3 3 3" /></svg></span><span class="side-label">折りたたむ</span></button>
+          </div>
+        </aside>
+
+        <main class="main">
+          <section class="workspace">
+            <div class="toolbar">
+              <div class="date-range">
+                <input class="date-field" type="date" value="2026-06-02" aria-label="開始日" />
+                <span class="range-separator">〜</span>
+                <input class="date-field" type="date" value="2026-06-05" aria-label="終了日" />
+              </div>
+              <div class="period-tools">
+                <div class="segmented" role="group" aria-label="表示期間">
+                  <button class="segment" type="button">月</button>
+                  <button class="segment" type="button">週</button>
+                  <button class="segment" type="button">日</button>
+                  <button class="segment active" type="button" aria-pressed="true">設定範囲</button>
+                </div>
+                <div class="navigation" role="group" aria-label="表示期間を移動">
+                  <button class="arrow" type="button" aria-label="前の期間"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg></button>
+                  <span class="step">1日</span>
+                  <button class="arrow" type="button" aria-label="次の期間"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+                </div>
+                <span class="divider" aria-hidden="true"></span>
+                <button class="filter-button" type="button">未確認のみ<span class="badge">3日</span></button>
+              </div>
+              <div class="actions">
+                <button class="plain-button" type="button"><span class="button-icon"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v6h-6" /></svg></span>最新データを取得</button>
+                <button class="primary-button" type="button"><span class="button-icon"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg></span>保存</button>
+              </div>
+            </div>
+
+            <div class="people" aria-label="表示する人">
+              <button class="person-chip active" type="button">全員（21人）</button>
+              <button class="person-chip" type="button">自分</button>
+              <button class="person-chip" type="button">自チーム（21人）</button>
+              <button class="person-chip" type="button">担当部下（20人）</button>
+              <button class="person-chip" type="button">山田 太郎</button>
+              <button class="person-chip" type="button">佐藤</button>
+              <button class="person-chip" type="button">鈴木</button>
+              <button class="person-chip" type="button">高橋</button>
+              <button class="person-chip" type="button">田中</button>
+              <button class="person-chip" type="button">伊藤</button>
+              <button class="person-chip" type="button">渡辺</button>
+              <button class="person-chip" type="button">山本</button>
+            </div>
+
+            <div class="table-card">
+              <div class="table-scroll">
+                <table aria-label="日報一覧">
+                  <thead>
+                    <tr>
+                      <th class="name-col">名前<span class="resize-handle" aria-hidden="true"></span></th>
+                      <th class="date-col">日付<span class="resize-handle" aria-hidden="true"></span></th>
+                      <th class="business-col">業務名<span class="resize-handle" aria-hidden="true"></span></th>
+                      <th class="detail-col">業務詳細<span class="resize-handle" aria-hidden="true"></span></th>
+                      <th class="comment-col">上司1<span class="resize-handle" aria-hidden="true"></span></th>
+                      <th class="comment-col">上司2<span class="resize-handle" aria-hidden="true"></span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="name-col" rowspan="4">山田 太郎</td>
+                      <td class="date-col">6/2 (火)<span class="weekday">社休日</span></td>
+                      <td class="business-col">未保存終了試験</td>
+                      <td class="detail-col">2機能実装しました</td>
+                      <td class="comment-col"></td>
+                      <td class="comment-col"></td>
+                    </tr>
+                    <tr>
+                      <td class="date-col">6/3 (水)</td>
+                      <td>フロントエンド作成</td>
+                      <td>CSSを作りました</td>
+                      <td></td><td></td>
+                    </tr>
+                    <tr class="today holiday">
+                      <td class="date-col">6/4 (木)<span class="weekday">祝日</span></td>
+                      <td></td>
+                      <td>編集中の罫線確認</td>
+                      <td></td><td></td>
+                    </tr>
+                    <tr><td class="date-col">6/5 (金)</td><td></td><td></td><td></td><td></td></tr>
+
+                    <tr>
+                      <td class="name-col" rowspan="4">佐藤 花子</td>
+                      <td class="date-col">6/2 (火)<span class="weekday">社休日</span></td>
+                      <td>バックエンド作成</td>
+                      <td>2機能実装しました</td>
+                      <td><div class="cell-actions"><button class="mini-button emphasis" type="button">サイン</button><button class="mini-button" type="button">コメントを追加</button></div></td>
+                      <td></td>
+                    </tr>
+                    <tr><td class="date-col">6/3 (水)</td><td>フロントエンド作成</td><td>CSSを作りました</td><td><div class="cell-actions"><button class="mini-button emphasis" type="button">サイン</button><button class="mini-button" type="button">コメントを追加</button></div></td><td></td></tr>
+                    <tr class="today holiday"><td class="date-col">6/4 (木)<span class="weekday">祝日</span></td><td></td><td></td><td></td><td></td></tr>
+                    <tr><td class="date-col">6/5 (金)</td><td></td><td></td><td><div class="cell-actions"><button class="mini-button emphasis" type="button">サイン</button><button class="mini-button" type="button">コメントを追加</button></div></td><td></td></tr>
+
+                    <tr>
+                      <td class="name-col" rowspan="3">鈴木 一郎</td>
+                      <td class="date-col">6/2 (火)<span class="weekday">社休日</span></td>
+                      <td>バックエンド作成</td>
+                      <td class="dirty">長文を入力しても列幅の中で折り返され、隣のセルにはみ出しません。</td>
+                      <td><div class="cell-actions"><button class="mini-button emphasis" type="button">サイン</button><button class="mini-button" type="button">コメントを追加</button></div></td>
+                      <td></td>
+                    </tr>
+                    <tr><td class="date-col">6/3 (水)</td><td>フロントエンド作成</td><td>CSSを作りました</td><td><div class="cell-actions"><button class="mini-button emphasis" type="button">サイン</button><button class="mini-button" type="button">コメントを追加</button></div></td><td></td></tr>
+                    <tr class="today holiday"><td class="date-col">6/4 (木)<span class="weekday">祝日</span></td><td></td><td></td><td></td><td></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

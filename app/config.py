@@ -8,7 +8,7 @@ from typing import Any
 
 
 COLOR_THEMES = frozenset({"light", "dark"})
-MEMBER_FILTER_LEVELS = ("large", "medium", "small", "member")
+MEMBER_FILTER_LEVELS = ("department", "section", "member")
 DEFAULT_MEMBER_FILTER_LEVELS = ",".join(MEMBER_FILTER_LEVELS)
 
 
@@ -41,8 +41,11 @@ def normalize_member_filter_levels(
 ) -> str:
     def parse_levels(raw: Any) -> list[str]:
         if isinstance(raw, (list, tuple, set)):
-            return [str(item).strip() for item in raw]
-        return [item.strip() for item in str(raw or "").replace(";", ",").split(",")]
+            values = [str(item).strip() for item in raw]
+        else:
+            values = [item.strip() for item in str(raw or "").replace(";", ",").split(",")]
+        aliases = {"large": "department", "medium": "section", "small": "section"}
+        return [aliases.get(item, item) for item in values]
 
     fallback = [
         level for level in MEMBER_FILTER_LEVELS if level in parse_levels(default)
@@ -109,7 +112,7 @@ class AppSettings:
 PATH_FIELD_LABELS = {
     "users_dir": "ユーザー日報フォルダ",
     "comments_dir": "上司コメントフォルダ",
-    "common_dir": "共通マスターフォルダ",
+    "common_dir": "管理フォルダ",
 }
 
 

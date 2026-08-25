@@ -16,6 +16,7 @@ from app.config import (
     to_int,
     validate_settings_paths,
 )
+from app.data_cache import DailyReportDataCache
 from app.ime_diagnostics import ImeDiagnosticRecorder
 from app.repository import CommonMasterConflictError, DailyReportRepository
 from app.security import (
@@ -46,6 +47,7 @@ class DailyReportApi:
         self._has_unsaved_changes = False
         self._close_window_callback: Callable[[], None] | None = None
         self._ime_diagnostic_recorder = ImeDiagnosticRecorder(base_dir)
+        self._data_cache = DailyReportDataCache(base_dir)
 
     @property
     def employee_id(self) -> str:
@@ -86,12 +88,16 @@ class DailyReportApi:
 
     def get_initial_state(self) -> dict[str, Any]:
         employee_registered: bool | None = None
+        is_admin = False
         if self._settings.is_complete:
             try:
-                employee_registered = self._is_employee_registered()
+                repository = DailyReportRepository(self._settings, self._base_dir)
+                repository.validate_paths()
+                current_user = self._current_user_master_row(repository)
+                employee_registered = current_user is not None
+                is_admin = self._user_is_admin(current_user)
             except Exception:
                 logger.exception("Failed to check employee registration")
-        is_admin = self._is_admin()
         if employee_registered is False:
             is_admin = False
         return {
@@ -111,6 +117,11 @@ class DailyReportApi:
     def save_settings(self, payload: Any) -> dict[str, Any]:
         try:
             payload = validate_settings_request(payload)
+            previous_paths = (
+                self._settings.users_dir,
+                self._settings.comments_dir,
+                self._settings.common_dir,
+            )
             candidate = replace(
                 self._settings,
                 users_dir=str(payload.get("users_dir", "")).strip(),
@@ -148,6 +159,13 @@ class DailyReportApi:
                 }
             self._settings = candidate
             self._settings_manager.save(self._settings)
+            current_paths = (
+                self._settings.users_dir,
+                self._settings.comments_dir,
+                self._settings.common_dir,
+            )
+            if current_paths != previous_paths:
+                self._get_data_cache().invalidate_all("settings paths changed")
             return {
                 "ok": True,
                 "message": "設定を保存しました。",
@@ -207,18 +225,20 @@ class DailyReportApi:
                     "message": "ネットワークFSパスが未設定です。",
                     "needs_settings": True,
                 }
-            repo = DailyReportRepository(self._settings, self._base_dir)
-            repo.validate_paths()
-            access_denied = self._registered_employee_access_denied(repo)
-            if access_denied:
-                return access_denied
-            data = repo.load_view_data(
+            data_cache = self._get_data_cache()
+            data, diagnostics = data_cache.load_view_data(
+                self._settings,
                 self._employee_id,
                 start_date=payload.get("start_date"),
                 end_date=payload.get("end_date"),
                 period_preset=payload.get("period_preset"),
+                force_refresh=bool(payload.get("force_refresh", False)),
             )
-            return {"ok": True, "data": data}
+            if not data_cache.is_employee_registered(
+                self._settings, self._employee_id
+            ):
+                return self._employee_access_denied()
+            return {"ok": True, "data": data, **diagnostics}
         except RequestValidationError as exc:
             return self._invalid_request(exc)
         except Exception:
@@ -240,20 +260,41 @@ class DailyReportApi:
                 }
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
-            data = repo.load_common_masters()
+            data_cache = self._get_data_cache()
+            if data_cache.is_loaded:
+                data, migration_required, revisions = data_cache.get_admin_common(
+                    self._settings, self._employee_id
+                )
+            else:
+                data = repo.load_common_masters()
+                revisions = repo.get_common_master_revisions()
+                migration_required = {
+                    "user_master": repo.legacy_rank_migration_required,
+                    "team_master": repo.commenter_assignment_migration_required,
+                    "organization_schema": repo.organization_schema_migration_required,
+                    "comment_assignment": repo.commenter_assignment_migration_required,
+                    "calendar": repo.calendar_migration_required,
+                }
+            schema_mode = str(
+                ((data.get("organization_schema") or [{}])[0]).get("mode", "new")
+            )
+            migration_preview = (
+                repo._build_organization_migration_preview(
+                    data.get("user_master", []), data.get("team_master", [])
+                )
+                if schema_mode == "legacy"
+                else {}
+            )
             return {
                 "ok": True,
                 "data": data,
-                "revisions": repo.get_common_master_revisions(),
-                "migration_required": {
-                    "user_master": repo.legacy_rank_migration_required,
-                    "team_master": repo.commenter_assignment_migration_required,
-                    "calendar": repo.calendar_migration_required,
-                },
+                "revisions": revisions,
+                "migration_required": migration_required,
+                "migration_preview": migration_preview,
             }
         except Exception:
             logger.exception("Failed to load common masters")
-            return {"ok": False, "message": "共通マスターを読み込めませんでした。"}
+            return {"ok": False, "message": "管理を読み込めませんでした。"}
 
     def save_common_master(self, payload: Any) -> dict[str, Any]:
         try:
@@ -274,9 +315,10 @@ class DailyReportApi:
             new_revision = repo.save_common_master(
                 master, rows, expected_revision=revision
             )
+            self._refresh_data_cache_after_management_save("calendar saved")
             return {
                 "ok": True,
-                "message": "共通マスターを保存しました。",
+                "message": "管理を保存しました。",
                 "master": master,
                 "revision": new_revision,
             }
@@ -290,7 +332,7 @@ class DailyReportApi:
             return self._invalid_request(exc)
         except Exception:
             logger.exception("Failed to save common master")
-            return {"ok": False, "message": "共通マスターの保存に失敗しました。"}
+            return {"ok": False, "message": "管理の保存に失敗しました。"}
 
     def save_user_administration(self, payload: Any) -> dict[str, Any]:
         try:
@@ -300,10 +342,16 @@ class DailyReportApi:
             if access_denied:
                 return access_denied
             if isinstance(payload, dict) and "teams" in payload:
-                teams, users, revisions = validate_administration_save_request(payload)
+                validated = validate_administration_save_request(payload)
+                if len(validated) == 4:
+                    teams, users, comment_assignments, revisions = validated
+                else:
+                    teams, users, revisions = validated
+                    comment_assignments = None
             else:
                 users, revisions = validate_user_administration_save_request(payload)
                 teams = None
+                comment_assignments = None
             if not self._settings.is_complete:
                 return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
             repo = DailyReportRepository(self._settings, self._base_dir)
@@ -313,9 +361,17 @@ class DailyReportApi:
                     users, repo.load_common_masters().get("team_master", [])
                 )
             new_revisions = (
-                repo.save_administration(teams, users, revisions)
+                repo.save_administration(
+                    teams,
+                    users,
+                    comment_assignments if comment_assignments is not None else revisions,
+                    revisions if comment_assignments is not None else None,
+                )
                 if teams is not None
                 else repo.save_user_administration(users, revisions)
+            )
+            self._refresh_data_cache_after_management_save(
+                "organization administration saved"
             )
             return {
                 "ok": True,
@@ -339,17 +395,55 @@ class DailyReportApi:
             user_updates, comment_updates = validate_save_request(payload)
             if not self._settings.is_complete:
                 return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
-            access_denied = self._registered_employee_access_denied()
-            if access_denied:
-                return {**access_denied, "no_targets": False}
+            data_cache = self._get_data_cache()
+            common, cached_comments = data_cache.get_save_context(
+                self._settings, self._employee_id
+            )
+            if not any(
+                str(row.get("employee_id", "")).strip() == self._employee_id
+                for row in common.get("user_master", [])
+            ):
+                return {**self._employee_access_denied(), "no_targets": False}
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
-            result = repo.save_updates(self._employee_id, user_updates, comment_updates)
-            targets = [value for value in result.values() if value.get("needed")]
+            result = repo.save_updates(
+                self._employee_id,
+                user_updates,
+                comment_updates,
+                common=common,
+                cached_comments=cached_comments,
+            )
+            report_cache = self._cache_partition_result(result.get("user"))
+            comment_cache = self._cache_partition_result(result.get("comment"))
+            try:
+                data_cache.apply_saved_partitions(
+                    self._settings,
+                    self._employee_id,
+                    report_partition=report_cache,
+                    comment_partition=comment_cache,
+                )
+            except Exception:
+                logger.exception("Failed to synchronize saved CSVs into cache")
+                for partition in (report_cache, comment_cache):
+                    if partition is not None:
+                        data_cache.invalidate_partition(
+                            partition[0], "saved partition could not be applied"
+                        )
+            public_result = {
+                name: {
+                    key: value
+                    for key, value in status.items()
+                    if not key.startswith("_cache_")
+                }
+                for name, status in result.items()
+            }
+            targets = [
+                value for value in public_result.values() if value.get("needed")
+            ]
             return {
                 "ok": bool(targets) and all(value.get("saved") for value in targets),
                 "no_targets": not targets,
-                "result": result,
+                "result": public_result,
             }
         except RequestValidationError as exc:
             return {
@@ -377,6 +471,51 @@ class DailyReportApi:
             "ok": False,
             "message": f"入力内容を確認してください。{exc}",
         }
+
+    @staticmethod
+    def _cache_partition_result(
+        result: dict[str, Any] | None,
+    ) -> tuple[Path, Any] | None:
+        if not result or not result.get("saved"):
+            return None
+        path = result.get("_cache_path")
+        frame = result.get("_cache_frame")
+        if not path or frame is None:
+            return None
+        return Path(path), frame
+
+    def _get_data_cache(self) -> DailyReportDataCache:
+        cache = getattr(self, "_data_cache", None)
+        if cache is None:
+            base_dir = getattr(
+                self,
+                "_base_dir",
+                getattr(self._settings_manager, "base_dir", Path.cwd()),
+            )
+            cache = DailyReportDataCache(Path(base_dir))
+            self._data_cache = cache
+        return cache
+
+    def _refresh_data_cache_after_management_save(self, reason: str) -> None:
+        data_cache = self._get_data_cache()
+        if not data_cache.is_loaded:
+            return
+        try:
+            access = data_cache.refresh_changed(
+                self._settings, self._employee_id
+            )
+            if access.refresh_result.failed:
+                logger.warning(
+                    "Management data saved with deferred cache refresh reason=%s failed=%s",
+                    reason,
+                    access.refresh_result.failed,
+                )
+        except Exception:
+            logger.exception(
+                "Failed to refresh daily-report cache after management save reason=%s",
+                reason,
+            )
+            data_cache.invalidate_all(f"management cache refresh failed: {reason}")
 
     @staticmethod
     def _admin_access_denied() -> dict[str, Any]:
@@ -412,13 +551,21 @@ class DailyReportApi:
     def _current_user_master_row(
         self, repo: DailyReportRepository | None = None
     ) -> dict[str, Any] | None:
-        repository = repo or DailyReportRepository(self._settings, self._base_dir)
+        common: dict[str, list[dict[str, Any]]] | None = None
         if repo is None:
+            data_cache = getattr(self, "_data_cache", None)
+            if data_cache is not None and data_cache.is_loaded:
+                common = data_cache.get_common(
+                    self._settings, self._employee_id
+                )
+        repository = repo or DailyReportRepository(self._settings, self._base_dir)
+        if repo is None and common is None:
             repository.validate_paths()
         employee_id = str(self._employee_id or "").strip()
         if not employee_id:
             return None
-        common = repository.load_common()
+        if common is None:
+            common = repository.load_common()
         return next(
             (
                 row
@@ -436,6 +583,10 @@ class DailyReportApi:
         except Exception:
             logger.exception("Failed to check administrator permission")
             return False
+        return self._user_is_admin(user)
+
+    @staticmethod
+    def _user_is_admin(user: dict[str, Any] | None) -> bool:
         return bool(
             user
             and str(user.get("employment_type", "")).strip() == "regular"

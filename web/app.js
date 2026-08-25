@@ -1,20 +1,22 @@
 // Shared application state, shell behavior, and startup.
-const MEMBER_FILTER_LEVELS = Object.freeze(["large", "medium", "small", "member"]);
+const MEMBER_FILTER_LEVELS = Object.freeze(["department", "section", "member"]);
 const MEMBER_FILTER_LABELS = Object.freeze({
-  large: "課",
-  medium: "係",
-  small: "チーム",
+  department: "課",
+  section: "係",
   member: "個人",
 });
 const ACCESS_DENIED_MESSAGE = "このアプリは使用できません。管理者に連絡してください。";
 
 function normalizeMemberFilterLevels(value, fallback = MEMBER_FILTER_LEVELS) {
   const parseLevels = (raw) => {
-    if (Array.isArray(raw)) return raw.map((item) => String(item).trim());
-    return String(raw ?? "")
-      .replaceAll(";", ",")
-      .split(",")
-      .map((item) => item.trim());
+    const values = Array.isArray(raw)
+      ? raw.map((item) => String(item).trim())
+      : String(raw ?? "")
+          .replaceAll(";", ",")
+          .split(",")
+          .map((item) => item.trim());
+    const aliases = { large: "department", medium: "section", small: "section" };
+    return values.map((item) => aliases[item] || item);
   };
   const fallbackLevels = MEMBER_FILTER_LEVELS.filter((level) =>
     parseLevels(fallback).includes(level),
@@ -31,6 +33,7 @@ const state = {
   displayName: "",
   canInputOwnReport: true,
   isSuperior: false,
+  isDirector: false,
   isAdmin: false,
   restrictToSelf: false,
   activeView: "reports",
@@ -58,6 +61,9 @@ const state = {
   missingCommentDates: null,
   missingCommentRangeStart: "",
   missingCommentRangeEnd: "",
+  missingCommentMode: "daily",
+  missingCommentMemberCounts: {},
+  directorMissingDays: 0,
   commentSignature: "",
   settingsSnapshot: "",
   colorTheme: "light",
@@ -66,6 +72,8 @@ const state = {
   memberFilterLevels: [...MEMBER_FILTER_LEVELS],
   accessDenied: false,
   closeApproved: false,
+  loadRequestSequence: 0,
+  cacheGeneration: 0,
 };
 
 let currentEditingElement = null;
@@ -78,13 +86,6 @@ const toastState = {
 };
 const actionButtonSignatures = new Map();
 const PERIOD_MODES = ["month", "week", "day", "default"];
-const FONT_SIZE_LABELS = Object.freeze({
-  compact: "極小",
-  standard: "小",
-  medium: "中",
-  large: "大",
-  xlarge: "極大",
-});
 const LEGACY_PERIOD_MODE_MAP = Object.freeze({
   last7days: "default",
   previousWorkday: "day",
@@ -241,10 +242,6 @@ function bindEvents() {
   $("saveSettingsButton").addEventListener("click", saveSettings);
   $("settingsPanel").addEventListener("input", syncSettingsDirtyState);
   $("settingsPanel").addEventListener("change", syncSettingsDirtyState);
-  $("settingsPanel").addEventListener("click", (event) => {
-    const tab = event.target.closest("[data-settings-tab]");
-    if (tab) setSettingsTab(tab.dataset.settingsTab);
-  });
   $("refreshButton").addEventListener("click", refreshData);
   $("saveButton").addEventListener("click", saveUpdates);
   $("cancelActionConfirmButton").addEventListener("click", () => {
@@ -270,7 +267,7 @@ function bindEvents() {
   );
   $("confirmResetColumnWidthsButton").addEventListener("click", () => {
     closeResetColumnWidthsDialog();
-    resetCurrentColumnWidths();
+    resetColumnWidths();
   });
   $("resetColumnWidthsDialog").addEventListener("click", (event) => {
     if (event.target === event.currentTarget) closeResetColumnWidthsDialog();
@@ -337,7 +334,6 @@ function bindEvents() {
     },
     { passive: false },
   );
-  $("toggleSidebarButton").addEventListener("click", toggleSidebar);
   $("tableWrap").addEventListener("click", handleTableClick);
   $("tableWrap").addEventListener("keydown", handleTableKeydown);
   $("tableWrap").addEventListener("pointerdown", startColumnResize);
@@ -363,8 +359,6 @@ function bindEvents() {
 
 function openResetColumnWidthsDialog() {
   const dialog = $("resetColumnWidthsDialog");
-  $("resetColumnWidthsSizeLabel").textContent =
-    FONT_SIZE_LABELS[state.fontSize] || FONT_SIZE_LABELS.large;
   if (typeof dialog.showModal === "function") dialog.showModal();
   else dialog.setAttribute("open", "");
   requestAnimationFrame(() => $("cancelResetColumnWidthsButton").focus());
@@ -443,10 +437,6 @@ function restoreUiState(settings) {
     ? settings.ui_font_size
     : "large";
   state.columnWidths = parseStoredColumnWidths(settings.ui_column_widths);
-  const sidebar = $("sidebar");
-  const isSidebarOpen = settings.ui_sidebar_open !== false;
-  sidebar.classList.toggle("is-open", isSidebarOpen);
-  updateSidebarToggleButton(isSidebarOpen);
   syncPeriodPresets();
   applyFontSize();
 }
@@ -461,7 +451,6 @@ function persistUiState() {
     !state.showMissingCommentsOnly &&
     ["month", "week", "day", ""].includes(state.activePeriodPreset);
   const payload = {
-    sidebar_open: $("sidebar").classList.contains("is-open"),
     period_preset: periodPreset,
     start_date: shouldPersistDates ? state.startDate : "",
     end_date: shouldPersistDates ? state.endDate : "",
@@ -566,34 +555,6 @@ function applyFontSize() {
       button.setAttribute("aria-pressed", String(isActive));
     });
   applyColumnWidthsToRenderedTable();
-}
-
-function toggleSidebar() {
-  const sidebar = $("sidebar");
-  const willOpen = !sidebar.classList.contains("is-open");
-  sidebar.classList.toggle("is-open", willOpen);
-  updateSidebarToggleButton(willOpen);
-  persistUiState();
-}
-
-function updateSidebarToggleButton(
-  isOpen = $("sidebar").classList.contains("is-open"),
-) {
-  const toggleButton = $("toggleSidebarButton");
-  const toggleIcon = toggleButton.querySelector(".sidebar-toggle-icon");
-  const toggleText = toggleButton.querySelector(".sidebar-utility-text");
-  if (toggleIcon) {
-    toggleIcon.innerHTML = isOpen
-      ? '<svg viewBox="0 0 24 24" role="img" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /><path d="m16 9-3 3 3 3" /></svg>'
-      : '<svg viewBox="0 0 24 24" role="img" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /><path d="m13 9 3 3-3 3" /></svg>';
-  }
-  if (toggleText) toggleText.textContent = isOpen ? "折りたたむ" : "展開する";
-  toggleButton.title = isOpen ? "サイドバーを閉じる" : "サイドバーを開く";
-  toggleButton.setAttribute(
-    "aria-label",
-    isOpen ? "サイドバーを閉じる" : "サイドバーを開く",
-  );
-  toggleButton.setAttribute("aria-expanded", String(isOpen));
 }
 
 function showSettings(visible) {
@@ -894,13 +855,15 @@ function updateViewChrome() {
   }
 }
 
-function syncCurrentUserName() {
+function syncCurrentUserDisplay() {
   const userName = $("currentUserName");
   if (!userName) return;
-  const displayName = state.displayName || state.employeeId || "ユーザー";
-  userName.textContent = displayName;
-  const avatar = $("currentUserAvatar");
-  if (avatar) avatar.textContent = Array.from(displayName.trim())[0] || "ユ";
+  const employeeId = state.employeeId || "未取得";
+  userName.textContent = employeeId;
+  $("currentUserDisplay")?.setAttribute(
+    "aria-label",
+    `ログイン中のユーザー: ${employeeId}`,
+  );
 }
 
 function escapeHtml(value) {
@@ -913,7 +876,6 @@ function escapeHtml(value) {
 }
 
 window.addEventListener("pywebviewready", async () => {
-  updateSidebarToggleButton();
   bindEvents();
   syncChrome();
   updateViewChrome();
@@ -923,7 +885,7 @@ window.addEventListener("pywebviewready", async () => {
   state.accessDenied =
     initial.access_denied === true || initial.employee_registered === false;
   updateViewAvailability();
-  syncCurrentUserName();
+  syncCurrentUserDisplay();
   fillSettings(initial.settings || {});
   restoreUiState(initial.settings || {});
   if (state.accessDenied) {

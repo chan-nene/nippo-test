@@ -1343,6 +1343,7 @@ html body .inspector-delete-actions {
 
 html body .inspector-save-button {
   display: inline-flex;
+  box-sizing: border-box;
   min-width: 150px;
   min-height: var(--control-height);
   align-items: center;
@@ -1355,6 +1356,10 @@ html body .inspector-save-button {
   padding: 0 14px;
   font-size: var(--font-12);
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  overflow-wrap: normal;
 }
 
 html body .inspector-save-button svg {
@@ -1407,6 +1412,7 @@ html body .admin-workspace.is-team-master .inspector-delete-actions .inspector-d
     animation-duration: 1.8s;
   }
 }
+
 
 /* Platform-style master navigation and neutral editor surfaces. */
 html body #adminPanel .admin-header {
@@ -2152,11 +2158,11 @@ html body #adminPanel .admin-workspace,
 html body #adminPanel .admin-loading {
   width: min(1180px, 100%);
   margin-right: auto;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 html body #adminPanel .admin-header {
-  display: grid;
+  display: block;
   min-height: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -2233,8 +2239,6 @@ html body #adminPanel .admin-page-save:disabled {
 html body #adminPanel .master-nav {
   display: flex;
   min-width: 0;
-  grid-column: 1 / 3;
-  grid-row: 2;
   align-items: center;
   gap: 20px;
   overflow: visible;
@@ -2295,7 +2299,11 @@ html body #adminPanel .admin-workspace.is-team-master {
 }
 
 html body #adminPanel .admin-workspace.is-user-master {
-  grid-template-columns: minmax(0, 1fr) 310px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html body #adminPanel .admin-workspace.is-user-master .master-inspector {
+  display: none;
 }
 
 html body #adminPanel .admin-workspace.is-calendar-master {
@@ -2823,32 +2831,145 @@ html body #adminPanel .team-editor-actions {
 
 html body #adminPanel .organization-user-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+html body #adminPanel .organization-user-table thead th:first-child {
+  border-left: 1px solid var(--org-rule);
+  border-top-left-radius: var(--radius-sm);
+}
+
+html body #adminPanel .organization-user-table thead th:last-child {
+  border-top-right-radius: var(--radius-sm);
 }
 
 html body #adminPanel .organization-user-table :is(th, td) {
-  border: 0;
+  border-top: 0;
+  border-right: 1px solid var(--org-rule);
   border-bottom: 1px solid var(--org-rule);
-  padding: 11px 8px;
+  border-left: 0;
+  padding: 8px 10px;
   text-align: left;
   vertical-align: middle;
 }
 
+html body #adminPanel .organization-user-table thead th {
+  border-top: 1px solid var(--org-rule);
+}
+
+html body #adminPanel .organization-user-table tbody td:first-child {
+  border-left: 1px solid var(--org-rule);
+}
+
 html body #adminPanel .organization-user-table th {
-  background: transparent;
-  color: var(--org-muted);
-  font-size: 12px;
-  font-weight: 600;
+  background: var(--org-subtle);
+  color: var(--org-ink-strong);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 html body #adminPanel .organization-user-table td {
   color: var(--org-ink);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
 }
 
-html body #adminPanel .organization-user-table tbody tr {
+html body #adminPanel .organization-user-table :is(
+  .organization-user-actions-heading,
+  .organization-user-actions
+) {
+  width: 88px;
+  text-align: right;
+}
+
+html body #adminPanel .organization-user-table .organization-user-actions {
+  padding: 4px 6px;
+}
+
+html body #adminPanel .api-key-actions {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+html body #adminPanel .api-key-action {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  display: inline-flex;
+  width: 34px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--org-muted);
+  padding: 0 8px;
   cursor: pointer;
+  transition: transform 100ms ease, color 150ms ease;
+}
+
+html body #adminPanel .api-key-action::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--org-ink) 8%, transparent);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+html body #adminPanel .api-key-action > span {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 18px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+}
+
+html body #adminPanel .api-key-action svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: currentColor;
+  overflow: visible;
+}
+
+html body #adminPanel .api-key-action.delete {
+  color: var(--org-danger);
+}
+
+html body #adminPanel .api-key-action.delete::before {
+  background: color-mix(in srgb, var(--org-danger) 16%, transparent);
+}
+
+html body #adminPanel .api-key-action:hover::before,
+html body #adminPanel .api-key-action:focus-visible::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+html body #adminPanel .api-key-action:active {
+  transform: scale(.97);
+}
+
+html body #adminPanel .api-key-action:focus-visible {
+  outline: 2px solid var(--org-focus);
+  outline-offset: -1px;
+}
+
+html body #adminPanel .organization-user-table tbody tr {
+  cursor: default;
 }
 
 html body #adminPanel .organization-user-table tbody tr:hover,
@@ -2883,35 +3004,49 @@ html body #adminPanel .user-managed-field {
   margin-bottom: 14px;
 }
 
-html body #adminPanel .inspector-field.admin-flag-field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 12px;
-}
-
-html body #adminPanel .admin-flag-field .inspector-field-label {
-  grid-column: 1;
-}
-
-html body #adminPanel .admin-flag-field input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  grid-column: 2;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--org-ink-strong);
-}
-
-html body #adminPanel .admin-flag-field .inspector-field-hint {
-  grid-column: 1 / -1;
-}
-
 html body #adminPanel .inspector-field-label,
 html body #adminPanel .user-managed-label {
   color: var(--org-muted);
   font-size: 12px;
   font-weight: 600;
+}
+
+html body #adminPanel .user-editor-fields .inspector-field :is(
+  input:not([type="radio"]),
+  select
+),
+html body #adminPanel .comment-assignment-editor .inspector-field select {
+  color: var(--org-ink);
+  font-weight: 400;
+}
+
+html body #adminPanel .inspector-radio-field {
+  display: grid;
+}
+
+html body #adminPanel .inspector-radio-group {
+  display: flex;
+  min-height: 35px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+html body #adminPanel .inspector-radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--org-ink);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+html body #adminPanel .inspector-radio-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--org-ink-strong);
 }
 
 html body #adminPanel .user-tag-row {
@@ -2957,6 +3092,34 @@ html body #adminPanel .user-tag-empty {
   font-size: 12px;
 }
 
+html body #adminPanel .user-commenter-teams {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 35px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--org-control-border);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-subtle);
+  padding: 6px 9px;
+}
+
+html body #adminPanel .user-commenter-team {
+  color: var(--org-ink);
+  font-size: 13px;
+}
+
+html body #adminPanel .user-commenter-team:not(:last-child)::after {
+  color: var(--org-muted);
+  content: "、";
+  margin-left: 6px;
+}
+
+html body #adminPanel .user-commenter-teams.is-empty {
+  color: var(--org-muted);
+  font-size: 13px;
+}
+
 html body #adminPanel .user-advanced-settings {
   margin-top: 2px;
 }
@@ -2965,13 +3128,80 @@ html body #adminPanel .user-advanced-settings .user-editor-fields {
   padding-top: 14px;
 }
 
-html body #adminPanel .user-editor-actions {
+html body #adminPanel .user-editor-actions,
+html body #adminPanel .team-editor-modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   border-top: 1px solid var(--org-rule);
   margin-top: 20px;
   padding-top: 16px;
+}
+
+html body #adminPanel .user-editor-dialog {
+  width: min(660px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-md);
+  background: var(--org-surface);
+  color: var(--org-ink);
+  padding: 0;
+  box-shadow: 0 24px 70px rgb(20 20 20 / 22%);
+}
+
+html body #adminPanel .user-editor-dialog::backdrop {
+  background: rgb(20 20 20 / 42%);
+}
+
+html[data-theme="dark"] body #adminPanel .user-editor-dialog {
+  box-shadow: 0 24px 70px rgb(0 0 0 / 48%);
+}
+
+html body #adminPanel .user-editor-dialog-content {
+  display: grid;
+  max-height: calc(100dvh - 32px);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+html body #adminPanel .user-editor-dialog-header {
+  border-bottom: 1px solid var(--org-rule);
+  padding: 20px 24px 16px;
+}
+
+html body #adminPanel .user-editor-dialog-header h2 {
+  margin: 0;
+  color: var(--org-ink-strong);
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+html body #adminPanel .user-editor-dialog-form {
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 24px 24px;
+}
+
+html body #adminPanel .inspector-cancel-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--org-control-border);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-surface);
+  color: var(--org-ink);
+  padding: 0 13px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--org-control-inset);
+}
+
+html body #adminPanel .inspector-cancel-button:hover,
+html body #adminPanel .inspector-cancel-button:focus-visible {
+  border-color: var(--org-control-border-hover);
+  background: var(--org-hover);
 }
 
 html body #adminPanel .inspector-save-button,
@@ -3024,6 +3254,20 @@ html body #adminPanel .fiscal-calendar-toolbar {
   padding: 12px 18px;
 }
 
+html body #adminPanel .fiscal-calendar-toolbar-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+html body #adminPanel .fiscal-calendar-toolbar .inspector-record-actions {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
 html body #adminPanel .fiscal-year-navigation,
 html body #adminPanel .fiscal-calendar-legend,
 html body #adminPanel .calendar-legend-item {
@@ -3039,7 +3283,7 @@ html body #adminPanel .fiscal-year-label {
   min-width: 76px;
   color: var(--org-ink-strong);
   text-align: center;
-  font-size: 14px;
+  font-size: var(--ui-font-size);
   font-weight: 700;
 }
 
@@ -3065,7 +3309,7 @@ html body #adminPanel .fiscal-calendar-legend {
   justify-content: flex-end;
   gap: 8px 12px;
   color: var(--org-muted);
-  font-size: 12px;
+  font-size: var(--ui-font-size);
 }
 
 html body #adminPanel .calendar-legend-item {
@@ -3092,7 +3336,7 @@ html body #adminPanel .fiscal-calendar-summary {
 
 html body #adminPanel .fiscal-calendar-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 14px 18px 18px;
 }
@@ -3108,7 +3352,7 @@ html body #adminPanel .fiscal-calendar-month {
 html body #adminPanel .fiscal-calendar-month h4 {
   margin: 0 0 8px;
   color: var(--org-ink-strong);
-  font-size: 14px;
+  font-size: var(--ui-font-size);
   font-weight: 700;
 }
 
@@ -3119,11 +3363,15 @@ html body #adminPanel .fiscal-calendar-days {
   gap: 3px;
 }
 
+html body #adminPanel .fiscal-calendar-week {
+  display: contents;
+}
+
 html body #adminPanel .fiscal-calendar-weekdays span {
   padding: 2px 0 5px;
   color: var(--org-muted);
   text-align: center;
-  font-size: 11px;
+  font-size: var(--ui-font-size);
 }
 
 html body #adminPanel .fiscal-calendar-weekdays .is-sunday {
@@ -3134,15 +3382,21 @@ html body #adminPanel .fiscal-calendar-weekdays .is-saturday {
   color: var(--org-calendar-holiday-ink);
 }
 
-html body #adminPanel .fiscal-calendar-day,
+html body #adminPanel .fiscal-calendar-cell,
 html body #adminPanel .fiscal-calendar-day-empty {
   aspect-ratio: 1;
   min-width: 0;
 }
 
+html body #adminPanel .fiscal-calendar-cell {
+  display: grid;
+}
+
 html body #adminPanel .fiscal-calendar-day {
   position: relative;
   display: grid;
+  width: 100%;
+  height: 100%;
   min-height: 32px;
   place-items: center;
   border: 1px solid transparent;
@@ -3188,6 +3442,10 @@ html body #adminPanel .inspector-empty {
   html body #adminPanel .team-browser {
     min-height: 350px;
   }
+
+  html body #adminPanel .fiscal-calendar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 620px) {
@@ -3199,23 +3457,12 @@ html body #adminPanel .inspector-empty {
     grid-template-columns: 1fr;
   }
 
-  html body #adminPanel .admin-title-line,
-  html body #adminPanel .admin-header-actions,
   html body #adminPanel .master-nav {
     grid-column: 1;
   }
 
-  html body #adminPanel .admin-header-actions {
-    grid-row: 2;
-    margin-bottom: 16px;
-  }
-
   html body #adminPanel .master-nav {
-    grid-row: 3;
-  }
-
-  html body #adminPanel .admin-page-save {
-    width: 100%;
+    margin-bottom: 18px;
   }
 
   html body #adminPanel .master-table-toolbar,
@@ -3235,11 +3482,16 @@ html body #adminPanel .inspector-empty {
     grid-template-columns: 1fr;
   }
 
-  html body #adminPanel .organization-user-table :is(th, td):is(:nth-child(3), :nth-child(5)) {
+  html body #adminPanel .organization-user-table :is(th, td):is(:nth-child(1), :nth-child(4), :nth-child(5)) {
     display: none;
   }
 
   html body #adminPanel .fiscal-calendar-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  html body #adminPanel .fiscal-calendar-toolbar-actions {
     align-items: stretch;
     flex-direction: column;
   }
@@ -3251,5 +3503,755 @@ html body #adminPanel .inspector-empty {
   html body #adminPanel .fiscal-calendar-grid {
     grid-template-columns: 1fr;
     padding: 12px;
+  }
+}
+
+/* Organization/comment-assignment workbench (two-level organization model). */
+html body #adminPanel .organization-migration-notice {
+  display: grid;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--warning, #a56b18) 42%, var(--org-rule));
+  border-radius: var(--org-radius-sm);
+  margin: 12px;
+  background: var(--warning-surface, #fff8e8);
+  color: var(--org-ink);
+  padding: 12px 14px;
+}
+
+html[data-theme="dark"] body #adminPanel .organization-migration-notice {
+  background: color-mix(in srgb, #a56b18 18%, var(--org-surface));
+}
+
+html body #adminPanel .organization-migration-notice p {
+  margin: 0;
+  color: var(--org-muted);
+  line-height: 1.55;
+}
+
+html body #adminPanel .organization-migration-notice details {
+  margin-top: 4px;
+}
+
+html body #adminPanel .organization-migration-notice summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--org-ink-strong);
+  font-weight: 600;
+}
+
+html body #adminPanel .organization-migration-notice ul {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+html body #adminPanel .organization-browser-v2 {
+  min-width: 0;
+}
+
+html body #adminPanel .organization-tree-v2 {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+  padding: 16px 14px 22px;
+}
+
+html body #adminPanel .organization-card {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-md);
+  background: var(--org-surface);
+  color: var(--org-ink);
+  padding: 14px;
+}
+
+html body #adminPanel .organization-director-card {
+  background: var(--org-subtle);
+}
+
+html body #adminPanel .organization-card-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html body #adminPanel .organization-card-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+html body #adminPanel .organization-card-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+html body #adminPanel .organization-card-copy strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-card-edit {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--org-radius-sm);
+  background: transparent;
+  color: var(--org-muted);
+  padding: 0;
+}
+
+html body #adminPanel .organization-card-toggle {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: var(--org-radius-sm);
+  background: transparent;
+  color: var(--org-muted);
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-card-toggle:hover,
+html body #adminPanel .organization-card-toggle:focus-visible {
+  border-color: var(--org-control-border-hover);
+  background: var(--org-hover);
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .organization-card-toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+html body #adminPanel .organization-drag-handle {
+  display: inline-flex;
+  width: 28px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--org-radius-sm);
+  color: var(--org-muted);
+  cursor: grab;
+  user-select: none;
+}
+
+html body #adminPanel .organization-drag-handle:hover {
+  background: var(--org-hover);
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .organization-drag-handle:active {
+  cursor: grabbing;
+}
+
+html body #adminPanel .organization-drag-handle svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+html body #adminPanel .organization-card-edit svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+html body #adminPanel .organization-card-edit:hover,
+html body #adminPanel .organization-card-edit:focus-visible {
+  border-color: var(--org-control-border-hover);
+  background: var(--org-hover);
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .organization-card-children {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-subtle);
+  padding: 10px;
+}
+
+html body #adminPanel .organization-card-children[hidden] {
+  display: none;
+}
+
+html body #adminPanel .organization-department-list {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+html body #adminPanel .organization-card.is-dragging {
+  position: relative;
+  z-index: 2;
+  opacity: 0.96;
+  box-shadow: 0 16px 30px rgb(20 20 20 / 18%);
+  cursor: grabbing;
+  transform: translateY(-3px) scale(1.012) rotate(0.2deg);
+}
+
+html body #adminPanel .organization-card-sortable-ghost {
+  border-style: dashed;
+  border-color: var(--org-rule-strong);
+  background: color-mix(in srgb, var(--org-active) 68%, var(--org-surface));
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+html body #adminPanel .organization-card-sortable-chosen,
+html body #adminPanel .organization-card-sortable-drag {
+  cursor: grabbing;
+}
+
+html body #adminPanel .organization-card.is-dragging .organization-drag-handle {
+  color: var(--org-ink-strong);
+  cursor: grabbing;
+}
+
+html body #adminPanel .organization-card-children .organization-card {
+  gap: 8px;
+  border-radius: var(--org-radius-sm);
+  background: var(--org-surface);
+  padding: 10px 12px;
+}
+
+html body #adminPanel .team-level-label:is(.is-department, .is-section, .is-director) {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--org-rule);
+  border-radius: 999px;
+  background: var(--org-subtle);
+  color: var(--org-muted);
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+html body #adminPanel .organization-member-count {
+  color: var(--org-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-editor-section {
+  display: grid;
+  gap: 14px;
+  border-bottom: 1px solid var(--org-rule);
+  padding: 2px 0 20px;
+}
+
+html body #adminPanel .organization-editor-section + .organization-editor-section {
+  padding-top: 20px;
+}
+
+html body #adminPanel .organization-editor-section .inspector-section-heading {
+  margin: 0;
+}
+
+html body #adminPanel .organization-arrange-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid var(--org-rule);
+  padding: 0 0 20px;
+}
+
+html body #adminPanel .comment-assignment-editor {
+  display: grid;
+  gap: 14px;
+}
+
+html body #adminPanel .assignment-checklist {
+  display: grid;
+  max-height: 280px;
+  gap: 3px;
+  overflow: auto;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-sm);
+  margin: 0;
+  background: var(--org-surface);
+  padding: 10px;
+}
+
+html body #adminPanel .assignment-checklist legend {
+  color: var(--org-muted);
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+html body #adminPanel .assignment-checklist label {
+  display: grid;
+  min-height: 34px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  border-radius: 6px;
+  padding: 5px 7px;
+}
+
+html body #adminPanel .assignment-checklist label:hover {
+  background: var(--org-hover);
+}
+
+html body #adminPanel .assignment-checklist input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--org-ink-strong);
+}
+
+html body #adminPanel .assignment-checklist p {
+  margin: 4px;
+  color: var(--org-muted);
+}
+
+html body #adminPanel .organization-member-list {
+  display: grid;
+  gap: 6px;
+}
+
+html body #adminPanel .organization-member-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-surface);
+  padding: 9px 10px;
+}
+
+html body #adminPanel .organization-member-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+html body #adminPanel .organization-member-copy :is(strong, small) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-member-copy small {
+  color: var(--org-muted);
+}
+
+html body #adminPanel .organization-member-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html body #adminPanel .organization-member-controls select {
+  min-width: 170px;
+  min-height: 32px;
+  border: 1px solid var(--org-control-border);
+  border-radius: 6px;
+  background: var(--org-surface);
+  color: var(--org-ink);
+  padding-inline: 8px;
+}
+
+html body #adminPanel .organization-add-member {
+  margin: 12px 0 0;
+}
+
+@media (max-width: 1100px) {
+  html body #adminPanel .organization-member-row {
+    grid-template-columns: 1fr;
+  }
+
+  html body #adminPanel .organization-member-controls {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 620px) {
+  html body #adminPanel .organization-tree-v2 {
+    padding-inline: 8px;
+  }
+
+  html body #adminPanel .organization-card {
+    padding: 12px;
+  }
+
+  html body #adminPanel .organization-card-children {
+    padding: 8px;
+  }
+
+  html body #adminPanel .organization-member-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  html body #adminPanel .organization-member-controls select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body #adminPanel .organization-card.is-dragging {
+    transform: none;
+  }
+}
+
+/* Final density contract for calendar and inspector actions. */
+html body #adminPanel .fiscal-year-button,
+html body #adminPanel .inspector-save-button,
+html body #adminPanel .admin-page-save {
+  box-sizing: border-box;
+  min-height: var(--control-height) !important;
+  height: var(--control-height) !important;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  overflow-wrap: normal;
+  padding-block: 0;
+}
+
+html body #adminPanel .fiscal-calendar-toolbar-actions,
+html body #adminPanel .inspector-record-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+html body #adminPanel .fiscal-year-button,
+html body #adminPanel .inspector-save-button,
+html body #adminPanel .inspector-delete-button,
+html body #adminPanel .admin-page-save {
+  font-family: "IBM Plex Sans", "IBM Plex Sans JP", "Yu Gothic UI", sans-serif !important;
+  font-size: var(--ui-font-size) !important;
+  font-weight: 700 !important;
+}
+
+/* Keep the organization master on the same neutral surface as reports/settings. */
+html body #adminPanel {
+  --org-canvas: var(--surface);
+  --org-surface: var(--surface);
+  --org-subtle: var(--surface-soft);
+  --org-hover: var(--surface-hover);
+  --org-active: var(--surface-active);
+  --org-ink: var(--text);
+  --org-ink-strong: var(--text-strong);
+  --org-muted: var(--text-muted);
+  --org-rule: var(--border);
+  --org-rule-strong: var(--border-strong);
+  --org-control-border: var(--border);
+  --org-control-border-hover: var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+html body #adminPanel .fiscal-calendar-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 12px 14px;
+}
+
+html body #adminPanel .fiscal-calendar-month {
+  padding: 7px;
+}
+
+html body #adminPanel .fiscal-calendar-month h4 {
+  margin-bottom: 4px;
+  font-size: var(--ui-font-size);
+}
+
+html body #adminPanel .fiscal-calendar-weekdays,
+html body #adminPanel .fiscal-calendar-days {
+  gap: 1px;
+}
+
+html body #adminPanel .fiscal-calendar-weekdays span {
+  padding: 1px 0 3px;
+  font-size: var(--ui-font-size);
+}
+
+html body #adminPanel .fiscal-calendar-day {
+  min-height: 18px;
+  border-radius: 4px;
+  font-size: var(--ui-font-size);
+}
+
+@media (max-width: 1100px) {
+  html body #adminPanel .fiscal-calendar-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  html body #adminPanel .fiscal-calendar-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  html body #adminPanel .fiscal-calendar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-inline: 8px;
+  }
+}
+
+/* Fluid administration workbench: use the space left by the application rail. */
+html body #adminPanel .admin-header,
+html body #adminPanel .admin-workspace,
+html body #adminPanel .admin-loading {
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+html body #adminPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+html body #adminPanel .admin-workspace {
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+html body #adminPanel .admin-workspace.is-user-master {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html body #adminPanel .admin-workspace.is-user-master .master-inspector {
+  display: none;
+}
+
+html body #adminPanel .admin-workspace.is-team-master {
+  --organization-card-width: 480px;
+  grid-template-columns: calc(var(--organization-card-width) + 52px);
+}
+
+html body #adminPanel .admin-workspace.is-team-master .master-inspector {
+  display: none;
+}
+
+html body #adminPanel .admin-workspace.is-team-master .master-table-pane {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html body #adminPanel .master-table-pane,
+html body #adminPanel .master-inspector {
+  overflow: hidden;
+}
+
+html body #adminPanel .admin-table-wrap,
+html body #adminPanel .master-inspector {
+  min-height: 0;
+  overflow: auto;
+}
+
+html body #adminPanel .team-browser .team-tree {
+  min-height: 0;
+  overflow: auto;
+}
+
+html body #adminPanel .organization-browser-v2 .organization-tree-v2 {
+  width: calc(var(--organization-card-width) + 28px);
+  min-width: calc(var(--organization-card-width) + 28px);
+  max-width: none;
+}
+
+html body #adminPanel .organization-browser-v2 .organization-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+html body #adminPanel .organization-browser-v2 .organization-tree-v2 > .organization-director-card,
+html body #adminPanel .organization-browser-v2 .organization-department-list > .organization-department-card {
+  width: var(--organization-card-width);
+  min-width: var(--organization-card-width);
+  max-width: var(--organization-card-width);
+}
+
+html body #adminPanel .organization-browser-v2 .organization-card-children > .organization-section-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+@media (max-width: 900px) {
+  html body #adminPanel .admin-workspace.is-team-master {
+    grid-template-columns: calc(var(--organization-card-width) + 52px);
+  }
+}
+
+html body #adminPanel .organization-user-table {
+  min-width: 1160px;
+  table-layout: fixed;
+}
+
+html body #adminPanel .organization-user-table th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: var(--table-header-bg);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+html body #adminPanel .admin-workspace.is-user-master .master-table-toolbar {
+  justify-content: flex-start;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+html body #adminPanel .admin-workspace.is-user-master .master-table-heading {
+  display: none;
+}
+
+html body #adminPanel .admin-workspace.is-user-master .master-table-tools {
+  width: 100%;
+  justify-content: space-between;
+}
+
+html body #adminPanel .admin-workspace.is-user-master :is(.master-table-pane, .master-inspector) {
+  box-shadow: none;
+}
+
+html body #adminPanel .admin-workspace.is-user-master .master-table-pane {
+  border: 0;
+  border-radius: 0;
+}
+
+html body #adminPanel .organization-user-table tbody tr:hover > td,
+html body #adminPanel .organization-user-table tbody tr.is-selected > td {
+  background: var(--org-active);
+}
+
+html body #adminPanel .organization-user-table tbody tr:has(.api-key-action:hover),
+html body #adminPanel .organization-user-table tbody tr:has(.api-key-action:hover) > td {
+  background: var(--org-surface);
+}
+
+html body #adminPanel .organization-user-table :is(th, td) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-user-table :is(th, td):nth-child(1) {
+  width: 120px;
+}
+
+html body #adminPanel .organization-user-table :is(th, td):nth-child(2) {
+  width: 190px;
+}
+
+html body #adminPanel .organization-user-table :is(th, td):nth-child(3) {
+  width: 130px;
+}
+
+html body #adminPanel .organization-user-table :is(th, td):nth-child(4) {
+  width: 105px;
+}
+
+html body #adminPanel .organization-user-table :is(th, td):nth-child(5) {
+  width: 105px;
+}
+
+html body #adminPanel .organization-user-table :is(th, td):nth-child(6) {
+  width: 190px;
+}
+
+html body #adminPanel .organization-user-table :is(th, td):nth-child(7) {
+  width: 225px;
+}
+
+@media (max-width: 900px) {
+  html body #adminPanel .admin-workspace {
+    grid-auto-rows: minmax(0, 1fr);
+  }
+
+  html body #adminPanel .team-browser {
+    min-height: 0;
+  }
+
+  html body #adminPanel .admin-workspace {
+    height: auto;
+    min-height: 0;
+  }
+
+  html body #adminPanel .master-table-pane {
+    overflow: hidden;
+  }
+
+  html body #adminPanel .master-inspector {
+    max-height: none;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  html body #adminPanel .user-editor-dialog {
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+
+  html body #adminPanel .user-editor-dialog-content {
+    max-height: calc(100dvh - 20px);
+  }
+
+  html body #adminPanel .user-editor-dialog-header,
+  html body #adminPanel .user-editor-dialog-form {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  html body #adminPanel .organization-user-table :is(th, td):is(
+    :nth-child(1),
+    :nth-child(4),
+    :nth-child(5)
+  ) {
+    display: table-cell;
+  }
+
+  html body #adminPanel .admin-table-wrap {
+    overflow-x: auto;
   }
 }

@@ -1,5 +1,5 @@
-// Common-data workbench. Comment permissions and display order are derived from
-// each team's ordered commenter list and the current team hierarchy.
+// Common-data workbench. Organization membership and comment assignments are
+// edited together and saved as one three-file transaction.
 (function () {
   const MASTER_DEFINITIONS = [
     {
@@ -10,15 +10,8 @@
       file: "user_master.csv",
       navFile: "user_master.csv",
       columns: [
-        { key: "employee_id", label: "社員ID", type: "text", required: true },
-        { key: "display_name", label: "表示名", type: "text", required: true },
-        {
-          key: "can_input_own_report",
-          label: "自分の日報入力",
-          type: "self_report_input",
-          required: true,
-          defaultValue: "1",
-        },
+        { key: "employee_id", label: "社員番号", type: "text", required: true },
+        { key: "display_name", label: "氏名", type: "text", required: true },
         {
           key: "employment_type",
           label: "雇用区分",
@@ -28,19 +21,33 @@
         },
         {
           key: "is_admin",
-          label: "管理者",
+          label: "権限",
           type: "admin_flag",
           required: false,
           defaultValue: "0",
         },
         {
-          key: "small_team_id",
-          label: "所属チーム",
-          type: "small_team",
-          required: false,
+          key: "affiliation_type",
+          label: "所属区分",
+          type: "affiliation_type",
+          required: true,
+          defaultValue: "organization",
         },
         {
-          key: "display_order",
+          key: "organization_id",
+          label: "所属組織",
+          type: "organization",
+          required: true,
+        },
+        {
+          key: "can_input_own_report",
+          label: "日報入力",
+          type: "self_report_input",
+          required: true,
+          defaultValue: "1",
+        },
+        {
+          key: "member_order",
           label: "表示順",
           type: "number",
           required: false,
@@ -56,36 +63,34 @@
       file: "team_master.csv",
       navFile: "team_master.csv",
       columns: [
-        { key: "team_id", label: "チームID", type: "text", required: true },
-        { key: "team_name", label: "チーム名", type: "text", required: true },
+        { key: "team_id", label: "組織ID", type: "number", required: true },
+        { key: "team_name", label: "組織名", type: "text", required: true },
         {
-          key: "team_level",
-          label: "階層",
-          type: "team_level",
+          key: "team_type",
+          label: "組織種別",
+          type: "team_type",
           required: true,
-          defaultValue: "small",
+          defaultValue: "section",
         },
         {
           key: "parent_team_id",
-          label: "親チーム",
-          type: "parent_team",
+          label: "親課",
+          type: "parent_department",
           required: false,
         },
         { key: "sort_order", label: "表示順", type: "number" },
-        {
-          key: "is_active",
-          label: "状態",
-          type: "active",
-          required: true,
-          defaultValue: "1",
-        },
-        {
-          key: "commenter_employee_ids",
-          label: "コメント担当者",
-          type: "text",
-          required: false,
-          table: false,
-        },
+      ],
+    },
+    {
+      key: "comment_assignment",
+      label: "コメント担当設定",
+      file: "comment_assignment.csv",
+      hidden: true,
+      columns: [
+        { key: "commenter_employee_id", label: "コメント担当者", type: "text", required: true },
+        { key: "target_type", label: "対象方式", type: "text", required: true, defaultValue: "none" },
+        { key: "target_organization_ids", label: "対象組織", type: "text" },
+        { key: "target_employee_ids", label: "対象ユーザー", type: "text" },
       ],
     },
     {
@@ -99,14 +104,30 @@
     },
   ];
 
+  const EMBEDDED_EDIT_ICON_PATH =
+    "M16.793 2.793a3.121 3.121 0 1 1 4.414 4.414l-8.5 8.5A1 1 0 0 1 12 16H9a1 1 0 0 1-1-1v-3a1 1 0 0 1 .293-.707l8.5-8.5Zm3 1.414a1.121 1.121 0 0 0-1.586 0L10 12.414V14h1.586l8.207-8.207a1.121 1.121 0 0 0 0-1.586ZM6 5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4a1 1 0 1 1 2 0v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h4a1 1 0 1 1 0 2H6Z";
+
   let isLoaded = false;
   let isLoading = false;
-  let activeMaster = "team_master";
-  let activeFiscalYear = fiscalYearForDate(new Date());
+  const MIN_FISCAL_YEAR = 2026;
+  let activeMaster = "user_master";
+  let activeFiscalYear = Math.max(
+    MIN_FISCAL_YEAR,
+    fiscalYearForDate(new Date()),
+  );
+  let calendarFocusDate = "";
+  let isChangingFiscalYear = false;
   let searchText = "";
   let nextRowId = 1;
   const drafts = new Map();
   const collapsedTeamIds = new Set();
+  const expandedOrganizationIds = new Set();
+  let organizationMigrationState = null;
+  let selectedOrganizationSpecial = "";
+  let userEditorModalState = null;
+  let teamEditorModalState = null;
+  let organizationDragState = null;
+  let organizationSortableInstances = [];
 
   const byId = (id) => document.getElementById(id);
   const getDefinition = (key = activeMaster) =>
@@ -118,17 +139,28 @@
     Boolean(draft) &&
     (Boolean(draft.migrationRequired) ||
       snapshot(valuesOnly(draft)) !== draft.originalSnapshot);
+  const hasDraftRowChanges = (draft) =>
+    Boolean(draft) && snapshot(valuesOnly(draft)) !== draft.originalSnapshot;
   const hasEditorChanges = (key = activeMaster) => {
-    if (key === "team_master") return isOrganizationAdministrationDirty();
-    const draft = drafts.get(key);
-    const rowsChanged =
-      Boolean(draft) && snapshot(valuesOnly(draft)) !== draft.originalSnapshot;
-    return rowsChanged;
+    if (key === "team_master") {
+      return ["user_master", "team_master", "comment_assignment"].some(
+        (draftKey) => hasDraftRowChanges(drafts.get(draftKey)),
+      );
+    }
+    if (key === "user_master") {
+      return ["user_master", "comment_assignment"].some((draftKey) =>
+        hasDraftRowChanges(drafts.get(draftKey)),
+      );
+    }
+    return hasDraftRowChanges(drafts.get(key));
   };
   const isUserAdministrationDirty = () =>
-    isDraftDirty(drafts.get("user_master"));
+    isDraftDirty(drafts.get("user_master")) ||
+    isDraftDirty(drafts.get("comment_assignment"));
   const isOrganizationAdministrationDirty = () =>
-    isUserAdministrationDirty() || isDraftDirty(drafts.get("team_master"));
+    isUserAdministrationDirty() ||
+    isDraftDirty(drafts.get("team_master")) ||
+    isDraftDirty(drafts.get("comment_assignment"));
   const isDefinitionDirty = (key) =>
     key === "user_master"
       ? isUserAdministrationDirty()
@@ -145,8 +177,137 @@
         ]),
       ),
     };
-    if (definition.key === "team_master") entry.values.is_active = "1";
     return entry;
+  }
+
+  function buildLegacyOrganizationCandidates(data, preview) {
+    const legacyTeams = Array.isArray(data.team_master) ? data.team_master : [];
+    const convertibleIds = new Set();
+    const departments = legacyTeams
+      .filter((team) => team.team_level === "large" && !team.parent_team_id)
+      .map((team) => {
+        convertibleIds.add(String(team.team_id || ""));
+        return {
+          team_id: String(team.team_id || ""),
+          team_name: String(team.team_name || ""),
+          team_type: "department",
+          parent_team_id: "",
+          sort_order: String(team.sort_order || ""),
+        };
+      });
+    const departmentIds = new Set(departments.map((team) => team.team_id));
+    const sections = legacyTeams
+      .filter(
+        (team) =>
+          team.team_level === "medium" &&
+          departmentIds.has(String(team.parent_team_id || "")),
+      )
+      .map((team) => {
+        convertibleIds.add(String(team.team_id || ""));
+        return {
+          team_id: String(team.team_id || ""),
+          team_name: String(team.team_name || ""),
+          team_type: "section",
+          parent_team_id: String(team.parent_team_id || ""),
+          sort_order: String(team.sort_order || ""),
+        };
+      });
+    const users = (Array.isArray(data.user_master) ? data.user_master : []).map(
+      (user) => {
+        const organizationId = String(user.small_team_id || "");
+        return {
+          employee_id: String(user.employee_id || ""),
+          display_name: String(user.display_name || ""),
+          can_input_own_report: String(user.can_input_own_report ?? "1"),
+          employment_type: String(user.employment_type || "regular"),
+          is_admin: String(user.is_admin || "0"),
+          affiliation_type: "organization",
+          organization_id: convertibleIds.has(organizationId) ? organizationId : "",
+          member_order: String(user.display_order || ""),
+        };
+      },
+    );
+    return {
+      rows: {
+        user_master: users,
+        team_master: [...departments, ...sections],
+        comment_assignment: users.map((user) => ({
+          commenter_employee_id: user.employee_id,
+          target_type: "none",
+          target_organization_ids: "",
+          target_employee_ids: "",
+        })),
+        calendar: Array.isArray(data.calendar) ? data.calendar : [],
+      },
+      ambiguousTeamIds: Array.isArray(preview.ambiguous_team_ids)
+        ? preview.ambiguous_team_ids
+        : [],
+      unresolvedEmployeeIds: users
+        .filter((user) => !user.organization_id)
+        .map((user) => user.employee_id),
+      legacyAssignments: legacyTeams
+        .filter(
+          (team) =>
+            String(team.commenter_employee_ids || "").trim() ||
+            String(team.target_employee_ids || "").trim(),
+        )
+        .map((team) => ({
+          teamName: String(team.team_name || team.team_id || "名称未設定"),
+          commenters: String(team.commenter_employee_ids || "") || "なし",
+          scope: String(team.commenter_scope || team.team_level || "不明"),
+          targets: String(team.target_employee_ids || "") || "組織範囲",
+        })),
+    };
+  }
+
+  function ensureAssignmentRows() {
+    const draft = drafts.get("comment_assignment");
+    const definition = getDefinition("comment_assignment");
+    const employeeIds = new Set(
+      (drafts.get("user_master")?.entries || []).map((entry) =>
+        valueFor(entry, "employee_id"),
+      ),
+    );
+    draft.entries = draft.entries.filter((entry) =>
+      employeeIds.has(valueFor(entry, "commenter_employee_id")),
+    );
+    const existing = new Set(
+      draft.entries.map((entry) => valueFor(entry, "commenter_employee_id")),
+    );
+    employeeIds.forEach((employeeId) => {
+      if (!employeeId || existing.has(employeeId)) return;
+      draft.entries.push(
+        createEntry(
+          {
+            commenter_employee_id: employeeId,
+            target_type: "none",
+            target_organization_ids: "",
+            target_employee_ids: "",
+          },
+          definition,
+          true,
+        ),
+      );
+    });
+  }
+
+  function normalizeAllMemberOrders() {
+    const groups = new Map();
+    (drafts.get("user_master")?.entries || []).forEach((entry) => {
+      const group =
+        valueFor(entry, "affiliation_type") === "director"
+          ? "director"
+          : valueFor(entry, "organization_id");
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group).push(entry);
+    });
+    groups.forEach((entries) => {
+      entries
+        .sort(compareUserListEntries)
+        .forEach((entry, index) => {
+          entry.values.member_order = String((index + 1) * 10);
+        });
+    });
   }
 
   function fiscalYearForDate(value) {
@@ -183,12 +344,6 @@
     return `${prefix}${target.getUTCMonth() + 1}月${target.getUTCDate()}日（${weekday}）`;
   }
 
-  function fiscalYearDayCount(fiscalYear) {
-    const start = Date.UTC(fiscalYear, 3, 1);
-    const end = Date.UTC(fiscalYear + 1, 3, 1);
-    return Math.round((end - start) / 86_400_000);
-  }
-
   function ensureFiscalYearEntries(fiscalYear = activeFiscalYear) {
     const definition = getDefinition("calendar");
     const draft = drafts.get("calendar");
@@ -222,18 +377,29 @@
     );
   }
 
+  function hasCalendarEntriesForFiscalYear(fiscalYear) {
+    const draft = drafts.get("calendar");
+    return Boolean(
+      draft?.entries.some((entry) => {
+        const date = calendarDate(valueFor(entry, "date"));
+        return date && fiscalYearForDate(date) === fiscalYear;
+      }),
+    );
+  }
+
   function createTeamId() {
-    if (typeof crypto?.randomUUID === "function") {
-      return `team_${crypto.randomUUID()}`;
-    }
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    return `team_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    const usedIds = new Set(
+      (drafts.get("team_master")?.entries || [])
+        .map((entry) => Number.parseInt(valueFor(entry, "team_id"), 10))
+        .filter((teamId) => Number.isSafeInteger(teamId) && teamId > 0),
+    );
+    let nextId = 1;
+    while (usedIds.has(nextId)) nextId += 1;
+    return String(nextId);
   }
 
   function initialize() {
     byId("adminReloadButton").addEventListener("click", reload);
-    byId("adminSaveButton").addEventListener("click", save);
     byId("adminAddRowButton").addEventListener("click", addRow);
     byId("adminSearchInput").addEventListener("input", (event) => {
       searchText = String(event.target.value || "").trim().toLocaleLowerCase("ja");
@@ -245,6 +411,10 @@
       if (button) selectMaster(button.dataset.master);
     });
     byId("adminTableWrap").addEventListener("click", (event) => {
+      if (event.target.closest("[data-save-editor]")) {
+        void save();
+        return;
+      }
       const fiscalYearButton = event.target.closest("[data-calendar-year-action]");
       if (fiscalYearButton) {
         changeFiscalYear(fiscalYearButton.dataset.calendarYearAction);
@@ -252,11 +422,17 @@
       }
       const calendarDay = event.target.closest("[data-calendar-date]");
       if (calendarDay) {
+        calendarFocusDate = calendarDay.dataset.calendarDate;
         toggleCalendarDay(calendarDay.dataset.calendarDate);
         return;
       }
       if (event.target.closest("[data-add-team-root]")) {
-        openTeamCreateDialog("large", "");
+        openTeamCreateDialog("department", "");
+        return;
+      }
+      const organizationToggle = event.target.closest("[data-organization-toggle]");
+      if (organizationToggle) {
+        toggleOrganizationSections(organizationToggle.dataset.organizationToggle);
         return;
       }
       const toggle = event.target.closest("[data-team-toggle]");
@@ -269,8 +445,31 @@
         setAllTeamsCollapsed(expandAction.dataset.teamExpandAction === "collapse");
         return;
       }
+      const userAction = event.target.closest("[data-user-row-action]");
+      if (userAction) {
+        if (userAction.dataset.userRowAction === "edit") {
+          openUserEditor(userAction.dataset.userId);
+        } else if (userAction.dataset.userRowAction === "delete") {
+          void deleteSelectedRow(userAction.dataset.userId);
+        }
+        return;
+      }
+      const organizationEdit = event.target.closest("[data-organization-edit]");
+      if (organizationEdit) {
+        if (organizationEdit.dataset.organizationEdit === "director") {
+          openDirectorEditor();
+        } else {
+          openTeamEditor(organizationEdit.dataset.organizationEdit);
+        }
+        return;
+      }
       const row = event.target.closest("[data-row-id]");
-      if (row) selectRow(row.dataset.rowId);
+      if (row) {
+        if (activeMaster !== "team_master" && activeMaster !== "user_master") {
+          selectRow(row.dataset.rowId);
+        }
+        return;
+      }
     });
     byId("adminTableWrap").addEventListener("input", (event) => {
       const search = event.target.closest("[data-team-search]");
@@ -285,66 +484,32 @@
       });
     });
     byId("adminTableWrap").addEventListener("keydown", (event) => {
+      if (handleCalendarGridKeydown(event)) return;
       if (!["Enter", " "].includes(event.key)) return;
+      if (
+        event.target.closest(
+          "[data-user-row-action], [data-organization-edit], [data-organization-toggle], [data-organization-drag-handle]",
+        )
+      ) return;
       const row = event.target.closest("[data-row-id]");
       if (!row) return;
       event.preventDefault();
-      selectRow(row.dataset.rowId);
+      if (activeMaster === "user_master") openUserEditor(row.dataset.rowId);
+      else if (activeMaster === "team_master") return;
+      else selectRow(row.dataset.rowId);
     });
-    byId("adminInspectorForm").addEventListener("input", (event) => {
-      updateSelectedRow(event);
+    byId("adminTableWrap").addEventListener("focusin", (event) => {
+      const calendarDay = event.target.closest("[data-calendar-date]");
+      if (!calendarDay) return;
+      calendarFocusDate = calendarDay.dataset.calendarDate;
+      syncCalendarRovingTabindex(calendarFocusDate);
     });
-    byId("adminInspectorForm").addEventListener("change", (event) => {
-      const assignment = event.target.closest("[data-team-assignment-select]");
-      if (assignment) {
-        setTeamAssignment(
-          assignment.dataset.assignmentKind,
-          assignment.dataset.teamId,
-          assignment.value,
-          true,
-        );
-        return;
-      }
-      updateSelectedRow(event);
-    });
-    byId("adminInspectorForm").addEventListener("click", (event) => {
-      if (event.target.closest("[data-save-editor]")) save();
-      if (event.target.closest("[data-delete-row]")) void deleteSelectedRow();
-      const memberMove = event.target.closest("[data-member-move]");
-      if (memberMove) {
-        moveSelectedMember(
-          memberMove.dataset.memberId,
-          memberMove.dataset.memberMove,
-        );
-        return;
-      }
-      const commenterMove = event.target.closest("[data-commenter-move]");
-      if (commenterMove) {
-        moveSelectedCommenter(
-          commenterMove.dataset.employeeId,
-          commenterMove.dataset.commenterMove,
-        );
-        return;
-      }
-      const assignmentRemove = event.target.closest("[data-team-assignment-remove]");
-      if (assignmentRemove) {
-        setTeamAssignment(
-          assignmentRemove.dataset.assignmentKind,
-          assignmentRemove.dataset.teamId,
-          assignmentRemove.dataset.employeeId,
-          false,
-        );
-        return;
-      }
-      const addTeamButton = event.target.closest("[data-add-child-level]");
-      if (addTeamButton) {
-        openTeamCreateDialog(
-          addTeamButton.dataset.addChildLevel,
-          addTeamButton.dataset.parentTeamId,
-        );
-      }
-      const moveButton = event.target.closest("[data-move-team]");
-      if (moveButton) moveSelectedTeam(moveButton.dataset.moveTeam);
+    ["adminInspectorForm", "userEditorDialogForm", "teamEditorDialogForm"].forEach((formId) => {
+      const form = byId(formId);
+      if (!form) return;
+      form.addEventListener("input", handleInspectorInput);
+      form.addEventListener("change", handleInspectorChange);
+      form.addEventListener("click", handleInspectorClick);
     });
     byId("teamCreateForm").addEventListener("submit", submitTeamCreateDialog);
     byId("teamCreateLevel").addEventListener("change", () => {
@@ -360,6 +525,149 @@
     byId("teamCreateDialog").addEventListener("click", (event) => {
       if (event.target === event.currentTarget) closeTeamCreateDialog();
     });
+    byId("userEditorDialog").addEventListener("cancel", (event) => {
+      event.preventDefault();
+    });
+    byId("teamEditorDialog").addEventListener("cancel", (event) => {
+      event.preventDefault();
+    });
+  }
+
+  function handleInspectorInput(event) {
+    updateSelectedRow(event);
+  }
+
+  function handleInspectorChange(event) {
+    const affiliation = event.target.closest("[data-user-affiliation]");
+    if (affiliation) {
+      void changeUserAffiliation(affiliation.value);
+      return;
+    }
+    const assignmentType = event.target.closest("[data-comment-target-type]");
+    if (assignmentType) {
+      updateCommentTargetType(assignmentType.value);
+      return;
+    }
+    const assignmentOrganization = event.target.closest(
+      "[data-comment-target-organization]",
+    );
+    if (assignmentOrganization) {
+      const assignment = assignmentEntryForSelectedUser(true);
+      assignment.values.target_organization_ids = assignmentOrganization.value;
+      assignment.values.target_employee_ids = "";
+      renderInspector();
+      syncAdminChrome();
+      return;
+    }
+    const assignmentTarget = event.target.closest("[data-comment-target-employee]");
+    if (assignmentTarget) {
+      toggleAssignmentListValue(
+        "target_employee_ids",
+        assignmentTarget.value,
+        assignmentTarget.checked,
+      );
+      return;
+    }
+    const assignmentDepartment = event.target.closest("[data-comment-target-department]");
+    if (assignmentDepartment) {
+      toggleAssignmentListValue(
+        "target_organization_ids",
+        assignmentDepartment.value,
+        assignmentDepartment.checked,
+      );
+      return;
+    }
+    const moveToGroup = event.target.closest("[data-move-user-affiliation]");
+    if (moveToGroup && moveToGroup.value) {
+      void moveUserToAffiliation(
+        moveToGroup.dataset.employeeId,
+        moveToGroup.value,
+      );
+      return;
+    }
+    const addMember = event.target.closest("[data-add-organization-member]");
+    if (addMember && addMember.value) {
+      void moveUserToAffiliation(addMember.value, addMember.dataset.destination);
+      return;
+    }
+    const assignment = event.target.closest("[data-team-assignment-select]");
+    if (assignment) {
+      setTeamAssignment(
+        assignment.dataset.assignmentKind,
+        assignment.dataset.teamId,
+        assignment.value,
+        true,
+      );
+      return;
+    }
+    updateSelectedRow(event);
+  }
+
+  function handleInspectorClick(event) {
+    const isUserEditorModal = event.currentTarget?.id === "userEditorDialogForm";
+    const isTeamEditorModal = event.currentTarget?.id === "teamEditorDialogForm";
+    if (event.target.closest("[data-user-editor-cancel]")) {
+      closeUserEditorModal(true);
+      return;
+    }
+    if (event.target.closest("[data-team-editor-cancel]")) {
+      closeTeamEditorModal(true);
+      return;
+    }
+    if (event.target.closest("[data-save-editor]")) {
+      if (isUserEditorModal) void saveUserEditor();
+      else if (isTeamEditorModal) void saveTeamEditor();
+      else void save();
+      return;
+    }
+    if (event.target.closest("[data-delete-row]")) {
+      void deleteSelectedRow();
+      return;
+    }
+    const organizationMemberMove = event.target.closest("[data-organization-member-move]");
+    if (organizationMemberMove) {
+      moveOrganizationMember(
+        organizationMemberMove.dataset.employeeId,
+        organizationMemberMove.dataset.organizationMemberMove,
+      );
+      return;
+    }
+    const memberMove = event.target.closest("[data-member-move]");
+    if (memberMove) {
+      moveSelectedMember(
+        memberMove.dataset.memberId,
+        memberMove.dataset.memberMove,
+      );
+      return;
+    }
+    const commenterMove = event.target.closest("[data-commenter-move]");
+    if (commenterMove) {
+      moveSelectedCommenter(
+        commenterMove.dataset.employeeId,
+        commenterMove.dataset.commenterMove,
+      );
+      return;
+    }
+    const assignmentRemove = event.target.closest("[data-team-assignment-remove]");
+    if (assignmentRemove) {
+      setTeamAssignment(
+        assignmentRemove.dataset.assignmentKind,
+        assignmentRemove.dataset.teamId,
+        assignmentRemove.dataset.employeeId,
+        false,
+      );
+      return;
+    }
+    const addTeamButton = event.target.closest("[data-add-child-level]");
+    if (addTeamButton) {
+      openTeamCreateDialog(
+        addTeamButton.dataset.addChildLevel,
+        addTeamButton.dataset.parentTeamId,
+      );
+      return;
+    }
+    const moveButton = event.target.closest("[data-move-team]");
+    if (moveButton) moveSelectedTeam(moveButton.dataset.moveTeam);
   }
 
   async function ensureLoaded() {
@@ -371,7 +679,7 @@
     const api = window.pywebview?.api;
     if (typeof api?.load_common_masters !== "function") {
       notify({
-        text: "共通マスターの読み込み機能を利用できません。",
+        text: "管理の読み込み機能を利用できません。",
         type: "error",
       });
       return;
@@ -384,7 +692,7 @@
       const result = await api.load_common_masters();
       if (!result?.ok) {
         notify({
-          text: result?.message || "共通マスターを読み込めませんでした。",
+          text: result?.message || "管理を読み込めませんでした。",
           type: "error",
         });
         return;
@@ -392,9 +700,16 @@
 
       drafts.clear();
       collapsedTeamIds.clear();
+      expandedOrganizationIds.clear();
+      const schemaMode = result.data?.organization_schema?.[0]?.mode || "new";
+      organizationMigrationState =
+        schemaMode === "legacy"
+          ? buildLegacyOrganizationCandidates(result.data || {}, result.migration_preview || {})
+          : null;
+      const organizationRows = organizationMigrationState?.rows || result.data || {};
       MASTER_DEFINITIONS.forEach((definition) => {
-        const rows = Array.isArray(result.data?.[definition.key])
-          ? result.data[definition.key]
+        const rows = Array.isArray(organizationRows?.[definition.key])
+          ? organizationRows[definition.key]
           : [];
         const entries = rows.map((row) =>
           createEntry(row, definition, false),
@@ -404,12 +719,20 @@
           originalSnapshot: snapshot(entries.map((entry) => entry.values)),
           revision: String(result.revisions?.[definition.key] || ""),
           migrationRequired: Boolean(
-            result.migration_required?.[definition.key],
+            result.migration_required?.[definition.key] ||
+              (organizationMigrationState && definition.key !== "calendar"),
           ),
           selectedId: "",
         });
       });
-      if (activeMaster === "calendar") ensureFiscalYearEntries();
+      const calendarDraft = drafts.get("calendar");
+      if (calendarDraft?.entries.length === 0) {
+        activeFiscalYear = Math.max(
+          MIN_FISCAL_YEAR,
+          fiscalYearForDate(new Date()),
+        );
+        ensureFiscalYearEntries(activeFiscalYear);
+      }
       isLoaded = true;
       searchText = "";
       byId("adminLoading").classList.add("hidden");
@@ -427,7 +750,7 @@
       const confirmed = await requestConfirmationDialog({
         title: "未保存の変更があります",
         description:
-          "共通マスターを再読み込みすると、保存していない変更は失われます。",
+          "管理を再読み込みすると、保存していない変更は失われます。",
         confirmLabel: "破棄して再読み込み",
         cancelLabel: "このまま編集を続ける",
         confirmTone: "danger",
@@ -438,31 +761,40 @@
     await load();
   }
 
-  async function save() {
-    if (!hasUnsaved()) return true;
+  async function save(targetMaster = activeMaster) {
+    const saveAdministration = ["user_master", "team_master", "comment_assignment"].includes(targetMaster);
+    const saveCalendar = targetMaster === "calendar";
+    const targetIsDirty = saveAdministration
+      ? isOrganizationAdministrationDirty()
+      : saveCalendar && isDraftDirty(drafts.get("calendar"));
+    if (!targetIsDirty) return true;
     if (isLoading) return false;
     const api = window.pywebview?.api;
     setBusy(true, "admin-save");
     try {
       const userDraft = drafts.get("user_master");
       const teamDraft = drafts.get("team_master");
-      const teamDirty = isDraftDirty(teamDraft);
-      const userDirty = isDraftDirty(userDraft);
-      if (teamDirty || userDirty) {
+      const assignmentDraft = drafts.get("comment_assignment");
+      const teamDirty = saveAdministration && isDraftDirty(teamDraft);
+      const userDirty = saveAdministration && isDraftDirty(userDraft);
+      const assignmentDirty = saveAdministration && isDraftDirty(assignmentDraft);
+      if (teamDirty || userDirty || assignmentDirty) {
         if (typeof api?.save_user_administration !== "function") {
           throw new Error("ユーザー管理の保存機能を利用できません。");
         }
-        if (teamDirty) normalizeAllTeamOrders();
+        normalizeAllTeamOrders();
+        normalizeAllMemberOrders();
+        ensureAssignmentRows();
         const payload = {
           users: valuesOnly(userDraft),
+          teams: valuesOnly(teamDraft),
+          comment_assignments: valuesOnly(assignmentDraft),
           revisions: {
             user_master: userDraft.revision,
+            team_master: teamDraft.revision,
+            comment_assignment: assignmentDraft.revision,
           },
         };
-        if (teamDirty) {
-          payload.teams = valuesOnly(teamDraft);
-          payload.revisions.team_master = teamDraft.revision;
-        }
         const result = await api.save_user_administration(payload);
         if (!result?.ok) {
           notify({
@@ -473,7 +805,7 @@
           });
           return false;
         }
-        if (userDirty || teamDirty) {
+        if (userDirty || teamDirty || assignmentDirty) {
           userDraft.originalSnapshot = snapshot(valuesOnly(userDraft));
           userDraft.migrationRequired = false;
           userDraft.revision = String(
@@ -483,19 +815,29 @@
             entry.isNew = false;
           });
         }
-        if (teamDirty) {
+        if (userDirty || teamDirty || assignmentDirty) {
           teamDraft.originalSnapshot = snapshot(valuesOnly(teamDraft));
+          teamDraft.migrationRequired = false;
           teamDraft.revision = String(
             result.revisions?.team_master || teamDraft.revision,
           );
           teamDraft.entries.forEach((entry) => {
             entry.isNew = false;
           });
+          assignmentDraft.originalSnapshot = snapshot(valuesOnly(assignmentDraft));
+          assignmentDraft.migrationRequired = false;
+          assignmentDraft.revision = String(
+            result.revisions?.comment_assignment || assignmentDraft.revision,
+          );
+          assignmentDraft.entries.forEach((entry) => {
+            entry.isNew = false;
+          });
+          organizationMigrationState = null;
         }
       }
 
       const calendarDraft = drafts.get("calendar");
-      if (isDraftDirty(calendarDraft)) {
+      if (saveCalendar && isDraftDirty(calendarDraft)) {
         const result = await api.save_common_master({
           master: "calendar",
           rows: valuesOnly(calendarDraft),
@@ -525,7 +867,7 @@
     } catch (error) {
       notify({
         text:
-          error?.message || "共通マスターの保存中にエラーが発生しました。",
+          error?.message || "管理の保存中にエラーが発生しました。",
         type: "error",
       });
       return false;
@@ -546,7 +888,6 @@
     }
     activeMaster = key;
     searchText = "";
-    if (activeMaster === "calendar") ensureFiscalYearEntries();
     render();
   }
 
@@ -562,16 +903,194 @@
       return;
     }
     draft.selectedId = rowId;
+    selectedOrganizationSpecial = "";
     renderTable();
     renderInspector();
     syncAdminChrome();
   }
 
-  function changeFiscalYear(direction) {
+  function captureUserEditorSnapshot() {
+    return ["user_master", "team_master", "comment_assignment"].map((key) => {
+      const draft = drafts.get(key);
+      return {
+        key,
+        selectedId: draft?.selectedId || "",
+        entries: (draft?.entries || []).map((entry) => ({
+          entry,
+          values: { ...entry.values },
+          isNew: entry.isNew,
+        })),
+      };
+    });
+  }
+
+  function restoreUserEditorSnapshot(snapshotState) {
+    snapshotState.forEach(({ key, selectedId, entries }) => {
+      const draft = drafts.get(key);
+      if (!draft) return;
+      entries.forEach(({ entry, values, isNew }) => {
+        entry.values = { ...values };
+        entry.isNew = isNew;
+      });
+      draft.entries = entries.map(({ entry }) => entry);
+      draft.selectedId = selectedId;
+    });
+  }
+
+  function openUserEditor(rowId, previousSnapshot = null) {
+    if (userEditorModalState) return;
+    const draft = drafts.get("user_master");
+    const entry = draft?.entries.find((item) => item.id === rowId);
+    if (!entry) return;
+    userEditorModalState = {
+      entryId: rowId,
+      snapshot: previousSnapshot || captureUserEditorSnapshot(),
+    };
+    draft.selectedId = rowId;
+    selectedOrganizationSpecial = "";
+    render();
+    const dialog = byId("userEditorDialog");
+    if (typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+    else dialog.setAttribute("open", "");
+    requestAnimationFrame(() => {
+      byId("userEditorDialogForm")
+        ?.querySelector("input:not(:disabled), select")
+        ?.focus();
+    });
+  }
+
+  function closeUserEditorModal(discard = true) {
+    const state = userEditorModalState;
+    if (!state) return;
+    if (discard) restoreUserEditorSnapshot(state.snapshot);
+    else {
+      const draft = drafts.get("user_master");
+      if (draft?.selectedId === state.entryId) draft.selectedId = "";
+    }
+    userEditorModalState = null;
+    const dialog = byId("userEditorDialog");
+    if (typeof dialog.close === "function" && dialog.open) dialog.close();
+    else dialog.removeAttribute("open");
+    byId("userEditorDialogForm")?.replaceChildren();
+    render();
+  }
+
+  async function saveUserEditor() {
+    if (!userEditorModalState || isLoading) return;
+    const saved = await save("user_master");
+    if (saved) closeUserEditorModal(false);
+  }
+
+  function openTeamEditor(rowId) {
+    if (teamEditorModalState || userEditorModalState) return;
+    const draft = drafts.get("team_master");
+    const entry = draft?.entries.find((item) => item.id === rowId);
+    if (!entry) return;
+    teamEditorModalState = {
+      kind: "team",
+      entryId: rowId,
+      snapshot: captureUserEditorSnapshot(),
+    };
+    draft.selectedId = rowId;
+    selectedOrganizationSpecial = "";
+    render();
+    const dialog = byId("teamEditorDialog");
+    if (typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+    else dialog.setAttribute("open", "");
+    requestAnimationFrame(() => {
+      byId("teamEditorDialogForm")
+        ?.querySelector("input:not(:disabled), select")
+        ?.focus();
+    });
+  }
+
+  function openDirectorEditor() {
+    if (teamEditorModalState || userEditorModalState) return;
+    if (!drafts.get("team_master")) return;
+    teamEditorModalState = {
+      kind: "director",
+      entryId: "",
+      snapshot: captureUserEditorSnapshot(),
+    };
+    const draft = drafts.get("team_master");
+    if (draft) draft.selectedId = "";
+    selectedOrganizationSpecial = "director";
+    render();
+    const dialog = byId("teamEditorDialog");
+    if (typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+    else dialog.setAttribute("open", "");
+    requestAnimationFrame(() => {
+      byId("teamEditorDialogForm")
+        ?.querySelector("input:not(:disabled), select")
+        ?.focus();
+    });
+  }
+
+  function renderTeamEditorDialog() {
+    const state = teamEditorModalState;
+    const form = byId("teamEditorDialogForm");
+    if (!state || !form) return;
+    form.replaceChildren();
+    if (state.kind === "director") {
+      byId("teamEditorDialogTitle").textContent = "部長を編集";
+      renderOrganizationMembersInspector(form, "director", "", null, true, { modal: true });
+      return;
+    }
+    const entry = drafts
+      .get("team_master")
+      ?.entries.find((item) => item.id === state?.entryId);
+    if (!entry || !form) return;
+    byId("teamEditorDialogTitle").textContent = "組織を編集";
+    renderOrganizationInspector(form, entry, { modal: true });
+  }
+
+  function closeTeamEditorModal(discard = true) {
+    const state = teamEditorModalState;
+    if (!state) return;
+    if (discard) restoreUserEditorSnapshot(state.snapshot);
+    else {
+      const draft = drafts.get("team_master");
+      if (draft?.selectedId === state.entryId) draft.selectedId = "";
+    }
+    selectedOrganizationSpecial = "";
+    teamEditorModalState = null;
+    const dialog = byId("teamEditorDialog");
+    if (typeof dialog.close === "function" && dialog.open) dialog.close();
+    else dialog.removeAttribute("open");
+    byId("teamEditorDialogForm")?.replaceChildren();
+    render();
+  }
+
+  async function saveTeamEditor() {
+    if (!teamEditorModalState || isLoading) return;
+    const saved = await save("team_master");
+    if (saved) closeTeamEditorModal(false);
+  }
+
+  async function changeFiscalYear(direction) {
     if (![-1, 1].includes(Number(direction))) return;
-    activeFiscalYear += Number(direction);
-    ensureFiscalYearEntries();
+    if (isChangingFiscalYear) return;
+    const targetFiscalYear = activeFiscalYear + Number(direction);
+    if (targetFiscalYear < MIN_FISCAL_YEAR) return;
     const draft = drafts.get("calendar");
+    if (!draft) return;
+    if (!hasCalendarEntriesForFiscalYear(targetFiscalYear)) {
+      isChangingFiscalYear = true;
+      try {
+        const confirmed = await requestConfirmationDialog({
+          title: `${targetFiscalYear}年度のカレンダーを作りますか？`,
+          description: `${targetFiscalYear}年度の土日を休日として作成します。`,
+          confirmLabel: "作成する",
+          cancelLabel: "キャンセル",
+        });
+        if (!confirmed) return;
+        ensureFiscalYearEntries(targetFiscalYear);
+      } finally {
+        isChangingFiscalYear = false;
+      }
+    }
+    activeFiscalYear = targetFiscalYear;
+    calendarFocusDate = "";
     const selectedDate = valueFor(
       draft?.entries.find((entry) => entry.id === draft.selectedId),
       "date",
@@ -585,7 +1104,13 @@
   function toggleCalendarDay(dateText) {
     const draft = drafts.get("calendar");
     const definition = getDefinition("calendar");
-    if (!draft || !definition || !calendarDate(dateText)) return;
+    const date = calendarDate(dateText);
+    if (
+      !draft ||
+      !definition ||
+      !date ||
+      fiscalYearForDate(date) < MIN_FISCAL_YEAR
+    ) return;
     const index = draft.entries.findIndex(
       (entry) => valueFor(entry, "date") === dateText,
     );
@@ -601,6 +1126,85 @@
     renderMasterNav();
     renderTable();
     syncAdminChrome();
+    requestAnimationFrame(() => focusCalendarDate(dateText));
+  }
+
+  function handleCalendarGridKeydown(event) {
+    const current = event.target.closest(".fiscal-calendar-day[data-calendar-date]");
+    if (!current || event.altKey || event.metaKey) return false;
+    const currentDate = current.dataset.calendarDate;
+    const parsed = calendarDate(currentDate);
+    if (!parsed) return false;
+
+    let targetDate = "";
+    if (event.key === "ArrowLeft") targetDate = offsetCalendarDate(currentDate, -1);
+    else if (event.key === "ArrowRight") targetDate = offsetCalendarDate(currentDate, 1);
+    else if (event.key === "ArrowUp") targetDate = offsetCalendarDate(currentDate, -7);
+    else if (event.key === "ArrowDown") targetDate = offsetCalendarDate(currentDate, 7);
+    else if (event.key === "Home") {
+      targetDate = offsetCalendarDate(currentDate, -parsed.getUTCDay());
+    } else if (event.key === "End") {
+      targetDate = offsetCalendarDate(currentDate, 6 - parsed.getUTCDay());
+    } else if (event.key === "PageUp") {
+      targetDate = offsetCalendarMonth(currentDate, -1);
+    } else if (event.key === "PageDown") {
+      targetDate = offsetCalendarMonth(currentDate, 1);
+    } else {
+      return false;
+    }
+
+    event.preventDefault();
+    const target = findCalendarDayButton(targetDate);
+    if (!target) return true;
+    calendarFocusDate = targetDate;
+    syncCalendarRovingTabindex(targetDate);
+    target.focus({ preventScroll: false });
+    return true;
+  }
+
+  function offsetCalendarDate(dateText, dayOffset) {
+    const target = calendarDate(dateText);
+    if (!target) return "";
+    target.setUTCDate(target.getUTCDate() + dayOffset);
+    return calendarIsoDate(
+      target.getUTCFullYear(),
+      target.getUTCMonth(),
+      target.getUTCDate(),
+    );
+  }
+
+  function offsetCalendarMonth(dateText, monthOffset) {
+    const parts = calendarDateParts(dateText);
+    if (!parts) return "";
+    const first = new Date(Date.UTC(parts.year, parts.monthIndex + monthOffset, 1));
+    const lastDay = new Date(
+      Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0),
+    ).getUTCDate();
+    return calendarIsoDate(
+      first.getUTCFullYear(),
+      first.getUTCMonth(),
+      Math.min(parts.day, lastDay),
+    );
+  }
+
+  function findCalendarDayButton(dateText) {
+    return [...document.querySelectorAll(".fiscal-calendar-day[data-calendar-date]")]
+      .find((button) => button.dataset.calendarDate === dateText) || null;
+  }
+
+  function syncCalendarRovingTabindex(dateText) {
+    document
+      .querySelectorAll(".fiscal-calendar-day[data-calendar-date]")
+      .forEach((button) => {
+        button.tabIndex = button.dataset.calendarDate === dateText ? 0 : -1;
+      });
+  }
+
+  function focusCalendarDate(dateText) {
+    const target = findCalendarDayButton(dateText);
+    if (!target) return;
+    syncCalendarRovingTabindex(dateText);
+    target.focus({ preventScroll: true });
   }
 
   function toggleTeam(teamId) {
@@ -622,21 +1226,34 @@
     renderTable();
   }
 
+  function toggleOrganizationSections(teamId) {
+    if (!teamId) return;
+    if (expandedOrganizationIds.has(teamId)) expandedOrganizationIds.delete(teamId);
+    else expandedOrganizationIds.add(teamId);
+    renderTable();
+  }
+
   function addRow() {
     if (hasEditorChanges(activeMaster)) {
       notify({ text: "現在の編集内容を保存してから追加してください。", type: "warning" });
       return;
     }
     if (activeMaster === "team_master") {
-      openTeamCreateDialog("large", "");
+      openTeamCreateDialog("department", "");
       return;
     }
     const definition = getDefinition();
     const draft = getDraft();
+    const snapshotState =
+      activeMaster === "user_master" ? captureUserEditorSnapshot() : null;
     const entry = createEntry({}, definition, true);
     draft.entries.push(entry);
     draft.selectedId = entry.id;
     searchText = "";
+    if (activeMaster === "user_master") {
+      openUserEditor(entry.id, snapshotState);
+      return;
+    }
     render();
     requestAnimationFrame(() => {
       byId("adminInspectorForm")
@@ -648,7 +1265,7 @@
   function addTeam(level, parentTeamId = "", teamName = "") {
     const definition = getDefinition("team_master");
     const draft = drafts.get("team_master");
-    if (!definition || !draft || !["large", "medium", "small"].includes(level)) return;
+    if (!definition || !draft || !["department", "section"].includes(level)) return;
     if (hasEditorChanges("team_master")) {
       notify({ text: "現在の編集内容を保存してから追加してください。", type: "warning" });
       return;
@@ -657,44 +1274,43 @@
       (entry) => valueFor(entry, "team_id") === parentTeamId,
     );
     const validParent =
-      level === "large"
+      level === "department"
         ? !parentTeamId
         : Boolean(parentTeamId) &&
-          ((level === "medium" && valueFor(parent, "team_level") === "large") ||
-            (level === "small" && ["large", "medium"].includes(valueFor(parent, "team_level"))));
-    if (level === "large" && parentTeamId) return;
+          level === "section" && valueFor(parent, "team_type") === "department";
+    if (level === "department" && parentTeamId) return;
     if (!validParent) return;
+    const snapshotState = captureUserEditorSnapshot();
 
     const entry = createEntry(
       {
         team_id: createTeamId(),
         team_name: String(teamName).trim(),
-        team_level: level,
+        team_type: level,
         parent_team_id: parentTeamId,
         sort_order: String(nextSiblingOrder(parentTeamId)),
-        is_active: "1",
       },
       definition,
       true,
     );
     draft.entries.push(entry);
     draft.selectedId = entry.id;
-    if (parentTeamId) collapsedTeamIds.delete(parentTeamId);
+    if (parentTeamId) expandedOrganizationIds.add(parentTeamId);
     searchText = "";
-    render();
-    requestAnimationFrame(() => {
-      byId("adminInspectorForm").querySelector('[data-column="team_name"]')?.focus();
-    });
+    openTeamEditor(entry.id, snapshotState);
   }
 
-  function openTeamCreateDialog(level = "large", parentTeamId = "") {
+  function openTeamCreateDialog(level = "department", parentTeamId = "") {
     if (hasEditorChanges("team_master")) {
       notify({ text: "現在の編集内容を保存してから追加してください。", type: "warning" });
       return;
     }
+    if (teamEditorModalState) closeTeamEditorModal(false);
     const dialog = byId("teamCreateDialog");
     const levelInput = byId("teamCreateLevel");
-    levelInput.value = ["large", "medium", "small"].includes(level) ? level : "large";
+    levelInput.value = ["department", "section"].includes(level)
+      ? level
+      : "department";
     byId("teamCreateName").value = "";
     byId("teamCreateError").textContent = "";
     renderTeamCreateParentChoices(parentTeamId);
@@ -720,8 +1336,8 @@
     const level = byId("teamCreateLevel").value;
     const parentTeamId = byId("teamCreateParent").value;
     const teamName = byId("teamCreateName").value.trim();
-    if (level !== "large" && !teamEntryFor(parentTeamId)) {
-      byId("teamCreateError").textContent = "親チームを選択してください。";
+    if (level !== "department" && !teamEntryFor(parentTeamId)) {
+      byId("teamCreateError").textContent = "親課を選択してください。";
       return;
     }
     closeTeamCreateDialog();
@@ -732,10 +1348,9 @@
     const level = byId("teamCreateLevel").value;
     const parentSelect = byId("teamCreateParent");
     const currentParentId = preferredParentId ?? parentSelect.value;
-    const parentLevels =
-      level === "medium" ? ["large"] : level === "small" ? ["large", "medium"] : [];
+    const parentLevels = level === "section" ? ["department"] : [];
     const choices =
-      level === "large"
+      level === "department"
         ? [["", "組織直下"]]
         : [["", "親チームを選択してください"], ...teamParentChoices(parentLevels, "")];
     parentSelect.replaceChildren();
@@ -748,8 +1363,8 @@
     parentSelect.value = choices.some(([value]) => value === currentParentId)
       ? currentParentId
       : "";
-    parentSelect.disabled = level === "large";
-    parentSelect.required = level !== "large";
+    parentSelect.disabled = level === "department";
+    parentSelect.required = level !== "department";
     updateTeamCreateDialogState();
   }
 
@@ -762,7 +1377,7 @@
     byId("teamCreateBreadcrumb").textContent =
       `${parentLabel} ＞ ${teamName || "新しいチーム"}`;
     byId("confirmTeamCreateButton").disabled =
-      !teamName || (level !== "large" && !parent);
+      !teamName || (level !== "department" && !parent);
   }
 
   function nextSiblingOrder(parentTeamId, excludedEntryId = "") {
@@ -795,13 +1410,30 @@
     parentIds.forEach(normalizeSiblingOrders);
   }
 
-  async function deleteSelectedRow() {
+  async function deleteSelectedRow(rowId = "") {
     const draft = getDraft();
+    const targetId = rowId || draft.selectedId;
     const index = draft.entries.findIndex(
-      (entry) => entry.id === draft.selectedId,
+      (entry) => entry.id === targetId,
     );
     if (index < 0) return;
     const entry = draft.entries[index];
+    const relatedDraftSnapshots = [
+      "user_master",
+      "team_master",
+      "comment_assignment",
+    ].map((key) => {
+      const relatedDraft = drafts.get(key);
+      return {
+        key,
+        selectedId: relatedDraft?.selectedId || "",
+        entries: (relatedDraft?.entries || []).map((item) => ({
+          entry: item,
+          values: { ...item.values },
+          isNew: item.isNew,
+        })),
+      };
+    });
     if (activeMaster === "team_master") {
       const teamId = valueFor(entry, "team_id");
       const hasChildren = draft.entries.some(
@@ -809,15 +1441,18 @@
       );
       const hasMembers = drafts
         .get("user_master")
-        ?.entries.some((user) => valueFor(user, "small_team_id") === teamId);
-      const isManaged = teamCommenterIds(entry).length > 0;
-      if (hasChildren || hasMembers || isManaged) {
+        ?.entries.some((user) => valueFor(user, "organization_id") === teamId);
+      const isReferenced = (drafts.get("comment_assignment")?.entries || []).some(
+        (assignment) =>
+          splitIds(valueFor(assignment, "target_organization_ids")).includes(teamId),
+      );
+      if (hasChildren || hasMembers || isReferenced) {
         notify({
           text: hasChildren
             ? "下位チームが残っています。先に下位チームを移動または削除してください。"
             : hasMembers
               ? "所属ユーザーが残っています。先にユーザーの所属を変更してください。"
-              : "コメント対象組織に設定されています。先にユーザー設定を変更してください。",
+              : "コメント対象の設定から参照されています。先にユーザー管理で対象を変更してください。",
           type: "error",
         });
         return;
@@ -833,28 +1468,48 @@
       confirmTone: "danger",
     });
     if (!confirmed) return;
-    const commenterSnapshots = [];
+    if (teamEditorModalState) closeTeamEditorModal(false);
+    if (activeMaster === "team_master") {
+      expandedOrganizationIds.delete(valueFor(entry, "team_id"));
+    }
     if (activeMaster === "user_master") {
       const employeeId = valueFor(entry, "employee_id");
-      (drafts.get("team_master")?.entries || []).forEach((team) => {
-        const commenterIds = teamCommenterIds(team);
-        if (!commenterIds.includes(employeeId)) return;
-        commenterSnapshots.push([team, valueFor(team, "commenter_employee_ids")]);
-        team.values.commenter_employee_ids = commenterIds
-          .filter((commenterId) => commenterId !== employeeId)
+      (drafts.get("comment_assignment")?.entries || []).forEach((assignment) => {
+        if (valueFor(assignment, "commenter_employee_id") === employeeId) {
+          return;
+        }
+        assignment.values.target_employee_ids = splitIds(
+          valueFor(assignment, "target_employee_ids"),
+        )
+          .filter((targetId) => targetId !== employeeId)
           .join(";");
+        if (
+          valueFor(assignment, "target_type") === "custom" &&
+          !assignment.values.target_employee_ids
+        ) {
+          assignment.values.target_type = "none";
+        }
       });
+      const assignmentDraft = drafts.get("comment_assignment");
+      assignmentDraft.entries = assignmentDraft.entries.filter(
+        (assignment) => valueFor(assignment, "commenter_employee_id") !== employeeId,
+      );
     }
     draft.entries.splice(index, 1);
     draft.selectedId = "";
     render();
     const saved = await save();
     if (!saved) {
-      draft.entries.splice(index, 0, entry);
-      commenterSnapshots.forEach(([team, value]) => {
-        team.values.commenter_employee_ids = value;
+      relatedDraftSnapshots.forEach((snapshotState) => {
+        const relatedDraft = drafts.get(snapshotState.key);
+        if (!relatedDraft) return;
+        snapshotState.entries.forEach(({ entry: snapshotEntry, values, isNew }) => {
+          snapshotEntry.values = { ...values };
+          snapshotEntry.isNew = isNew;
+        });
+        relatedDraft.entries = snapshotState.entries.map(({ entry: snapshotEntry }) => snapshotEntry);
+        relatedDraft.selectedId = snapshotState.selectedId;
       });
-      draft.selectedId = entry.id;
       render();
     }
   }
@@ -862,6 +1517,7 @@
   function updateSelectedRow(event) {
     const input = event.target.closest("[data-column]");
     if (!input) return;
+    if (input.type === "radio" && !input.checked) return;
     const draft = getDraft();
     const entry = draft.entries.find((item) => item.id === draft.selectedId);
     if (!entry) return;
@@ -883,11 +1539,28 @@
     } else {
       entry.values[input.dataset.column] = nextValue;
     }
+    if (
+      activeMaster === "user_master" &&
+      input.dataset.column === "employee_id" &&
+      previousValue !== nextValue
+    ) {
+      const assignment = assignmentEntryForUser(previousValue);
+      if (assignment) assignment.values.commenter_employee_id = nextValue;
+    }
     if (input.dataset.column === "employment_type" && nextValue === "temporary") {
       entry.values.is_admin = "0";
+      if (activeMaster === "user_master") {
+        resetCommentAssignment(valueFor(entry, "employee_id"));
+      }
     }
     if (input.dataset.column === "team_level") {
       entry.values.parent_team_id = "";
+    }
+    if (input.dataset.column === "team_type") {
+      entry.values.parent_team_id = nextValue === "department" ? "" : entry.values.parent_team_id;
+    }
+    if (input.dataset.column === "commenter_scope" && nextValue !== "custom") {
+      entry.values.target_employee_ids = "";
     }
     if (
       activeMaster === "team_master" &&
@@ -904,11 +1577,14 @@
     renderMasterNav();
     renderTable();
     if (
-      event.type === "change" &&
+      (event.type === "change" ||
+        (event.type === "input" && input.dataset.column === "employment_type")) &&
       ((input.dataset.column === "employee_id" && entry.isNew) ||
         input.dataset.column === "employment_type" ||
+        input.dataset.column === "team_type" ||
         input.dataset.column === "team_level" ||
-        input.dataset.column === "parent_team_id")
+        input.dataset.column === "parent_team_id" ||
+        input.dataset.column === "commenter_scope")
     ) {
       renderInspector();
     }
@@ -933,7 +1609,10 @@
       "is-calendar-master",
       activeMaster === "calendar",
     );
-    byId("masterInspector").hidden = activeMaster === "calendar";
+    byId("masterInspector").hidden =
+      activeMaster === "calendar" ||
+      activeMaster === "user_master" ||
+      activeMaster === "team_master";
     renderMasterNav();
     renderTableHeading();
     renderTable();
@@ -944,7 +1623,7 @@
   function renderMasterNav() {
     const navigation = byId("masterNav");
     navigation.replaceChildren();
-    MASTER_DEFINITIONS.forEach((definition) => {
+    MASTER_DEFINITIONS.filter((definition) => !definition.hidden).forEach((definition) => {
       const draft = drafts.get(definition.key);
       const button = document.createElement("button");
       button.type = "button";
@@ -977,10 +1656,8 @@
 
   function renderTableHeading() {
     const definition = getDefinition();
-    const draft = getDraft();
     const addButton = byId("adminAddRowButton");
     const title = byId("adminTableTitle");
-    const count = byId("adminTableCount");
     const searchControl = byId("adminSearchControl");
     const searchInput = byId("adminSearchInput");
     const isTeam = definition.key === "team_master";
@@ -1000,37 +1677,46 @@
         : definition.key === "team_master"
           ? "チーム"
           : `${activeFiscalYear}年度カレンダー`;
-    count.textContent =
-      definition.key === "user_master"
-        ? `${draft.entries.length}人`
-        : definition.key === "team_master"
-          ? `${draft.entries.length}チーム`
-          : `${fiscalYearDayCount(activeFiscalYear)}日`;
+    title.hidden = definition.key === "user_master";
     addButton.hidden = isTeam || definition.key === "calendar";
     searchControl.hidden = isTeam || definition.key === "calendar";
     searchInput.placeholder =
       definition.key === "team_master"
         ? "チームを検索"
         : definition.key === "user_master"
-          ? "ユーザーを検索"
+          ? "社員番号・氏名を検索"
           : "日付を検索";
+    searchInput.setAttribute(
+      "aria-label",
+      definition.key === "user_master"
+        ? "社員番号・氏名を検索"
+        : definition.key === "team_master"
+          ? "チームを検索"
+          : "日付を検索",
+    );
     searchInput.value = searchText;
   }
 
   function filteredEntries() {
     const draft = getDraft();
     if (!searchText) return draft.entries;
+    const searchableKeys =
+      activeMaster === "user_master" ? ["employee_id", "display_name"] : null;
     return draft.entries.filter((entry) =>
-      Object.values(entry.values).some((value) =>
-        String(value).toLocaleLowerCase("ja").includes(searchText),
+      (searchableKeys || Object.keys(entry.values)).some((key) =>
+        String(entry.values[key] ?? "").toLocaleLowerCase("ja").includes(searchText),
       ),
     );
   }
 
   function renderTable() {
+    if (activeMaster === "user_master" && userEditorModalState) return;
+    if (activeMaster === "team_master" && teamEditorModalState) return;
+    if (activeMaster !== "team_master") destroyOrganizationSortables();
     const draft = getDraft();
     if (activeMaster === "team_master") {
       renderTeamTree(draft);
+      renderOrganizationMigrationNotice();
       return;
     }
     if (activeMaster === "calendar") {
@@ -1038,10 +1724,43 @@
       return;
     }
     renderUserList(draft);
+    renderOrganizationMigrationNotice();
+  }
+
+  function renderOrganizationMigrationNotice() {
+    if (!organizationMigrationState || activeMaster === "calendar") return;
+    const notice = document.createElement("section");
+    notice.className = "organization-migration-notice";
+    notice.setAttribute("role", "status");
+    const title = document.createElement("strong");
+    title.textContent = "旧組織データの移行確認が必要です";
+    const description = document.createElement("p");
+    const unresolved = organizationMigrationState.unresolvedEmployeeIds.length;
+    const ambiguous = organizationMigrationState.ambiguousTeamIds.length;
+    description.textContent =
+      "課・係の候補だけを編集用に展開しました。コメント担当は全員「なし」です。" +
+      (ambiguous || unresolved
+        ? ` 旧チーム${ambiguous}件、所属未確定ユーザー${unresolved}人を解消してから保存してください。`
+        : " 所属とコメント担当を確認し、保存すると新形式へ確定します。");
+    notice.append(title, description);
+    if (organizationMigrationState.legacyAssignments.length) {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = `旧コメント担当設定を参照（${organizationMigrationState.legacyAssignments.length}件）`;
+      const list = document.createElement("ul");
+      organizationMigrationState.legacyAssignments.forEach((assignment) => {
+        const item = document.createElement("li");
+        item.textContent = `${assignment.teamName}: 担当 ${assignment.commenters} / 範囲 ${assignment.scope} / 個別対象 ${assignment.targets}`;
+        list.append(item);
+      });
+      details.append(summary, list);
+      notice.append(details);
+    }
+    byId("adminTableWrap").prepend(notice);
   }
 
   function renderUserList(draft) {
-    const entries = filteredEntries();
+    const entries = filteredEntries().slice().sort(compareUserListEntries);
     const wrap = byId("adminTableWrap");
     wrap.replaceChildren();
     if (!entries.length) {
@@ -1059,11 +1778,12 @@
     const head = document.createElement("thead");
     const headerRow = document.createElement("tr");
     [
-      "ユーザー",
+      "社員番号",
+      "氏名",
       "雇用区分",
-      "管理者",
-      "自分の日報",
-      "所属チーム",
+      "権限",
+      "日報入力",
+      "所属組織",
       "コメント対象",
     ].forEach((label) => {
       const th = document.createElement("th");
@@ -1071,6 +1791,11 @@
       th.textContent = label;
       headerRow.append(th);
     });
+    const actionHeading = document.createElement("th");
+    actionHeading.className = "organization-user-actions-heading";
+    actionHeading.scope = "col";
+    actionHeading.setAttribute("aria-label", "操作");
+    headerRow.append(actionHeading);
     head.append(headerRow);
     const body = document.createElement("tbody");
     entries.forEach((entry) => {
@@ -1079,24 +1804,35 @@
       row.dataset.rowId = entry.id;
       row.classList.toggle("is-selected", entry.id === draft.selectedId);
       row.setAttribute("aria-selected", String(entry.id === draft.selectedId));
+      const employeeId = document.createElement("td");
+      employeeId.textContent = valueFor(entry, "employee_id") || "—";
       const name = document.createElement("td");
       name.textContent = valueFor(entry, "display_name") || valueFor(entry, "employee_id") || "—";
       const employment = document.createElement("td");
       employment.textContent = employmentTypeLabel(valueFor(entry, "employment_type"));
       const administrator = document.createElement("td");
-      administrator.textContent = valueFor(entry, "is_admin") === "1" ? "管理者" : "—";
-      const ownReport = document.createElement("td");
-      ownReport.textContent = valueFor(entry, "can_input_own_report") === "0"
-        ? "入力しない"
-        : "入力する";
+      administrator.textContent = valueFor(entry, "is_admin") === "1" ? "管理者" : "-";
       const team = document.createElement("td");
-      team.textContent = teamNameFor(valueFor(entry, "small_team_id")) || "—";
+      team.textContent = affiliationLabel(entry);
       const managed = document.createElement("td");
-      managed.textContent = commenterTeamIdsForUser(valueFor(entry, "employee_id"))
-        .map((teamId) => teamNameFor(teamId))
-        .filter(Boolean)
-        .join("、") || "—";
-      row.append(name, employment, administrator, ownReport, team, managed);
+      managed.textContent = commentAssignmentSummary(
+        valueFor(entry, "employee_id"),
+      );
+      const ownReport = document.createElement("td");
+      ownReport.textContent = valueFor(entry, "can_input_own_report") === "0" ? "不要" : "要";
+      const actions = document.createElement("td");
+      actions.className = "organization-user-actions";
+      const actionGroup = document.createElement("div");
+      actionGroup.className = "api-key-actions";
+      actionGroup.setAttribute("role", "toolbar");
+      const displayLabel = valueFor(entry, "display_name") || valueFor(entry, "employee_id") || "ユーザー";
+      actionGroup.setAttribute("aria-label", displayLabel + "の操作");
+      actionGroup.append(
+        createUserRowAction("edit", entry, displayLabel),
+        createUserRowAction("delete", entry, displayLabel),
+      );
+      actions.append(actionGroup);
+      row.append(employeeId, name, employment, administrator, ownReport, team, managed, actions);
       body.append(row);
     });
     table.append(head, body);
@@ -1139,10 +1875,16 @@
     summary.className = "fiscal-calendar-summary";
     summary.textContent = `休日 ${holidayCount}日`;
     legend.append(holidayLegend, workdayLegend, summary);
-    toolbar.append(yearNavigation, legend);
+    const toolbarActions = document.createElement("div");
+    toolbarActions.className = "fiscal-calendar-toolbar-actions";
+    toolbarActions.append(legend, createEditorActionBar());
+    toolbar.append(yearNavigation, toolbarActions);
 
     const calendar = document.createElement("div");
     calendar.className = "fiscal-calendar-grid";
+    calendar.setAttribute("role", "grid");
+    calendar.setAttribute("aria-label", `${activeFiscalYear}年度カレンダー`);
+    calendarFocusDate = getCalendarFocusDate();
     for (let offset = 0; offset < 12; offset += 1) {
       const absoluteMonth = 3 + offset;
       const calendarYear = activeFiscalYear + Math.floor(absoluteMonth / 12);
@@ -1154,12 +1896,31 @@
     wrap.append(toolbar, calendar);
   }
 
+  function getCalendarFocusDate() {
+    const candidate = calendarDate(calendarFocusDate);
+    if (candidate && fiscalYearForDate(candidate) === activeFiscalYear) {
+      return calendarFocusDate;
+    }
+    const today = new Date();
+    const todayText = calendarIsoDate(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    const todayDate = calendarDate(todayText);
+    if (todayDate && fiscalYearForDate(todayDate) === activeFiscalYear) {
+      return todayText;
+    }
+    return calendarIsoDate(activeFiscalYear, 3, 1);
+  }
+
   function createFiscalYearButton(direction, label, text) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "fiscal-year-button";
     button.dataset.calendarYearAction = String(direction);
     button.setAttribute("aria-label", label);
+    button.disabled = direction < 0 && activeFiscalYear <= MIN_FISCAL_YEAR;
     button.textContent = text;
     return button;
   }
@@ -1167,38 +1928,61 @@
   function createCalendarMonth(year, monthIndex, entriesByDate) {
     const month = document.createElement("section");
     month.className = "fiscal-calendar-month";
-    month.setAttribute("aria-label", `${year}年${monthIndex + 1}月`);
+    month.setAttribute("role", "rowgroup");
     const heading = document.createElement("h4");
+    heading.id = `fiscal-calendar-month-${year}-${monthIndex + 1}`;
     heading.textContent = `${monthIndex + 1}月`;
+    month.setAttribute("aria-labelledby", heading.id);
     const weekdays = document.createElement("div");
     weekdays.className = "fiscal-calendar-weekdays";
+    weekdays.setAttribute("role", "row");
     ["日", "月", "火", "水", "木", "金", "土"].forEach((label, index) => {
       const weekday = document.createElement("span");
       weekday.textContent = label;
+      weekday.setAttribute("role", "columnheader");
       weekday.classList.toggle("is-sunday", index === 0);
       weekday.classList.toggle("is-saturday", index === 6);
       weekdays.append(weekday);
     });
     const days = document.createElement("div");
     days.className = "fiscal-calendar-days";
+    days.setAttribute("role", "presentation");
     const firstWeekday = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay();
     const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
-    for (let index = 0; index < firstWeekday; index += 1) {
+    let cellIndex = 0;
+    let week = null;
+    const appendCell = (cell) => {
+      if (cellIndex % 7 === 0) {
+        week = document.createElement("div");
+        week.className = "fiscal-calendar-week";
+        week.setAttribute("role", "row");
+        days.append(week);
+      }
+      week.append(cell);
+      cellIndex += 1;
+    };
+    const appendEmptyCell = () => {
       const empty = document.createElement("span");
-      empty.className = "fiscal-calendar-day-empty";
+      empty.className = "fiscal-calendar-cell fiscal-calendar-day-empty";
+      empty.setAttribute("role", "gridcell");
       empty.setAttribute("aria-hidden", "true");
-      days.append(empty);
-    }
+      appendCell(empty);
+    };
+    for (let index = 0; index < firstWeekday; index += 1) appendEmptyCell();
     for (let day = 1; day <= lastDay; day += 1) {
       const dateText = calendarIsoDate(year, monthIndex, day);
       const entry = entriesByDate.get(dateText);
       const weekday = new Date(Date.UTC(year, monthIndex, day)).getUTCDay();
       const isWeekend = [0, 6].includes(weekday);
       const isHoliday = Boolean(entry);
+      const cell = document.createElement("span");
+      cell.className = "fiscal-calendar-cell";
+      cell.setAttribute("role", "gridcell");
       const button = document.createElement("button");
       button.type = "button";
       button.className = "fiscal-calendar-day";
       button.dataset.calendarDate = dateText;
+      button.tabIndex = dateText === calendarFocusDate ? 0 : -1;
       button.classList.toggle("is-holiday", isHoliday);
       button.classList.toggle("is-weekend-workday", isWeekend && !isHoliday);
       button.setAttribute("aria-pressed", String(isHoliday));
@@ -1209,13 +1993,314 @@
       const number = document.createElement("span");
       number.textContent = String(day);
       button.append(number);
-      days.append(button);
+      cell.append(button);
+      appendCell(cell);
     }
+    while (cellIndex % 7 !== 0) appendEmptyCell();
     month.append(heading, weekdays, days);
     return month;
   }
 
+  function renderOrganizationTree(draft) {
+    const wrap = byId("adminTableWrap");
+    destroyOrganizationSortables();
+    wrap.replaceChildren();
+    const browser = document.createElement("section");
+    browser.className = "team-browser organization-browser-v2";
+    browser.setAttribute("aria-label", "課・係一覧");
+    const toolbar = document.createElement("div");
+    toolbar.className = "team-browser-heading";
+    const addDepartment = document.createElement("button");
+    addDepartment.type = "button";
+    addDepartment.className = "admin-add-button";
+    addDepartment.dataset.addTeamRoot = "true";
+    const addIcon = document.createElement("span");
+    addIcon.setAttribute("aria-hidden", "true");
+    addIcon.textContent = "＋";
+    addDepartment.append(addIcon, "組織を追加");
+    toolbar.append(addDepartment);
+
+    const tree = document.createElement("div");
+    tree.className = "team-tree organization-tree-v2";
+    tree.setAttribute("role", "tree");
+    const departmentList = document.createElement("div");
+    departmentList.className = "organization-card-list organization-department-list";
+    departmentList.dataset.organizationSortList = "departments";
+    departmentList.setAttribute("role", "group");
+    tree.append(createOrganizationDirectorCard(), departmentList);
+
+    const departments = draft.entries
+      .filter((entry) => valueFor(entry, "team_type") === "department")
+      .sort(compareTeamEntries);
+    departments.forEach((department) => {
+      const departmentId = valueFor(department, "team_id");
+      const sections = draft.entries
+        .filter(
+          (entry) =>
+            valueFor(entry, "team_type") === "section" &&
+            valueFor(entry, "parent_team_id") === departmentId,
+        )
+        .sort(compareTeamEntries);
+      departmentList.append(createOrganizationCard(department, sections));
+    });
+    if (!departments.length) {
+      const empty = document.createElement("p");
+      empty.className = "admin-table-empty team-browser-empty";
+      empty.textContent = "組織がありません。";
+      departmentList.append(empty);
+    }
+    browser.append(toolbar, tree);
+    wrap.append(browser);
+    initializeOrganizationSortables();
+  }
+
+  function createOrganizationDirectorCard() {
+    const card = document.createElement("article");
+    card.className = "organization-card organization-director-card";
+    card.dataset.directorGroup = "true";
+    card.setAttribute("role", "treeitem");
+    card.append(
+      createOrganizationCardHeader(
+        "director",
+        "部長",
+        directMembersFor("director", "").length,
+        "director",
+      ),
+    );
+    return card;
+  }
+
+  function createOrganizationCard(entry, sections = []) {
+    const teamId = valueFor(entry, "team_id");
+    const type = valueFor(entry, "team_type");
+    const card = document.createElement("article");
+    card.className = `organization-card organization-${type}-card`;
+    card.dataset.rowId = entry.id;
+    card.dataset.teamId = teamId;
+    card.dataset.organizationCard = "true";
+    card.dataset.organizationLevel = type;
+    card.setAttribute("role", "treeitem");
+    const isExpanded = expandedOrganizationIds.has(teamId);
+    card.append(
+      createOrganizationCardHeader(
+        type,
+        valueFor(entry, "team_name") || "名称未設定",
+        directMembersFor("organization", teamId).length,
+        entry.id,
+        {
+          organizationId: teamId,
+          draggable: true,
+          expanded: isExpanded,
+          sectionCount: sections.length,
+        },
+      ),
+    );
+    if (type === "department" && sections.length) {
+      const children = document.createElement("div");
+      children.className = "organization-card-children";
+      children.dataset.organizationSortList = "sections";
+      children.dataset.organizationParentTeamId = teamId;
+      children.hidden = !isExpanded;
+      children.setAttribute("role", "group");
+      sections.forEach((section) => children.append(createOrganizationCard(section)));
+      card.append(children);
+    }
+    return card;
+  }
+
+  function createOrganizationCardHeader(type, nameText, memberCount, editId, options = {}) {
+    const header = document.createElement("div");
+    header.className = "organization-card-header";
+    const label = document.createElement("span");
+    label.className = `team-level-label is-${type}`;
+    label.textContent = type === "department" ? "課" : "係";
+    if (type === "director") label.textContent = "部長";
+    const name = document.createElement("strong");
+    name.textContent = nameText;
+    const count = document.createElement("span");
+    count.className = "organization-member-count";
+    count.textContent = `${memberCount}人`;
+    const copy = document.createElement("div");
+    copy.className = "organization-card-copy";
+    copy.append(label, name, count);
+    const actions = document.createElement("div");
+    actions.className = "organization-card-header-actions";
+    if (options.draggable) {
+      actions.append(createOrganizationDragHandle(options.organizationId, nameText));
+    }
+    if (type === "department" && options.sectionCount) {
+      actions.append(
+        createOrganizationToggleButton(
+          options.organizationId,
+          options.sectionCount,
+          options.expanded,
+        ),
+      );
+    }
+    actions.append(createOrganizationEditButton(editId, nameText));
+    header.append(copy, actions);
+    return header;
+  }
+
+  function createOrganizationToggleButton(teamId, sectionCount, expanded) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "organization-card-toggle";
+    button.dataset.organizationToggle = teamId;
+    button.setAttribute("aria-expanded", String(expanded));
+    button.setAttribute("aria-label", `係${sectionCount}件を${expanded ? "閉じる" : "開く"}`);
+    button.title = expanded ? "係を閉じる" : "係を表示";
+    button.append(
+      createTeamSvgIcon(expanded ? "m5 15 7-7 7 7" : "m5 9 7 7 7-7"),
+      document.createTextNode(`係 ${sectionCount}件`),
+    );
+    return button;
+  }
+
+  function createOrganizationDragHandle(teamId, nameText) {
+    const handle = document.createElement("span");
+    handle.className = "organization-drag-handle";
+    handle.dataset.organizationDragHandle = teamId;
+    handle.setAttribute("role", "img");
+    handle.setAttribute("aria-label", `${nameText}の並び順をドラッグで変更`);
+    handle.title = "ドラッグで並び替え";
+    handle.append(
+      createTeamSvgIcon(
+        "M7 5h2v2H7V5Zm4 0h2v2h-2V5ZM7 11h2v2H7v-2Zm4 0h2v2h-2v-2ZM7 17h2v2H7v-2Zm4 0h2v2h-2v-2Z",
+      ),
+    );
+    return handle;
+  }
+
+  function organizationCardsIn(list) {
+    return [...(list?.children || [])].filter((child) =>
+      child.matches("[data-organization-card]"),
+    );
+  }
+
+  function organizationOrderIn(list) {
+    return organizationCardsIn(list).map((card) => card.dataset.teamId);
+  }
+
+  function organizationOrderSnapshot(list) {
+    return organizationOrderIn(list).map((teamId) => ({
+      teamId,
+      sortOrder: valueFor(teamEntryFor(teamId), "sort_order"),
+    }));
+  }
+
+  function initializeOrganizationSortables() {
+    if (typeof window.Sortable !== "function") {
+      notify({
+        text: "組織の並び替え機能を読み込めませんでした。",
+        type: "error",
+      });
+      return;
+    }
+    const wrap = byId("adminTableWrap");
+    wrap.querySelectorAll("[data-organization-sort-list]").forEach((list) => {
+      const sortable = new window.Sortable(list, {
+        animation: 160,
+        bubbleScroll: true,
+        chosenClass: "organization-card-sortable-chosen",
+        draggable: "[data-organization-card]",
+        dragClass: "organization-card-sortable-drag",
+        fallbackOnBody: false,
+        fallbackTolerance: 3,
+        forceFallback: true,
+        ghostClass: "organization-card-sortable-ghost",
+        handle: "[data-organization-drag-handle]",
+        invertSwap: false,
+        scroll: true,
+        scrollSensitivity: 60,
+        scrollSpeed: 12,
+        swapThreshold: 0.55,
+        onMove: (event) =>
+          event.from === list && event.to === list && event.related !== event.dragged,
+        onStart: (event) => {
+          if (activeMaster !== "team_master" || isLoading || organizationDragState) {
+            event.preventDefault?.();
+            return;
+          }
+          organizationDragState = {
+            card: event.item,
+            list,
+            previousOrder: organizationOrderSnapshot(list),
+          };
+          event.item.classList.add("is-dragging");
+        },
+        onEnd: () => {
+          commitOrganizationDrag();
+        },
+      });
+      list.dataset.organizationSortable = "true";
+      organizationSortableInstances.push(sortable);
+    });
+  }
+
+  function destroyOrganizationSortables() {
+    organizationSortableInstances.forEach((sortable) => sortable.destroy());
+    organizationSortableInstances = [];
+    organizationDragState = null;
+  }
+
+  function commitOrganizationDrag() {
+    const state = organizationDragState;
+    if (!state) return;
+    const nextOrder = organizationOrderIn(state.list);
+    const previousOrder = state.previousOrder.map(({ teamId }) => teamId);
+    const changed = nextOrder.some((teamId, index) => teamId !== previousOrder[index]);
+    state.card.classList.remove("is-dragging");
+    organizationDragState = null;
+    if (!changed) {
+      renderTable();
+      return;
+    }
+    const previousOrders = new Map(
+      state.previousOrder.map(({ teamId, sortOrder }) => [teamId, sortOrder]),
+    );
+    const parentTeamId = state.list.dataset.organizationParentTeamId || "";
+    nextOrder.forEach((teamId, index) => {
+      const entry = teamEntryFor(teamId);
+      if (!entry) return;
+      entry.values.parent_team_id = parentTeamId;
+      entry.values.sort_order = String((index + 1) * 10);
+    });
+    renderTable();
+    syncAdminChrome();
+    void saveOrganizationOrder(previousOrders);
+  }
+
+  async function saveOrganizationOrder(previousOrders) {
+    const saved = await save("team_master");
+    if (saved) return;
+    previousOrders.forEach((sortOrder, teamId) => {
+      const entry = teamEntryFor(teamId);
+      if (entry) entry.values.sort_order = sortOrder;
+    });
+    renderTable();
+    syncAdminChrome();
+  }
+
+  function createOrganizationEditButton(editId, nameText) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "organization-card-edit";
+    button.dataset.organizationEdit = editId;
+    button.setAttribute("aria-label", `${nameText}を編集`);
+    button.title = "編集";
+    const icon = createTeamSvgIcon(EMBEDDED_EDIT_ICON_PATH);
+    const iconPath = icon.querySelector("path");
+    iconPath.setAttribute("fill-rule", "evenodd");
+    iconPath.setAttribute("clip-rule", "evenodd");
+    iconPath.setAttribute("fill", "currentColor");
+    button.append(icon);
+    return button;
+  }
+
   function renderTeamTree(draft) {
+    return renderOrganizationTree(draft);
+    /* istanbul ignore next -- legacy renderer retained for migration reference */
     const wrap = byId("adminTableWrap");
     wrap.replaceChildren();
     const entries = draft.entries;
@@ -1226,10 +2311,7 @@
     heading.className = "team-browser-heading";
     const title = document.createElement("h2");
     title.textContent = "チーム";
-    const count = document.createElement("span");
-    count.className = "team-browser-count";
-    count.textContent = `${entries.length}チーム`;
-    heading.append(title, count);
+    heading.append(title);
 
     const search = document.createElement("input");
     search.type = "search";
@@ -1287,10 +2369,7 @@
     const name = document.createElement("span");
     name.className = "team-name";
     name.textContent = valueFor(entry, "team_name") || "名称未設定";
-    const count = document.createElement("span");
-    count.className = "team-count";
-    count.textContent = String(teamMemberCountFor(teamId));
-    button.append(mark, name, count);
+    button.append(mark, name);
     container.append(button);
     (children.get(teamId) || [])
       .filter((child) => visibleIds.has(valueFor(child, "team_id")))
@@ -1421,11 +2500,7 @@
       unsaved.textContent = "未保存";
       metadata.append(unsaved);
     }
-    const memberCount = document.createElement("span");
-    memberCount.className = "team-member-count";
-    memberCount.textContent = String(teamMemberCountFor(teamId));
     select.append(name, metadata);
-    select.append(memberCount);
     row.append(select);
     branch.append(row);
 
@@ -1448,7 +2523,7 @@
     return leftOrder - rightOrder || valueFor(left, "team_name").localeCompare(
       valueFor(right, "team_name"),
       "ja",
-    );
+    ) || valueFor(left, "team_id").localeCompare(valueFor(right, "team_id"), "ja");
   }
 
   function createTeamSvgIcon(pathData) {
@@ -1471,7 +2546,13 @@
   }
 
   function teamLevelLabel(level) {
-    return { large: "課", medium: "係", small: "チーム" }[level] || level || "—";
+    return {
+      department: "課",
+      section: "係",
+      large: "課",
+      medium: "係",
+      small: "旧チーム",
+    }[level] || level || "—";
   }
 
   function teamNameFor(teamId) {
@@ -1527,6 +2608,24 @@
 
   function renderInspector() {
     if (activeMaster === "calendar") return;
+    if (activeMaster === "user_master") {
+      const empty = byId("adminInspectorEmpty");
+      const form = byId("adminInspectorForm");
+      empty.classList.add("hidden");
+      form.classList.add("hidden");
+      form.replaceChildren();
+      if (userEditorModalState) renderUserEditorDialog();
+      return;
+    }
+    if (activeMaster === "team_master") {
+      const empty = byId("adminInspectorEmpty");
+      const form = byId("adminInspectorForm");
+      empty.classList.add("hidden");
+      form.classList.add("hidden");
+      form.replaceChildren();
+      if (teamEditorModalState) renderTeamEditorDialog();
+      return;
+    }
     const draft = getDraft();
     const entry = draft.entries.find((item) => item.id === draft.selectedId);
     const empty = byId("adminInspectorEmpty");
@@ -1550,7 +2649,7 @@
     if (activeMaster === "user_master") {
       renderUserInspector(form, entry);
     } else if (activeMaster === "team_master") {
-      renderTeamInspector(form, entry);
+      renderOrganizationInspector(form, entry);
     } else {
       renderGenericInspector(form, entry);
     }
@@ -1576,7 +2675,7 @@
         createChildTeamButton("medium", teamId, "係を追加"),
       );
     } else if (level === "medium") {
-      childActions.append(createChildTeamButton("small", teamId, "チームを追加"));
+          // 課・係の2階層。既存smallは読み書き可能だが新規作成しない。
     }
     if (childActions.childElementCount) actions.append(childActions);
 
@@ -1613,6 +2712,9 @@
       renderTeamAssignmentCard(teamId, "member"),
       renderTeamAssignmentCard(teamId, "commenter"),
     );
+    if (valueFor(entry, "commenter_scope") === "custom") {
+      assignmentGrid.append(renderTeamAssignmentCard(teamId, "target"));
+    }
 
     const settings = document.createElement("details");
     settings.className = "team-settings";
@@ -1626,7 +2728,7 @@
       createDeleteActionBar(createDeleteButton("このチームを削除")),
     );
     settings.append(settingsSummary, settingsBody);
-    form.append(header, assignmentGrid, settings);
+    form.append(header, assignmentGrid, settings, createEditorActionBar());
   }
 
   function createTeamInspectorHeader(entry) {
@@ -1640,9 +2742,7 @@
     const copy = document.createElement("div");
     const title = document.createElement("h3");
     title.textContent = valueFor(entry, "team_name") || "名称未設定";
-    const description = document.createElement("p");
-    description.textContent = "チーム情報と、ユーザーの所属・コメント担当をここから変更できます。";
-    copy.append(title, description);
+    copy.append(title);
     const status = document.createElement("span");
     status.className = "team-status";
     status.classList.toggle("is-inactive", valueFor(entry, "is_active") !== "1");
@@ -1654,24 +2754,25 @@
 
   function renderTeamAssignmentCard(teamId, kind) {
     const isMember = kind === "member";
+    const isTarget = kind === "target";
     const currentEntries = isMember
       ? teamMemberEntries(teamId)
-      : teamCommenterEntries(teamId);
+      : isTarget
+        ? teamTargetEntries(teamId)
+        : teamCommenterEntries(teamId);
     const card = document.createElement("section");
     card.className = "team-assignment-card assignment-card";
     const heading = document.createElement("div");
     heading.className = "section-heading";
     const title = document.createElement("h3");
-    title.textContent = isMember ? "所属ユーザー" : "コメント担当ユーザー";
-    const count = document.createElement("span");
-    count.className = "team-assignment-count count";
-    count.textContent = `${currentEntries.length}人`;
-    heading.append(title, count);
-    const description = document.createElement("p");
-    description.textContent = isMember
-      ? "このチームを現在の所属先としているユーザーです。追加・解除するとユーザー側の所属チームも更新されます。"
-      : "この組織と下位組織の日報にコメントできるユーザーです。上下ボタンの順でコメント欄に表示されます。";
-
+      title.textContent = isMember
+        ? "所属ユーザー"
+        : isTarget
+          ? "カスタム対象ユーザー"
+        : valueFor(teamEntryFor(teamId), "commenter_scope") === "custom"
+          ? "カスタム対象ユーザー"
+          : "コメント担当ユーザー";
+    heading.append(title);
     const list = document.createElement("div");
     list.className = "team-member-list member-list";
     if (!currentEntries.length) {
@@ -1679,7 +2780,9 @@
       empty.className = "team-assignment-empty";
       empty.textContent = isMember
         ? "所属ユーザーはまだいません。"
-        : "コメント担当ユーザーはまだいません。";
+        : isTarget
+          ? "カスタム対象ユーザーはまだいません。"
+          : "コメント担当ユーザーはまだいません。";
       list.append(empty);
     } else {
       let previousAssignedTeamId = "";
@@ -1710,11 +2813,11 @@
         role.className = "member-role";
         role.textContent = isMember
           ? "メンバー"
-          : "コメント担当";
+          : isTarget ? "コメント対象" : "コメント担当";
         meta.append(name, role);
         const orderControls = document.createElement("span");
         orderControls.className = "team-member-order-controls";
-        {
+        if (!isTarget) {
           const availability = isMember
             ? memberMoveAvailability(user)
             : commenterMoveAvailability(teamId, employeeId);
@@ -1728,7 +2831,7 @@
             if (isMember) {
               move.dataset.memberMove = direction;
               move.dataset.memberId = employeeId;
-            } else {
+            } else if (!isTarget) {
               move.dataset.commenterMove = direction;
               move.dataset.employeeId = employeeId;
             }
@@ -1749,6 +2852,7 @@
           : teamId;
         remove.dataset.employeeId = employeeId;
         remove.textContent = "解除";
+        remove.setAttribute("aria-label", `${displayNameFor(employeeId)}を対象から解除`);
         row.append(avatar, meta);
         row.append(orderControls);
         row.append(remove);
@@ -1762,11 +2866,15 @@
     pickerSummary.className = "add-link";
     pickerSummary.textContent = isMember
       ? "＋ 所属ユーザーを変更"
-      : "＋ コメント担当を変更";
+      : isTarget ? "＋ 対象ユーザーを1人追加" : "＋ コメント担当を変更";
     const select = document.createElement("select");
     select.dataset.teamAssignmentSelect = "true";
     select.dataset.assignmentKind = kind;
     select.dataset.teamId = teamId;
+    select.setAttribute(
+      "aria-label",
+      isMember ? "所属ユーザーを1人追加" : "カスタム対象ユーザーを1人追加",
+    );
     const canAssignMembers = !isMember || isAssignableTeam(teamId);
     const placeholder = document.createElement("option");
     placeholder.value = "";
@@ -1774,14 +2882,15 @@
       ? "所属先の課・係・チームから変更してください"
       : isMember
         ? "ユーザーを追加…"
-        : "担当者を追加…";
+        : isTarget ? "対象ユーザーを追加…" : "担当者を追加…";
     select.append(placeholder);
     const currentIds = new Set(currentEntries.map((user) => valueFor(user, "employee_id")));
     const candidates = userEntriesForAssignment()
       .filter((user) => {
         const employeeId = valueFor(user, "employee_id");
         if (!employeeId || currentIds.has(employeeId)) return false;
-        return isMember || valueFor(user, "employment_type") !== "temporary";
+        return (isMember || valueFor(user, "employment_type") !== "temporary") &&
+          (!isTarget || !currentIds.has(employeeId));
       })
       .sort(compareUserEntries);
     candidates.forEach((user) => {
@@ -1796,7 +2905,7 @@
     select.disabled = !candidates.length || !canAssignMembers;
     picker.classList.toggle("is-disabled", select.disabled);
     picker.append(pickerSummary, select);
-    card.append(heading, description, list, picker);
+    card.append(heading, list, picker);
     return card;
   }
 
@@ -1805,8 +2914,8 @@
   }
 
   function compareUserEntries(left, right) {
-    const leftOrder = Number(valueFor(left, "display_order") || 999999);
-    const rightOrder = Number(valueFor(right, "display_order") || 999999);
+    const leftOrder = Number(valueFor(left, "member_order") || 999999);
+    const rightOrder = Number(valueFor(right, "member_order") || 999999);
     return leftOrder - rightOrder || displayNameFor(valueFor(left, "employee_id")).localeCompare(
       displayNameFor(valueFor(right, "employee_id")),
       "ja",
@@ -1814,6 +2923,38 @@
       valueFor(right, "employee_id"),
       "ja",
     );
+  }
+
+  function compareUserListEntries(left, right) {
+    const organizationOrder = organizationDisplayOrder();
+    const key = (entry) =>
+      valueFor(entry, "affiliation_type") === "director"
+        ? Number.MAX_SAFE_INTEGER
+        : organizationOrder.get(valueFor(entry, "organization_id")) ??
+          Number.MAX_SAFE_INTEGER - 1;
+    return key(left) - key(right) || compareUserEntries(left, right);
+  }
+
+  function organizationDisplayOrder() {
+    const entries = drafts.get("team_master")?.entries || [];
+    const order = new Map();
+    let index = 0;
+    entries
+      .filter((entry) => valueFor(entry, "team_type") === "department")
+      .sort(compareTeamEntries)
+      .forEach((department) => {
+        const departmentId = valueFor(department, "team_id");
+        entries
+          .filter(
+            (entry) =>
+              valueFor(entry, "team_type") === "section" &&
+              valueFor(entry, "parent_team_id") === departmentId,
+          )
+          .sort(compareTeamEntries)
+          .forEach((section) => order.set(valueFor(section, "team_id"), index++));
+        order.set(departmentId, index++);
+      });
+    return order;
   }
 
   function teamPathEntries(teamId) {
@@ -1847,8 +2988,8 @@
 
   function compareTeamScopedUsers(left, right) {
     return compareTeamPaths(
-      valueFor(left, "small_team_id"),
-      valueFor(right, "small_team_id"),
+      valueFor(left, "organization_id"),
+      valueFor(right, "organization_id"),
     ) || compareUserEntries(left, right);
   }
 
@@ -1866,6 +3007,19 @@
     return teamCommenterIds(teamEntryFor(teamId))
       .map((employeeId) => usersById.get(employeeId))
       .filter(Boolean);
+  }
+
+  function teamTargetIds(team) {
+    return valueFor(team, "target_employee_ids")
+      .split(";").map((id) => id.trim()).filter(Boolean);
+  }
+
+  function teamTargetEntries(teamId) {
+    const usersById = new Map(
+      userEntriesForAssignment().map((entry) => [valueFor(entry, "employee_id"), entry]),
+    );
+    return teamTargetIds(teamEntryFor(teamId))
+      .map((employeeId) => usersById.get(employeeId)).filter(Boolean);
   }
 
   function commenterMoveAvailability(teamId, employeeId) {
@@ -1936,6 +3090,14 @@
       else if (valueFor(user, "small_team_id") === teamId) {
         setUserTeamAssignment(user, "");
       }
+    } else if (kind === "target") {
+      const team = teamEntryFor(teamId);
+      if (!team || valueFor(team, "commenter_scope") !== "custom") return;
+      const ids = teamTargetIds(team);
+      const index = ids.indexOf(employeeId);
+      if (assigned && index < 0) ids.push(employeeId);
+      if (!assigned && index >= 0) ids.splice(index, 1);
+      team.values.target_employee_ids = ids.join(";");
     } else {
       const team = teamEntryFor(teamId);
       if (!team) return;
@@ -1968,8 +3130,13 @@
       valueFor(entry, "team_name"),
       { required: true, hideKey: true },
     );
+    const scopeField = createInspectorField(
+      { key: "commenter_scope", label: "コメント対象", type: "commenter_scope" },
+      valueFor(entry, "commenter_scope") || "custom",
+      { required: true, hideKey: true },
+    );
     if (level === "large") {
-      return [nameField];
+      return [nameField, scopeField];
     }
 
     const entryId = valueFor(entry, "team_id");
@@ -1988,7 +3155,7 @@
       selectedSectionId,
       { required: true },
     );
-    if (level === "medium") return [sectionField, nameField];
+    if (level === "medium") return [sectionField, nameField, scopeField];
 
     const unitChoices = selectedSectionId
       ? [
@@ -2003,7 +3170,7 @@
       selectedUnitId,
       { required: true, disabled: !selectedSectionId },
     );
-    return [sectionField, unitField, nameField];
+    return [sectionField, unitField, nameField, scopeField];
   }
 
   function createTeamPlacementSelect(labelText, choices, value, options = {}) {
@@ -2150,75 +3317,716 @@
     };
   }
 
-  function renderUserInspector(form, entry) {
-    const header = document.createElement("div");
-    header.className = "user-editor-header";
-    const title = document.createElement("h2");
-    title.textContent = valueFor(entry, "display_name") || "新しいユーザー";
-    const caption = document.createElement("p");
-    caption.className = "editor-caption";
-    caption.textContent = "ユーザー情報を編集";
-    header.append(title, caption);
+  function renderOrganizationInspector(form, entry, options = {}) {
+    const teamId = valueFor(entry, "team_id");
+    const teamType = valueFor(entry, "team_type");
+    const modal = Boolean(options.modal);
+    const header = createInspectorHeader(
+      teamType === "department" ? "選択中の課" : "選択中の係",
+      valueFor(entry, "team_name") || "名称未設定",
+    );
+    const basic = document.createElement("section");
+    basic.className = "organization-editor-section";
+    basic.append(createSectionHeading("基本情報", "組織IDは作成後に変更できません。"));
+    const fields = document.createElement("div");
+    fields.className = "inspector-fields team-editor-fields";
+    const definition = getDefinition("team_master");
+    ["team_id", "team_name", "team_type"].forEach((key) => {
+      const column = definition.columns.find((item) => item.key === key);
+      fields.append(
+        createInspectorField(column, valueFor(entry, key), {
+          required: true,
+          disabled: key !== "team_name",
+          hideKey: true,
+        }),
+      );
+    });
+    if (teamType === "section") {
+      const parentColumn = definition.columns.find(
+        (item) => item.key === "parent_team_id",
+      );
+      fields.append(
+        createInspectorField(parentColumn, valueFor(entry, "parent_team_id"), {
+          required: true,
+          disabled: true,
+          hideKey: true,
+        }),
+      );
+    }
+    basic.append(fields);
 
+    const arrange = document.createElement("div");
+    arrange.className = "team-arrange-actions organization-arrange-actions";
+    if (teamType === "department") {
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "admin-add-button";
+      add.dataset.addChildLevel = "section";
+      add.dataset.parentTeamId = teamId;
+      add.textContent = "係を追加";
+      arrange.append(add);
+    }
+    const availability = teamMoveAvailability(entry);
+    [["up", "上へ"], ["down", "下へ"]].forEach(([direction, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "team-member-order-button";
+      button.dataset.moveTeam = direction;
+      button.textContent = label;
+      button.disabled = !availability[direction];
+      arrange.append(button);
+    });
+
+    form.append(header, basic, arrange);
+    renderOrganizationMembersInspector(form, "organization", teamId, entry, false);
+    const deleteActions = createDeleteActionBar(
+      createDeleteButton(`${teamType === "department" ? "課" : "係"}を削除`),
+    );
+    if (modal) {
+      form.append(deleteActions, createEditorActionBar({ modal: true }));
+    } else {
+      form.append(createEditorActionBar(), deleteActions);
+    }
+  }
+
+  function renderOrganizationMembersInspector(
+    form,
+    affiliationType,
+    organizationId,
+    teamEntry = null,
+    includeHeader = true,
+    options = {},
+  ) {
+    if (includeHeader) {
+      form.append(createInspectorHeader("固定グループ", "部長"));
+    }
+    const section = document.createElement("section");
+    section.className = "organization-editor-section organization-members-section";
+    section.append(
+      createSectionHeading(
+        "直接所属ユーザー",
+        "並び順は日報のユーザー行とコメント担当者列に共通で使われます。",
+      ),
+    );
+    const members = directMembersFor(affiliationType, organizationId);
+    const list = document.createElement("div");
+    list.className = "organization-member-list";
+    members.forEach((member, index) => {
+      const employeeId = valueFor(member, "employee_id");
+      const row = document.createElement("div");
+      row.className = "organization-member-row";
+      const copy = document.createElement("span");
+      copy.className = "organization-member-copy";
+      const name = document.createElement("strong");
+      name.textContent = valueFor(member, "display_name") || employeeId;
+      const meta = document.createElement("small");
+      meta.textContent = `${employeeId} ・ 順序 ${valueFor(member, "member_order") || "未設定"}`;
+      copy.append(name, meta);
+      const controls = document.createElement("span");
+      controls.className = "organization-member-controls";
+      [["up", "上へ"], ["down", "下へ"]].forEach(([direction, label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "team-member-order-button";
+        button.dataset.organizationMemberMove = direction;
+        button.dataset.employeeId = employeeId;
+        button.textContent = label;
+        button.disabled = direction === "up" ? index === 0 : index === members.length - 1;
+        controls.append(button);
+      });
+      const destination = document.createElement("select");
+      destination.dataset.moveUserAffiliation = "true";
+      destination.dataset.employeeId = employeeId;
+      destination.setAttribute("aria-label", `${name.textContent}の移動先`);
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "別の所属へ移動…";
+      destination.append(placeholder);
+      organizationAffiliationChoices()
+        .filter(([value]) => value !== affiliationValue(member))
+        .forEach(([value, label]) => {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          destination.append(option);
+        });
+      controls.append(destination);
+      row.append(copy, controls);
+      list.append(row);
+    });
+    if (!members.length) {
+      const empty = document.createElement("p");
+      empty.className = "admin-table-empty";
+      empty.textContent = "直接所属ユーザーはいません。";
+      list.append(empty);
+    }
+
+    const addField = document.createElement("label");
+    addField.className = "inspector-field organization-add-member";
+    const addLabel = document.createElement("span");
+    addLabel.className = "inspector-field-label";
+    addLabel.textContent = "別の所属からユーザーを移動";
+    const addSelect = document.createElement("select");
+    addSelect.dataset.addOrganizationMember = "true";
+    addSelect.dataset.destination =
+      affiliationType === "director" ? "director" : `organization:${organizationId}`;
+    const addPlaceholder = document.createElement("option");
+    addPlaceholder.value = "";
+    addPlaceholder.textContent = "ユーザーを選択…";
+    addSelect.append(addPlaceholder);
+    (drafts.get("user_master")?.entries || [])
+      .filter((entry) => !members.includes(entry))
+      .sort(compareUserListEntries)
+      .forEach((entry) => {
+        const option = document.createElement("option");
+        option.value = valueFor(entry, "employee_id");
+        option.textContent = `${valueFor(entry, "display_name")}（現在: ${affiliationLabel(entry)}）`;
+        addSelect.append(option);
+      });
+    addField.append(addLabel, addSelect);
+    section.append(list, addField);
+    form.append(section);
+    if (includeHeader) form.append(createEditorActionBar({ modal: Boolean(options.modal) }));
+  }
+
+  function moveOrganizationMember(employeeId, direction) {
+    const user = drafts
+      .get("user_master")
+      ?.entries.find((entry) => valueFor(entry, "employee_id") === employeeId);
+    if (!user || !["up", "down"].includes(direction)) return;
+    const siblings = directMembersFor(
+      valueFor(user, "affiliation_type"),
+      valueFor(user, "organization_id"),
+    );
+    const index = siblings.findIndex((entry) => entry.id === user.id);
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= siblings.length) return;
+    [siblings[index], siblings[targetIndex]] = [siblings[targetIndex], siblings[index]];
+    siblings.forEach((entry, siblingIndex) => {
+      entry.values.member_order = String((siblingIndex + 1) * 10);
+    });
+    renderTable();
+    renderInspector();
+    syncAdminChrome();
+  }
+
+  function assignmentEntryForUser(employeeId, create = false) {
+    const draft = drafts.get("comment_assignment");
+    let entry = draft?.entries.find(
+      (item) => valueFor(item, "commenter_employee_id") === employeeId,
+    );
+    if (!entry && create && draft) {
+      entry = createEntry(
+        {
+          commenter_employee_id: employeeId,
+          target_type: "none",
+          target_organization_ids: "",
+          target_employee_ids: "",
+        },
+        getDefinition("comment_assignment"),
+        true,
+      );
+      draft.entries.push(entry);
+    }
+    return entry || null;
+  }
+
+  function assignmentEntryForSelectedUser(create = false) {
+    return assignmentEntryForUser(
+      valueFor(getSelectedUser(), "employee_id"),
+      create,
+    );
+  }
+
+  function resetCommentAssignment(employeeId) {
+    const assignment = assignmentEntryForUser(employeeId, true);
+    if (!assignment) return;
+    assignment.values.target_type = "none";
+    assignment.values.target_organization_ids = "";
+    assignment.values.target_employee_ids = "";
+  }
+
+  function affiliationValue(entry) {
+    return valueFor(entry, "affiliation_type") === "director"
+      ? "director"
+      : `organization:${valueFor(entry, "organization_id")}`;
+  }
+
+  function affiliationLabel(entry) {
+    if (valueFor(entry, "affiliation_type") === "director") return "部長";
+    const organizationId = valueFor(entry, "organization_id");
+    return teamPathLabel(teamEntryFor(organizationId)) || "所属未設定";
+  }
+
+  function directMembersFor(affiliationType, organizationId) {
+    return (drafts.get("user_master")?.entries || [])
+      .filter((entry) =>
+        affiliationType === "director"
+          ? valueFor(entry, "affiliation_type") === "director"
+          : valueFor(entry, "affiliation_type") === "organization" &&
+            valueFor(entry, "organization_id") === organizationId,
+      )
+      .sort(compareUserListEntries);
+  }
+
+  function commentAssignmentSummary(employeeId) {
+    const assignment = assignmentEntryForUser(employeeId);
+    const type = valueFor(assignment, "target_type") || "none";
+    if (type === "none") return "なし";
+    if (type === "organization") {
+      return (
+        teamPathLabel(teamEntryFor(valueFor(assignment, "target_organization_ids"))) ||
+        teamNameFor(valueFor(assignment, "target_organization_ids")) ||
+        "組織"
+      );
+    }
+    if (type === "departments") {
+      const count = splitIds(valueFor(assignment, "target_organization_ids")).length;
+      return `複数課（${count}課）`;
+    }
+    const count = splitIds(valueFor(assignment, "target_employee_ids")).length;
+    return "個別設定（" + count + "人）";
+  }
+
+  function splitIds(value) {
+    return [...new Set(String(value || "").split(";").map((item) => item.trim()).filter(Boolean))];
+  }
+
+  function organizationAffiliationChoices() {
+    const teams = drafts.get("team_master")?.entries || [];
+    const departments = teams
+      .filter((entry) => valueFor(entry, "team_type") === "department")
+      .sort(compareTeamEntries);
+    const choices = [["director", "部長"]];
+    departments.forEach((department) => {
+      const departmentId = valueFor(department, "team_id");
+      choices.push([`organization:${departmentId}`, teamPathLabel(department)]);
+      teams
+        .filter(
+          (entry) =>
+            valueFor(entry, "team_type") === "section" &&
+            valueFor(entry, "parent_team_id") === departmentId,
+        )
+        .sort(compareTeamEntries)
+        .forEach((section) => {
+          choices.push([
+            `organization:${valueFor(section, "team_id")}`,
+            teamPathLabel(section),
+          ]);
+        });
+    });
+    return choices;
+  }
+
+  async function changeUserAffiliation(nextValue) {
+    const user = getSelectedUser();
+    if (!user) return;
+    await applyUserAffiliationChange(user, nextValue);
+  }
+
+  async function moveUserToAffiliation(employeeId, nextValue) {
+    const user = drafts
+      .get("user_master")
+      ?.entries.find((entry) => valueFor(entry, "employee_id") === employeeId);
+    if (!user) return;
+    await applyUserAffiliationChange(user, nextValue);
+  }
+
+  async function applyUserAffiliationChange(user, nextValue) {
+    const previous = affiliationValue(user);
+    if (!nextValue || previous === nextValue) {
+      renderInspector();
+      return;
+    }
+    const employeeId = valueFor(user, "employee_id");
+    const assignment = assignmentEntryForUser(employeeId);
+    if (assignment && valueFor(assignment, "target_type") !== "none") {
+      const confirmed = await requestConfirmationDialog({
+        title: "所属変更とコメント担当解除",
+        description:
+          "所属を変更すると、現在のコメント担当設定を解除します。保存後は過去分を含むコメント列の表示も変わります。",
+        confirmLabel: "解除して所属を変更",
+        cancelLabel: "変更しない",
+        confirmTone: "danger",
+      });
+      if (!confirmed) {
+        renderInspector();
+        return;
+      }
+    }
+    if (nextValue === "director") {
+      user.values.affiliation_type = "director";
+      user.values.organization_id = "";
+      user.values.can_input_own_report = "0";
+    } else {
+      user.values.affiliation_type = "organization";
+      user.values.organization_id = nextValue.replace(/^organization:/, "");
+    }
+    user.values.member_order = String(
+      directMembersFor(
+        user.values.affiliation_type,
+        user.values.organization_id,
+      ).length * 10,
+    );
+    resetCommentAssignment(employeeId);
+    pruneInvalidCustomAssignments();
+    renderMasterNav();
+    renderTable();
+    renderInspector();
+    syncAdminChrome();
+  }
+
+  function pruneInvalidCustomAssignments() {
+    (drafts.get("comment_assignment")?.entries || []).forEach((assignment) => {
+      if (valueFor(assignment, "target_type") !== "custom") return;
+      const commenter = drafts
+        .get("user_master")
+        ?.entries.find(
+          (entry) =>
+            valueFor(entry, "employee_id") ===
+            valueFor(assignment, "commenter_employee_id"),
+        );
+      const allowed = new Set(
+        allowedCustomTargets(commenter).map((entry) => valueFor(entry, "employee_id")),
+      );
+      assignment.values.target_employee_ids = splitIds(
+        valueFor(assignment, "target_employee_ids"),
+      )
+        .filter((employeeId) => allowed.has(employeeId))
+        .join(";");
+      if (!assignment.values.target_employee_ids) {
+        assignment.values.target_type = "none";
+      }
+    });
+  }
+
+  function updateCommentTargetType(targetType) {
+    const assignment = assignmentEntryForSelectedUser(true);
+    if (!assignment) return;
+    const normalizedTargetType = String(targetType || "");
+    const organizationPrefix = "organization:";
+    const organizationId = normalizedTargetType.startsWith(organizationPrefix)
+      ? normalizedTargetType.slice(organizationPrefix.length)
+      : "";
+    assignment.values.target_type = organizationId ? "organization" : normalizedTargetType;
+    assignment.values.target_organization_ids = organizationId;
+    assignment.values.target_employee_ids = "";
+    renderInspector();
+    renderTable();
+    syncAdminChrome();
+  }
+
+  function toggleAssignmentListValue(column, id, selected) {
+    const assignment = assignmentEntryForSelectedUser(true);
+    if (!assignment) return;
+    const values = splitIds(valueFor(assignment, column));
+    const next = selected
+      ? [...new Set([...values, id])]
+      : values.filter((value) => value !== id);
+    assignment.values[column] = next.join(";");
+    renderTable();
+    renderInspector();
+    syncAdminChrome();
+  }
+
+  function allowedOrganizationTargets(user) {
+    const organization = teamEntryFor(valueFor(user, "organization_id"));
+    if (!organization) return [];
+    const organizationId = valueFor(organization, "team_id");
+    if (valueFor(organization, "team_type") === "section") {
+      return [
+        organization,
+        teamEntryFor(valueFor(organization, "parent_team_id")),
+      ].filter(Boolean).sort(compareTeamPathOrder);
+    }
+    return [
+      organization,
+      ...(drafts.get("team_master")?.entries || []).filter(
+        (entry) =>
+          valueFor(entry, "team_type") === "section" &&
+          valueFor(entry, "parent_team_id") === organizationId,
+      ),
+    ].sort(compareTeamPathOrder);
+  }
+
+  function allowedCustomTargets(user) {
+    const organization = teamEntryFor(valueFor(user, "organization_id"));
+    if (!organization) return [];
+    const organizationIds = new Set([valueFor(organization, "team_id")]);
+    if (valueFor(organization, "team_type") === "department") {
+      (drafts.get("team_master")?.entries || [])
+        .filter(
+          (entry) =>
+            valueFor(entry, "team_type") === "section" &&
+            valueFor(entry, "parent_team_id") === valueFor(organization, "team_id"),
+        )
+        .forEach((entry) => organizationIds.add(valueFor(entry, "team_id")));
+    }
+    return (drafts.get("user_master")?.entries || [])
+      .filter(
+        (entry) =>
+          entry.id !== user.id &&
+          valueFor(entry, "affiliation_type") === "organization" &&
+          organizationIds.has(valueFor(entry, "organization_id")) &&
+          valueFor(entry, "can_input_own_report") === "1",
+      )
+      .sort(compareUserListEntries);
+  }
+
+  function renderUserEditorDialog() {
+    const state = userEditorModalState;
+    const entry = drafts
+      .get("user_master")
+      ?.entries.find((item) => item.id === state?.entryId);
+    const form = byId("userEditorDialogForm");
+    if (!entry || !form) return;
+    byId("userEditorDialogTitle").textContent = entry.isNew
+      ? "ユーザーを追加"
+      : "ユーザーを編集";
+    form.replaceChildren();
+    renderOrganizationUserInspector(form, entry, { modal: true });
+  }
+
+  function renderOrganizationUserInspector(form, entry, options = {}) {
+    const definition = getDefinition("user_master");
+    const fields = document.createElement("div");
+    fields.className = "inspector-fields user-editor-fields";
+    ["employee_id", "display_name"].forEach((key) => {
+      const column = definition.columns.find((item) => item.key === key);
+      fields.append(
+        createInspectorField(column, valueFor(entry, key), {
+          required: true,
+          disabled: key === "employee_id" && !entry.isNew,
+          hideKey: true,
+        }),
+      );
+    });
+
+    const affiliationField = document.createElement("label");
+    affiliationField.className = "inspector-field";
+    const affiliationLabelElement = document.createElement("span");
+    affiliationLabelElement.className = "inspector-field-label";
+    affiliationLabelElement.textContent = "所属組織";
+    const affiliationSelect = document.createElement("select");
+    affiliationSelect.dataset.userAffiliation = "true";
+    const currentAffiliation = affiliationValue(entry);
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "所属を選択";
+    affiliationSelect.append(emptyOption);
+    organizationAffiliationChoices().forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      affiliationSelect.append(option);
+    });
+    affiliationSelect.value = currentAffiliation === "organization:" ? "" : currentAffiliation;
+    affiliationSelect.required = true;
+    affiliationField.append(affiliationLabelElement, affiliationSelect);
+
+    ["employment_type", "is_admin", "can_input_own_report"].forEach((key) => {
+      const column = definition.columns.find((item) => item.key === key);
+      fields.append(
+        createInspectorField(column, valueFor(entry, key), {
+          required: Boolean(column.required),
+          disabled:
+            (key === "is_admin" && valueFor(entry, "employment_type") !== "regular") ||
+            (key === "can_input_own_report" && valueFor(entry, "affiliation_type") === "director"),
+          hideKey: true,
+        }),
+      );
+    });
+    fields.append(affiliationField);
+
+    const assignmentSection = document.createElement("section");
+    assignmentSection.className = "organization-editor-section user-comment-assignment-section";
+    assignmentSection.append(renderCommentAssignmentEditor(entry));
+    form.append(
+      fields,
+      assignmentSection,
+      createUserEditorActions({ modal: Boolean(options.modal) }),
+    );
+  }
+
+  function renderCommentAssignmentEditor(user) {
+    const assignment = assignmentEntryForUser(valueFor(user, "employee_id"), true);
+    const wrap = document.createElement("div");
+    wrap.className = "comment-assignment-editor";
+    const typeField = document.createElement("label");
+    typeField.className = "inspector-field";
+    const label = document.createElement("span");
+    label.className = "inspector-field-label";
+    label.textContent = "対象方式";
+    const select = document.createElement("select");
+    select.dataset.commentTargetType = "true";
+    const isDirector = valueFor(user, "affiliation_type") === "director";
+    const isTemporary = valueFor(user, "employment_type") === "temporary";
+    const organizationChoices = allowedOrganizationTargets(user).map((entry) => {
+      const organizationId = valueFor(entry, "team_id");
+      return ["organization:" + organizationId, teamPathLabel(entry)];
+    });
+    const choices = isTemporary
+      ? [["none", "なし"]]
+      : isDirector
+      ? [["none", "なし"], ["departments", "複数課"]]
+      : [["none", "なし"], ...organizationChoices, ["custom", "所属組織内で個別設定"]];
+    choices.forEach(([value, text]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      select.append(option);
+    });
+    const assignmentType = valueFor(assignment, "target_type");
+    const currentValue = assignmentType === "organization"
+      ? "organization:" + valueFor(assignment, "target_organization_ids")
+      : assignmentType;
+    select.value = choices.some(([value]) => value === currentValue)
+      ? currentValue
+      : "none";
+    typeField.append(label, select);
+    wrap.append(typeField);
+
+    if (select.value === "custom") {
+      wrap.append(
+        createAssignmentChecklist(
+          "所属組織内のユーザー",
+          allowedCustomTargets(user),
+          splitIds(valueFor(assignment, "target_employee_ids")),
+          "employee",
+        ),
+      );
+    } else if (select.value === "departments") {
+      const departments = (drafts.get("team_master")?.entries || [])
+        .filter((entry) => valueFor(entry, "team_type") === "department")
+        .sort(compareTeamEntries);
+      wrap.append(
+        createAssignmentChecklist(
+          "対象の課（複数選択）",
+          departments,
+          splitIds(valueFor(assignment, "target_organization_ids")),
+          "department",
+        ),
+      );
+    }
+    return wrap;
+  }
+
+  function createAssignmentChecklist(titleText, entries, selectedIds, kind) {
+    const fieldset = document.createElement("fieldset");
+    fieldset.className = "assignment-checklist";
+    const legend = document.createElement("legend");
+    legend.textContent = `${titleText}（${selectedIds.length}件選択）`;
+    fieldset.append(legend);
+    entries.forEach((entry) => {
+      const id =
+        kind === "employee" ? valueFor(entry, "employee_id") : valueFor(entry, "team_id");
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = id;
+      input.checked = selectedIds.includes(id);
+      if (kind === "employee") input.dataset.commentTargetEmployee = "true";
+      else input.dataset.commentTargetDepartment = "true";
+      const text = document.createElement("span");
+      text.textContent =
+        kind === "employee"
+          ? `${valueFor(entry, "display_name")}（${id}）`
+          : teamPathLabel(entry);
+      label.append(input, text);
+      fieldset.append(label);
+    });
+    if (!entries.length) {
+      const empty = document.createElement("p");
+      empty.textContent = "選択可能な対象がありません。";
+      fieldset.append(empty);
+    }
+    return fieldset;
+  }
+
+  function renderUserInspector(form, entry) {
+    return renderOrganizationUserInspector(form, entry);
+    /* istanbul ignore next -- legacy inspector retained for migration reference */
     const fields = document.createElement("div");
     fields.className = "user-editor-fields";
     const definition = getDefinition("user_master");
-    definition.columns
-      .filter(
-        (column) =>
-          [
-            "display_name",
-            "employment_type",
-            "is_admin",
-            "can_input_own_report",
-            "small_team_id",
-          ].includes(column.key),
-      )
-      .forEach((column) => {
-        const field = createInspectorField(column, entry.values[column.key], {
-          required: Boolean(column.required),
-          disabled:
-            column.key === "is_admin" &&
-            valueFor(entry, "employment_type") !== "regular",
-          hint: column.key === "is_admin" ? "正社員のみ設定できます。" : "",
-          hideKey: true,
-        });
-        fields.append(field);
+    const editorColumnOrder = [
+      "employee_id",
+      "display_name",
+      "employment_type",
+      "is_admin",
+      "small_team_id",
+      "can_input_own_report",
+    ];
+    editorColumnOrder.forEach((columnKey) => {
+      const column = definition.columns.find((candidate) => candidate.key === columnKey);
+      if (!column) return;
+      const field = createInspectorField(column, entry.values[column.key], {
+        required: Boolean(column.required),
+        disabled:
+          (column.key === "employee_id" && !entry.isNew) ||
+          (column.key === "is_admin" &&
+            valueFor(entry, "employment_type") !== "regular"),
+        hideKey: true,
       });
-
-    const advanced = document.createElement("details");
-    advanced.className = "user-advanced-settings";
-    advanced.open = entry.isNew;
-    const advancedSummary = document.createElement("summary");
-    advancedSummary.textContent = "詳細設定";
-    const advancedFields = document.createElement("div");
-    advancedFields.className = "user-editor-fields";
-    definition.columns
-      .filter((column) => column.key === "employee_id")
-      .forEach((column) => {
-        advancedFields.append(
-          createInspectorField(column, entry.values[column.key], {
-            required: Boolean(column.required),
-            disabled: column.key === "employee_id" && !entry.isNew,
-            hideKey: true,
-          }),
-        );
+      field.dataset.userField = column.key;
+      fields.append(field);
+      if (column.key === "small_team_id") {
+        fields.append(createUserCommenterTeamsField(entry));
+      }
     });
-    advanced.append(advancedSummary, advancedFields);
-    form.append(header, fields, advanced, createUserEditorActions());
+    form.append(fields, createUserEditorActions());
   }
 
-  function createUserEditorActions() {
+  function createUserCommenterTeamsField(entry) {
+    const field = document.createElement("div");
+    field.className = "inspector-field user-commenter-teams-field";
+    field.dataset.userField = "commenter_team_ids";
+
+    const label = document.createElement("span");
+    label.className = "inspector-field-label";
+    const labelText = document.createElement("span");
+    labelText.textContent = "コメント対象チーム";
+    label.append(labelText);
+
+    const values = document.createElement("div");
+    values.className = "user-commenter-teams";
+    const teamIds = commenterTeamIdsForUser(valueFor(entry, "employee_id"));
+    teamIds.forEach((teamId) => {
+      const team = document.createElement("span");
+      team.className = "user-commenter-team";
+      team.textContent = teamNameFor(teamId);
+      values.append(team);
+    });
+    if (!teamIds.length) {
+      values.classList.add("is-empty");
+      values.textContent = "—";
+    }
+
+    field.append(label, values);
+    return field;
+  }
+
+  function createUserEditorActions({ modal = false } = {}) {
     const actions = document.createElement("div");
     actions.className = "user-editor-actions";
-    const deleteButton = createDeleteButton("削除");
-    deleteButton.classList.add("is-secondary");
+    if (modal) {
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.className = "inspector-cancel-button";
+      cancelButton.dataset.userEditorCancel = "true";
+      cancelButton.textContent = "キャンセル";
+      actions.append(cancelButton);
+    } else {
+      const deleteButton = createDeleteButton("削除");
+      deleteButton.classList.add("is-secondary");
+      actions.append(deleteButton);
+    }
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.className = "inspector-save-button";
     saveButton.dataset.saveEditor = "true";
     saveButton.textContent = "保存";
-    actions.append(deleteButton, saveButton);
+    actions.append(saveButton);
     return actions;
   }
 
@@ -2245,16 +4053,6 @@
           column.key === "team_id" &&
           !entry.isNew,
       });
-      if (
-        activeMaster === "team_master" &&
-        column.key === "team_id" &&
-        !entry.isNew
-      ) {
-        const hint = document.createElement("small");
-        hint.className = "inspector-field-hint";
-        hint.textContent = "登録後のチームIDは変更できません";
-        field.append(hint);
-      }
       fields.append(field);
     });
     form.append(header, fields, createUserEditorActions());
@@ -2286,8 +4084,15 @@
   }
 
   function createInspectorField(column, value, options = {}) {
-    const label = document.createElement("label");
-    label.className = "inspector-field";
+    const isRadioField = [
+      "employment_type",
+      "admin_flag",
+      "self_report_input",
+    ].includes(column.type);
+    const label = document.createElement(isRadioField ? "div" : "label");
+    label.className = isRadioField
+      ? "inspector-field inspector-radio-field"
+      : "inspector-field";
     const labelText = document.createElement("span");
     labelText.className = "inspector-field-label";
     const visibleLabel = document.createElement("span");
@@ -2297,38 +4102,83 @@
     labelText.append(visibleLabel);
     if (!options.hideKey) labelText.append(key);
 
+    if (isRadioField) {
+      const radioGroup = document.createElement("div");
+      radioGroup.className = "inspector-radio-group";
+      radioGroup.setAttribute("role", "radiogroup");
+      radioGroup.setAttribute("aria-label", column.label);
+      const choices =
+        column.type === "employment_type"
+          ? [["regular", "正社員"], ["temporary", "派遣社員"]]
+          : column.type === "admin_flag"
+            ? [["1", "管理者"], ["0", "非管理者"]]
+            : [["1", "要"], ["0", "不要"]];
+      const isInvalid = Boolean(options.required) && !String(value).trim();
+      choices.forEach(([optionValue, text], index) => {
+        const optionLabel = document.createElement("label");
+        optionLabel.className = "inspector-radio-option";
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "user-editor-" + column.key;
+        radio.value = optionValue;
+        radio.checked = String(value) === optionValue;
+        radio.dataset.column = column.key;
+        radio.required = Boolean(options.required) && index === 0;
+        radio.disabled = Boolean(options.disabled);
+        radio.autocomplete = "off";
+        radio.setAttribute("aria-invalid", String(isInvalid));
+        const optionText = document.createElement("span");
+        optionText.textContent = text;
+        optionLabel.append(radio, optionText);
+        radioGroup.append(optionLabel);
+      });
+      radioGroup.setAttribute("aria-invalid", String(isInvalid));
+      label.append(labelText, radioGroup);
+      if (options.hint) {
+        const hint = document.createElement("small");
+        hint.className = "inspector-field-hint";
+        hint.textContent = options.hint;
+        label.append(hint);
+      }
+      return label;
+    }
+
     let input;
-    if (column.type === "admin_flag") {
-      label.classList.add("admin-flag-field");
-      input = document.createElement("input");
-      input.type = "checkbox";
-      input.checked = value === "1";
-      input.setAttribute("aria-label", column.label);
-    } else if (
+    if (
       [
         "boolean",
         "active",
-        "employment_type",
-        "self_report_input",
         "team_level",
+        "team_type",
         "small_team",
+        "organization",
+        "affiliation_type",
         "parent_team",
+        "parent_department",
+        "commenter_scope",
       ].includes(column.type)
     ) {
       input = document.createElement("select");
       let choices = [];
       if (column.type === "boolean") {
         choices = [["0", "稼働日"], ["1", "休日"]];
-      } else if (column.type === "self_report_input") {
-        choices = [["1", "入力する"], ["0", "入力しない"]];
-      } else if (column.type === "employment_type") {
-        choices = [["regular", "正社員"], ["temporary", "派遣社員"]];
       } else if (column.type === "active") {
         choices = [["1", "有効"], ["0", "廃止"]];
       } else if (column.type === "team_level") {
-        choices = [["large", "課"], ["medium", "係"], ["small", "チーム"]];
+        choices = [["large", "課"], ["medium", "係"]];
+        if (value === "small") choices.push(["small", "旧チーム（既存）"]);
+      } else if (column.type === "team_type") {
+        choices = [["department", "課"], ["section", "係"]];
+      } else if (column.type === "affiliation_type") {
+        choices = [["organization", "課・係"], ["director", "部長"]];
+      } else if (column.type === "commenter_scope") {
+        choices = [["large", "課"], ["medium", "係"], ["custom", "カスタム"]];
       } else if (column.type === "small_team") {
         choices = [["", "所属なし"], ...teamAssignmentChoices()];
+      } else if (column.type === "organization") {
+        choices = [["", "所属を選択"], ...teamAssignmentChoices()];
+      } else if (column.type === "parent_department") {
+        choices = [["", "親課を選択"], ...teamChoices("department")];
       } else {
         const selected = getDraft()?.entries.find(
           (entry) => entry.id === getDraft()?.selectedId,
@@ -2359,6 +4209,9 @@
       }
     }
     input.dataset.column = column.key;
+    if (column.type === "commenter_scope") {
+      input.setAttribute("aria-label", "コメント対象範囲");
+    }
     if (input.type !== "checkbox") input.value = value;
     input.required = Boolean(options.required);
     input.disabled = Boolean(options.disabled);
@@ -2378,7 +4231,10 @@
 
   function teamChoices(level) {
     return (drafts.get("team_master")?.entries || [])
-      .filter((entry) => valueFor(entry, "team_level") === level)
+      .filter((entry) =>
+        valueFor(entry, "team_type") === level ||
+        valueFor(entry, "team_level") === level,
+      )
       .sort((left, right) => {
         const leftOrder = Number(valueFor(left, "sort_order") || 999999);
         const rightOrder = Number(valueFor(right, "sort_order") || 999999);
@@ -2396,7 +4252,7 @@
   function teamAssignmentChoices() {
     const entries = drafts.get("team_master")?.entries || [];
     return entries
-      .filter((entry) => ["large", "medium", "small"].includes(valueFor(entry, "team_level")))
+      .filter((entry) => ["department", "section"].includes(valueFor(entry, "team_type")))
       .sort(compareTeamPathOrder)
       .map((entry) => [valueFor(entry, "team_id"), teamPathLabel(entry)]);
   }
@@ -2424,7 +4280,10 @@
 
   function teamParentChoices(levels, excludedTeamId) {
     return (drafts.get("team_master")?.entries || [])
-      .filter((entry) => levels.includes(valueFor(entry, "team_level")))
+      .filter((entry) =>
+        levels.includes(valueFor(entry, "team_type")) ||
+        levels.includes(valueFor(entry, "team_level")),
+      )
       .filter((entry) => valueFor(entry, "team_id") !== excludedTeamId)
       .sort(compareTeamEntries)
       .map((entry) => [valueFor(entry, "team_id"), teamPathLabel(entry)]);
@@ -2439,17 +4298,56 @@
     return button;
   }
 
-  function createEditorActionBar() {
+  function createUserRowAction(action, entry, displayLabel) {
+    const button = document.createElement("button");
+    const isEdit = action === "edit";
+    const iconPath = isEdit
+      ? EMBEDDED_EDIT_ICON_PATH
+      : "M10.556 4a1 1 0 0 0-.97.751l-.292 1.14h5.421l-.293-1.14A1 1 0 0 0 13.453 4h-2.897Zm6.224 1.892-.421-1.639A3 3 0 0 0 13.453 2h-2.897A3 3 0 0 0 7.65 4.253l-.421 1.639H4a1 1 0 1 0 0 2h.1l1.215 11.425A3 3 0 0 0 8.3 22h7.4a3 3 0 0 0 2.984-2.683l1.214-11.425H20a1 1 0 1 0 0-2h-3.22Zm1.108 2H6.112l1.192 11.214A1 1 0 0 0 8.3 20h7.4a1 1 0 0 0 .995-.894l1.192-11.214ZM10 10a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1Zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1Z";
+    button.type = "button";
+    button.className = "api-key-action " + action;
+    button.dataset.userRowAction = action;
+    button.dataset.userId = entry.id;
+    button.setAttribute(
+      "aria-label",
+      displayLabel + (isEdit ? "を編集" : "を削除"),
+    );
+    button.title = isEdit ? "編集" : "削除";
+    const iconWrap = document.createElement("span");
+    const icon = createTeamSvgIcon(iconPath);
+    const iconPathElement = icon.querySelector("path");
+    iconPathElement.setAttribute("fill-rule", "evenodd");
+    iconPathElement.setAttribute("clip-rule", "evenodd");
+    iconPathElement.setAttribute("fill", "currentColor");
+    iconWrap.append(icon);
+    button.append(iconWrap);
+    return button;
+  }
+
+  function createEditorActionBar({ modal = false } = {}) {
     const actions = document.createElement("div");
-    actions.className = "inspector-record-actions";
+    actions.className = modal
+      ? "team-editor-modal-actions"
+      : "inspector-record-actions";
+    if (modal) {
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.className = "inspector-cancel-button";
+      cancelButton.dataset.teamEditorCancel = "true";
+      cancelButton.textContent = "キャンセル";
+      actions.append(cancelButton);
+    }
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.className = "inspector-save-button";
     saveButton.dataset.saveEditor = "true";
-    saveButton.append(
-      createTeamSvgIcon("m5 12 4 4L19 6"),
-      document.createTextNode("変更を保存"),
-    );
+    if (modal) saveButton.textContent = "保存";
+    else {
+      saveButton.append(
+        createTeamSvgIcon("m5 12 4 4L19 6"),
+        document.createTextNode("変更を保存"),
+      );
+    }
     actions.append(saveButton);
     return actions;
   }
@@ -2465,6 +4363,7 @@
     let count = 0;
     if (isDraftDirty(drafts.get("user_master"))) count += 1;
     if (isDraftDirty(drafts.get("team_master"))) count += 1;
+    if (isDraftDirty(drafts.get("comment_assignment"))) count += 1;
     if (isDraftDirty(drafts.get("calendar"))) count += 1;
     return count;
   }
@@ -2473,7 +4372,6 @@
     const count = dirtyFileCount();
     const badge = byId("adminDirtyBadge");
     const ledger = byId("adminLedgerCount");
-    const pageSaveButton = byId("adminSaveButton");
     const activeEditorDirty =
       activeMaster === "team_master"
         ? isOrganizationAdministrationDirty()
@@ -2485,9 +4383,6 @@
     document.querySelectorAll("[data-save-editor]").forEach((button) => {
       button.disabled = !activeEditorDirty || isLoading;
     });
-    if (pageSaveButton) {
-      pageSaveButton.disabled = count === 0 || isLoading;
-    }
     if (ledger) ledger.textContent = count === 0 ? "変更はありません" : `${count}ファイルを編集中`;
     if (typeof syncNativeUnsavedState === "function") {
       syncNativeUnsavedState(hasUnsavedChanges());
@@ -2501,6 +4396,7 @@
   window.adminMasters = {
     initialize,
     ensureLoaded,
+    reload,
     hasUnsaved,
     save,
     syncChrome: syncAdminChrome,

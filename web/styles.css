@@ -5,7 +5,7 @@
 
 :root {
   color-scheme: light;
-  --font-ui: "Segoe UI", Arial, "IBM Plex Sans JP", "Yu Gothic UI", sans-serif;
+  --font-ui: "IBM Plex Sans", "IBM Plex Sans JP", "Yu Gothic UI", sans-serif;
   --font-10: 10px;
   --font-12: 12px;
   --font-13: 13px;
@@ -13,6 +13,8 @@
   --font-15: 15px;
   --font-16: 16px;
   --font-18: 18px;
+  /* Shared content scale: every requested size is an exact CSS pixel value. */
+  --ui-font-size: 14px;
   --app-bg: #f7f7f8;
   --surface: #ffffff;
   --surface-alt: var(--app-bg);
@@ -41,13 +43,16 @@
   --text: #242424;
   --text-strong: #111111;
   --text-muted: #686868;
+  --interactive-fill: #343434;
+  --interactive-fill-hover: #454545;
+  --interactive-ink: #3f3f46;
   --primary: #242424;
   --primary-hover: #111111;
   --primary-ink: #111111;
   --primary-soft: var(--selection-soft);
   --primary-border: #b8b8bc;
   --primary-on: #ffffff;
-  --dirty: oklch(96% 0.058 90);
+  --dirty: #fef3c7;
   --success: oklch(47% 0.125 153);
   --success-bg: oklch(95% 0.032 153);
   --warning: oklch(48% 0.125 65);
@@ -65,7 +70,8 @@
   --title-bar-border: var(--border);
   --sidebar-bg: var(--surface-soft);
   --sidebar-bg-deep: var(--surface-hover);
-  --sidebar-text: var(--text);
+  --sidebar-text: var(--interactive-ink);
+  --sidebar-active-text: var(--interactive-fill);
   --sidebar-muted: var(--text-muted);
   --shadow-color: rgb(20 20 20 / 10%);
   --shadow-color-strong: rgb(20 20 20 / 16%);
@@ -73,7 +79,6 @@
   --radius-sm: 5px;
   --radius-md: 8px;
   --title-height: 54px;
-  --sidebar-open: 224px;
   --sidebar-closed: 80px;
   --toolbar-height: 48px;
   --table-row-height: 42px;
@@ -89,7 +94,8 @@
   --cell-padding-x: 10px;
   --cell-padding-y: 9px;
   --date-cell-padding-x: 10px;
-  --date-column-width: 86px;
+  --date-column-width: 140px;
+  --period-date-input-width: 148px;
   --badge-height: 17px;
   --range-today-height: 58px;
   --settings-padding: 18px;
@@ -120,16 +126,16 @@ html[data-theme="dark"] {
   --table-border: rgb(255 255 255 / 12%);
   --table-border-strong: rgb(255 255 255 / 18%);
   --border-strong: rgb(255 255 255 / 25%);
-  --text: #dcdcdc;
-  --text-strong: #f3f3f3;
+  --text: #d1d1d1;
+  --text-strong: #e5e5e5;
   --text-muted: #afafaf;
-  --primary: #f3f3f3;
-  --primary-hover: #ffffff;
-  --primary-ink: #f3f3f3;
+  --primary: #e3e3e3;
+  --primary-hover: #f0f0f0;
+  --primary-ink: #e5e5e5;
   --primary-soft: #303030;
   --primary-border: rgb(255 255 255 / 25%);
-  --primary-on: #131313;
-  --dirty: #4a3b1c;
+  --primary-on: #161616;
+  --dirty: rgb(251 191 36 / 15%);
   --success: #68d391;
   --success-bg: #173526;
   --warning: #f1c75b;
@@ -146,7 +152,8 @@ html[data-theme="dark"] {
   --title-bar-border: rgb(255 255 255 / 12%);
   --sidebar-bg: #0d0d0d;
   --sidebar-bg-deep: #0d0d0d;
-  --sidebar-text: #dcdcdc;
+  --sidebar-text: #b8b8b8;
+  --sidebar-active-text: #d8d8d8;
   --sidebar-muted: #afafaf;
   --shadow-color: rgb(0 0 0 / 24%);
   --shadow-color-strong: rgb(0 0 0 / 40%);
@@ -161,6 +168,7 @@ html body[data-font-size="compact"] {
   --font-15: 14px;
   --font-16: 15px;
   --font-18: 17px;
+  --ui-font-size: 13px;
   --control-height: 30px;
   --table-row-height: 38px;
   --table-header-height: 34px;
@@ -174,7 +182,8 @@ html body[data-font-size="compact"] {
   --cell-padding-x: 8px;
   --cell-padding-y: 7px;
   --date-cell-padding-x: 8px;
-  --date-column-width: 80px;
+  --date-column-width: 136px;
+  --period-date-input-width: 140px;
   --badge-height: 16px;
   --range-today-height: 54px;
   --settings-padding: 16px;
@@ -188,6 +197,7 @@ html body[data-font-size="medium"] {
   --font-15: 16px;
   --font-16: 17px;
   --font-18: 20px;
+  --ui-font-size: 15px;
   --control-height: 36px;
   --table-row-height: 46px;
   --table-header-height: 40px;
@@ -201,7 +211,8 @@ html body[data-font-size="medium"] {
   --cell-padding-x: 11px;
   --cell-padding-y: 10px;
   --date-cell-padding-x: 11px;
-  --date-column-width: 94px;
+  --date-column-width: 144px;
+  --period-date-input-width: 156px;
   --badge-height: 19px;
   --range-today-height: 62px;
   --settings-padding: 19px;
@@ -215,6 +226,7 @@ html body[data-font-size="large"] {
   --font-15: 17px;
   --font-16: 18px;
   --font-18: 21px;
+  --ui-font-size: 16px;
   --control-height: 40px;
   --table-row-height: 50px;
   --table-header-height: 43px;
@@ -228,7 +240,8 @@ html body[data-font-size="large"] {
   --cell-padding-x: 12px;
   --cell-padding-y: 11px;
   --date-cell-padding-x: 13px;
-  --date-column-width: 102px;
+  --date-column-width: 148px;
+  --period-date-input-width: 168px;
   --badge-height: 20px;
   --range-today-height: 64px;
   --settings-padding: 20px;
@@ -242,6 +255,7 @@ html body[data-font-size="xlarge"] {
   --font-15: 20px;
   --font-16: 21px;
   --font-18: 23px;
+  --ui-font-size: 17px;
   --control-height: 44px;
   --table-row-height: 56px;
   --table-header-height: 48px;
@@ -255,7 +269,8 @@ html body[data-font-size="xlarge"] {
   --cell-padding-x: 14px;
   --cell-padding-y: 12px;
   --date-cell-padding-x: 16px;
-  --date-column-width: 114px;
+  --date-column-width: 156px;
+  --period-date-input-width: 180px;
   --badge-height: 23px;
   --range-today-height: 70px;
   --settings-padding: 22px;
@@ -275,7 +290,7 @@ html body {
   background: var(--app-bg);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: var(--ui-font-size);
   line-height: 1.5;
   accent-color: var(--primary);
   caret-color: var(--primary);
@@ -346,6 +361,7 @@ html body .title-bar-leading {
 html body .title-bar-title {
   overflow: hidden;
   color: var(--text-strong);
+  font-family: "Segoe UI", Arial, sans-serif;
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -356,6 +372,7 @@ html body .title-bar-title {
 html body .title-bar-actions {
   gap: 6px;
   margin-left: auto;
+  line-height: 1;
 }
 
 html body .current-user {
@@ -364,6 +381,7 @@ html body .current-user {
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -375,21 +393,24 @@ html body .current-user-icon {
 }
 
 html body .current-user-display {
+  height: 32px;
   min-width: 0;
   gap: 6px;
+  line-height: 1;
 }
 
 html body .current-user-icon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   justify-content: center;
   color: var(--text-muted);
 }
 
 html body .current-user-icon svg {
-  width: 17px;
-  height: 17px;
+  display: block;
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -399,8 +420,8 @@ html body .current-user-icon svg {
 
 html body .header-icon-button {
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   align-items: center;
   justify-content: center;
   border: 1px solid transparent;
@@ -408,6 +429,7 @@ html body .header-icon-button {
   background: transparent;
   color: var(--text-muted);
   padding: 0;
+  line-height: 1;
 }
 
 html body .header-icon-button:hover,
@@ -417,6 +439,17 @@ html body .header-icon-button.is-active {
   color: var(--primary-ink);
 }
 
+html:not([data-theme="dark"]) body .header-icon-button,
+html:not([data-theme="dark"]) body .current-user,
+html:not([data-theme="dark"]) body .current-user-icon {
+  color: var(--interactive-ink);
+}
+
+html:not([data-theme="dark"]) body .header-icon-button:hover,
+html:not([data-theme="dark"]) body .header-icon-button.is-active {
+  color: var(--interactive-fill);
+}
+
 html body .column-width-reset-button {
   margin-left: 0;
 }
@@ -424,7 +457,7 @@ html body .column-width-reset-button {
 html body .theme-mode-switch {
   --theme-group: #f9f9f9;
   --theme-indicator: #ffffff;
-  --theme-on: #0d0d0d;
+  --theme-on: var(--interactive-fill);
   --theme-off: #5d5d5d;
   --theme-hover: #cdcdcd;
   --theme-focus: #0169cc;
@@ -454,7 +487,7 @@ html body .theme-mode-switch {
 html[data-theme="dark"] body .theme-mode-switch {
   --theme-group: #131313;
   --theme-indicator: #303030;
-  --theme-on: #ffffff;
+  --theme-on: #d8d8d8;
   --theme-off: #afafaf;
   --theme-hover: #303030;
   --theme-focus: #0285ff;
@@ -489,7 +522,7 @@ html body .theme-mode-switch > button {
   flex: 0 0 30px;
   align-items: center;
   justify-content: center;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -501,8 +534,8 @@ html body .theme-mode-switch > button {
 
 html body .theme-mode-switch > button svg {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   color: currentColor;
 }
 
@@ -547,8 +580,9 @@ html body .theme-mode-switch > button:disabled::before { opacity: 0 !important; 
 }
 
 html body .header-icon-button svg {
-  width: 16px;
-  height: 16px;
+  display: block;
+  width: 18px;
+  height: 18px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -556,22 +590,11 @@ html body .header-icon-button svg {
   stroke-width: 2;
 }
 
-html body .title-bar .sidebar-toggle {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  border-radius: 8px;
-}
-
-html body .title-bar .sidebar-toggle-icon,
-html body .title-bar .sidebar-toggle-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
 html body .font-size-control {
   position: relative;
   display: inline-flex;
+  height: 32px;
+  align-items: center;
 }
 
 /* Confirmation dialog */
@@ -674,6 +697,7 @@ html body .font-size-button {
   color: var(--text);
   font-size: var(--font-13);
   font-weight: 600;
+  line-height: 1;
   letter-spacing: -0.04em;
 }
 
@@ -730,36 +754,28 @@ html body .app-shell {
 }
 
 html body .sidebar {
+  --sidebar-item-gap: 8px;
   display: flex;
   width: var(--sidebar-closed);
   flex: 0 0 var(--sidebar-closed);
   flex-direction: column;
+  row-gap: var(--sidebar-item-gap);
   overflow: hidden;
   border-right: 0;
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
-  transition: width 0.18s ease, flex-basis 0.18s ease;
-}
-
-html body .sidebar.is-open {
-  width: var(--sidebar-open);
-  flex-basis: var(--sidebar-open);
+  transition: none;
 }
 
 html body .sidebar-nav {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   margin: 0;
   padding: 6px 4px 8px;
 }
 
-html body .sidebar.is-open .sidebar-nav {
-  padding-right: 12px;
-  padding-left: 12px;
-}
-
 html body .sidebar-nav ul {
   display: grid;
-  gap: 2px;
+  gap: var(--sidebar-item-gap);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -769,7 +785,7 @@ html body .sidebar-item,
 html body .sidebar-utility-button {
   display: inline-flex;
   width: 100%;
-  height: 80px;
+  height: 60px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -790,17 +806,6 @@ html body .sidebar-utility-button {
   gap: 0;
   margin-inline: 0;
   padding: 0;
-}
-
-html body .sidebar.is-open .sidebar-item,
-html body .sidebar.is-open .sidebar-utility-button {
-  width: 100%;
-  height: 50px;
-  flex-direction: row;
-  justify-content: flex-start;
-  gap: 14px;
-  margin-inline: 0;
-  padding: 0 14px;
 }
 
 html body .sidebar-item:hover,
@@ -824,21 +829,19 @@ html body .sidebar-utility-button.is-active:hover {
   color: var(--primary-on);
 }
 
-html body .sidebar-icon,
-html body .sidebar-toggle-icon {
+html body .sidebar-icon {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
   align-items: center;
   justify-content: center;
 }
 
 html body .sidebar-icon svg,
-html body .sidebar-utility-button svg,
-html body .sidebar-toggle-icon svg {
-  width: 28px;
-  height: 28px;
+html body .sidebar-utility-button svg {
+  width: 26px;
+  height: 26px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -849,110 +852,29 @@ html body .sidebar-toggle-icon svg {
 html body .sidebar-secondary-nav {
   display: grid;
   flex: 0 0 auto;
-  gap: 2px;
+  gap: var(--sidebar-item-gap);
   padding: 4px;
   border-top: 0;
 }
 
-html body .sidebar.is-open .sidebar-secondary-nav {
-  padding-right: 12px;
-  padding-left: 12px;
-}
-
 html body .sidebar-text,
 html body .sidebar-utility-text {
-  max-width: 152px;
+  width: 68px;
+  max-width: 68px;
   overflow: hidden;
   color: currentColor;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   opacity: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: max-width 0.14s ease, opacity 0.1s ease;
-}
-
-html body .sidebar:not(.is-open) .sidebar-text,
-html body .sidebar:not(.is-open) .sidebar-utility-text {
-  width: 68px;
-  max-width: 68px;
-  flex: 0 0 auto;
-  overflow: hidden;
-  font-size: 10px;
   line-height: 1.2;
-  opacity: 1;
   text-align: center;
 }
 
-html body .sidebar-user {
-  display: flex;
-  width: calc(100% - 8px);
-  min-height: 58px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 12px;
-  overflow: hidden;
-  margin: 4px;
-  border-radius: 10px;
-  padding: 8px 10px;
-  color: var(--sidebar-text);
-}
-
-html body .sidebar.is-open .sidebar-user {
-  width: calc(100% - 24px);
-  margin-right: 12px;
-  margin-left: 12px;
-}
-
-html body .sidebar-user-avatar {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  place-items: center;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  background: var(--surface-active);
-  color: var(--text-strong);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-html body .sidebar-user-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-}
-
-html body .sidebar-user-copy small {
-  color: var(--sidebar-muted);
-  font-size: 10px;
-}
-
-html body .sidebar:not(.is-open) .sidebar-user {
-  width: 72px;
-  min-height: 72px;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  padding: 6px 2px;
-}
-
-html body .sidebar:not(.is-open) .sidebar-user-copy {
-  width: 68px;
-  align-items: center;
-}
-
-html body .sidebar:not(.is-open) .sidebar-user-copy .current-user {
-  max-width: 68px;
-  font-size: 10px;
-  font-weight: 500;
-  text-align: center;
-}
-
-html body .sidebar:not(.is-open) .sidebar-user-copy small {
-  display: none;
+html body .sidebar-item .sidebar-text,
+html body .sidebar-utility-button .sidebar-utility-text {
+  font-size: 12px !important;
 }
 
 /* Main layout */
@@ -1154,11 +1076,11 @@ html body .message.hidden {
   display: none;
 }
 
-html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"]) {
-  font-size: var(--font-14);
+html body[data-font-size] {
+  font-size: var(--ui-font-size);
 }
 
-html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"])
+html body[data-font-size]
   :is(
     button,
     input,
@@ -1166,17 +1088,15 @@ html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-s
     select,
     label,
     .current-user,
-    .sidebar-text,
-    .sidebar-utility-text,
     .message,
     .empty
   ) {
-  font-size: var(--font-13) !important;
+  font-size: var(--ui-font-size) !important;
 }
 
-html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"])
+html body[data-font-size]
   :is(th, td, .editable-content) {
-  font-size: var(--font-14) !important;
+  font-size: var(--ui-font-size) !important;
 }
 
 html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"])
@@ -1189,14 +1109,14 @@ html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-s
   font-size: var(--font-18) !important;
 }
 
-html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"])
+html body[data-font-size]
   :is(
     .date-weekday,
     .period-shift-button,
     .preset-button,
     .boss-reply-icon
-  ) {
-  font-size: var(--font-12) !important;
+) {
+  font-size: var(--ui-font-size) !important;
 }
 
 html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"])
@@ -1271,34 +1191,21 @@ html body .sidebar-item:hover,
 html body .sidebar-utility-button:hover {
   border-color: transparent;
   background: var(--surface-active);
-  color: var(--text-strong);
+  color: var(--sidebar-active-text);
 }
 
 html body .sidebar-item.is-active,
 html body .sidebar-utility-button.is-active {
   border-color: transparent;
   background: var(--surface-active);
-  color: var(--text-strong);
+  color: var(--sidebar-active-text);
 }
 
 html body .sidebar-item.is-active:hover,
 html body .sidebar-utility-button.is-active:hover {
   border-color: transparent;
   background: var(--surface-active);
-  color: var(--text-strong);
-}
-
-html body .sidebar .sidebar-text {
-  font-size: 13px !important;
-  font-weight: 500;
-}
-
-html body .sidebar:not(.is-open) .sidebar-text {
-  font-size: 10px !important;
-}
-
-html body .sidebar:not(.is-open) .sidebar-user-copy .current-user {
-  font-size: 10px !important;
+  color: var(--sidebar-active-text);
 }
 
 html body .header-icon-button:hover,
@@ -1311,4 +1218,62 @@ html body .header-icon-button.is-active {
 html body .main-area,
 html body .content {
   background: var(--app-bg);
+}
+
+/* Fixed compact navigation rail: navigation stays discoverable without a toggle. */
+html body .sidebar {
+  width: var(--sidebar-closed);
+  flex-basis: var(--sidebar-closed);
+  transition: none;
+}
+
+html body .sidebar-nav,
+html body .sidebar-secondary-nav {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 4px 0;
+}
+
+html body .sidebar-secondary-nav {
+  gap: var(--sidebar-item-gap);
+  padding-top: 0;
+}
+
+html body .sidebar-item,
+html body .sidebar-utility-button {
+  width: 72px;
+  height: 60px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  margin-inline: 0;
+  padding: 0;
+}
+
+html body .sidebar-text,
+html body .sidebar-utility-text {
+  width: 68px;
+  max-width: 68px;
+  flex: 0 0 auto;
+  font-size: 12px !important;
+  line-height: 1.2;
+  text-align: center;
+}
+
+html body .current-user-display {
+  max-width: 160px;
+  min-height: 32px;
+  gap: 6px;
+  padding-left: 4px;
+}
+
+html body .current-user {
+  max-width: 120px;
+  font-size: var(--font-13);
+}
+
+/* Keep the compact rail labels at 10pt even when the global font-size control is enlarged. */
+html body[data-font-size] .sidebar .sidebar-item .sidebar-text,
+html body[data-font-size] .sidebar .sidebar-utility-button .sidebar-utility-text {
+  font-size: 12px !important;
 }

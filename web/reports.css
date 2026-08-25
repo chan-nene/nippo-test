@@ -2,6 +2,77 @@
 
 /* Command bar */
 
+html body #reportPanel {
+  --report-primary-bg: var(--interactive-fill);
+  --report-primary-fg: #fff;
+  --report-primary-hover: var(--interactive-fill-hover);
+  --report-filter-idle-bg: var(--report-soft-bg);
+  --report-filter-idle-fg: var(--report-soft-fg);
+  --report-filter-idle-hover-bg: var(--report-soft-hover);
+  --report-filter-idle-hover-fg: var(--report-soft-fg);
+  --report-filter-selected-bg: var(--interactive-fill);
+  --report-filter-selected-fg: #fff;
+  --report-filter-selected-hover: var(--interactive-fill-hover);
+  --report-filter-selected-border: transparent;
+  --report-action-ink: var(--interactive-ink);
+  --report-action-ink-hover: var(--interactive-ink);
+  --report-focus: #0169cc;
+  --report-soft-bg: oklab(0.159065 0 0 / 0.08);
+  --report-soft-hover: oklab(0.159065 0 0 / 0.12);
+  --report-soft-fg: var(--interactive-ink);
+  --report-period-bg: #ededed;
+  --report-period-indicator: #ffffff;
+  --report-period-fg: var(--interactive-fill);
+  --report-period-muted: #5d5d5d;
+  --report-period-hover: #cdcdcd;
+  --report-period-shadow: 0 1px 4px -1px rgb(0 0 0 / .2);
+  --report-disabled: #8f8f8f;
+  --report-disabled-bg: oklab(0.159065 0 0 / 0.05);
+  --report-today-bg: oklab(0.683029 -0.16619 0.102668 / 0.15);
+  --report-today-fg: #008635;
+}
+
+html:not([data-theme="dark"]) body #reportPanel {
+  --holiday-row-bg: #f4f4f5;
+  --holiday-row-hover-bg: #e9e9eb;
+}
+
+html[data-theme="dark"] body #reportPanel {
+  --report-primary-bg: var(--primary);
+  --report-primary-fg: var(--primary-on);
+  --report-primary-hover: var(--primary-hover);
+  --report-filter-idle-bg: #2b2b2b;
+  --report-filter-idle-fg: #b8b8b8;
+  --report-filter-idle-hover-bg: #353535;
+  --report-filter-idle-hover-fg: #d1d1d1;
+  --report-filter-selected-bg: #4a4a4a;
+  --report-filter-selected-fg: #e6e6e6;
+  --report-filter-selected-hover: #565656;
+  --report-filter-selected-border: #6a6a6a;
+  --report-action-ink: var(--text);
+  --report-action-ink-hover: var(--text-strong);
+  --report-focus: #0285ff;
+  --report-soft-bg: oklab(1 0 0 / 0.08);
+  --report-soft-hover: oklab(1 0 0 / 0.12);
+  --report-soft-fg: var(--text);
+  --report-period-bg: #0d0d0d;
+  --report-period-indicator: #303030;
+  --report-period-fg: var(--text-strong);
+  --report-period-muted: #afafaf;
+  --report-period-hover: #303030;
+  --report-disabled: #5d5d5d;
+  --report-disabled-bg: oklab(1 0 0 / 0.05);
+  --report-today-fg: #04b84c;
+}
+
+html body {
+  --report-empty-icon: #9b9b9b;
+}
+
+html[data-theme="dark"] body {
+  --report-empty-icon: #b9b9b9;
+}
+
 html body .report-toolbar {
   display: flex;
   min-width: 0;
@@ -21,12 +92,6 @@ html body .toolbar-row {
   margin: 0;
 }
 
-html body .toolbar-heading-row {
-  min-height: 48px;
-  padding: 6px 14px 4px;
-  background: transparent;
-}
-
 html body .toolbar-filter-row {
   min-height: 60px;
   padding: 8px 14px 14px;
@@ -35,14 +100,24 @@ html body .toolbar-filter-row {
 }
 
 html body .toolbar-left,
-html body .toolbar-left-wide,
-html body .toolbar-right,
-html body .period-control {
+html body .toolbar-left-wide {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: var(--control-group-gap);
   flex-wrap: nowrap;
+  position: relative;
+}
+
+html body .toolbar-right {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--control-group-gap);
+  flex-wrap: nowrap;
+  position: relative;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 html body .toolbar-filter-row .toolbar-left-wide {
@@ -52,42 +127,11 @@ html body .toolbar-filter-row .toolbar-left-wide {
   flex-wrap: wrap;
 }
 
-html body .toolbar-right {
-  position: relative;
-  flex: 0 0 auto;
-  gap: var(--control-group-gap);
-  margin-left: auto;
-}
-
-html body .view-label {
-  display: inline-flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0;
-}
-
-html body .view-label #pageTitle {
-  color: var(--text-strong);
-  font-size: var(--font-18);
-  font-weight: 700;
-  line-height: 1.15;
-}
-
-html body .toolbar-button,
-html body .period-field-group {
-  min-height: calc(var(--control-height) + 4px);
-  height: calc(var(--control-height) + 4px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--input-bg);
-  color: var(--text);
-  box-shadow: none;
-}
-
 html body .toolbar-button {
   display: inline-flex;
+  position: relative;
+  min-height: var(--control-height);
+  height: var(--control-height);
   align-items: center;
   justify-content: center;
   gap: var(--control-icon-gap);
@@ -95,15 +139,11 @@ html body .toolbar-button {
   white-space: nowrap;
   font-size: var(--font-13);
   font-weight: 600;
-}
-
-html body .toolbar-button {
-  position: relative;
-}
-
-html body .toolbar-heading-row .toolbar-button:not(.primary) {
-  border-color: var(--border);
-  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  box-shadow: none;
 }
 
 html body .toolbar-button:hover {
@@ -141,50 +181,27 @@ html body .toolbar-button-icon {
   font-weight: 700;
 }
 
-html body .toolbar-button-badge {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  display: inline-flex;
-  min-width: 17px;
-  height: 17px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--surface);
-  border-radius: 999px;
-  background: var(--error);
-  color: var(--primary-on);
-  font-size: 10px;
-  font-weight: 700;
-}
-
 html body .period-control {
+  display: flex;
+  min-width: 0;
+  align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
 }
 
 html body .period-main-controls,
-html body .period-mode-control,
-html body .period-navigation,
-html body .missing-filter-group {
+html body .period-mode-control {
   display: flex;
   min-width: 0;
   align-items: center;
 }
 
-html body .period-main-controls {
-  width: auto;
-  gap: 14px;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-
-html body .period-mode-control {
-  flex: 0 0 auto;
-}
-
 html body .period-navigation {
-  height: calc(var(--control-height) + 4px);
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0;
+  height: var(--control-height);
   flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -195,38 +212,33 @@ html body .period-navigation {
 
 html body .period-shift-button {
   display: inline-flex;
-  width: 38px;
-  min-width: 38px;
-  height: calc(var(--control-height) - 6px);
+  width: calc(var(--control-height) - 4px);
+  min-width: calc(var(--control-height) - 4px);
   align-items: center;
   justify-content: center;
+  flex: 0 0 calc(var(--control-height) - 4px);
   gap: 0;
   border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  padding: 0;
-  font-size: var(--font-16);
-  font-weight: 600;
   white-space: nowrap;
 }
 
-html body .period-shift-button:hover {
-  background: var(--surface);
-  color: var(--primary-ink);
-  box-shadow: 0 1px 3px var(--shadow-color);
+html body .period-shift-step-label {
+  display: inline-flex;
+  min-width: 60px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0 8px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
-html body .period-shift-button:focus-visible {
-  position: relative;
-  z-index: 1;
-  outline: 2px solid color-mix(in srgb, var(--primary) 48%, transparent);
-  outline-offset: -2px;
-}
-
-html body .period-shift-button:disabled {
-  cursor: default;
-  opacity: 0.58;
+html body .period-main-controls {
+  width: auto;
+  gap: 14px;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 html body .period-shift-button svg {
@@ -240,22 +252,10 @@ html body .period-shift-button svg {
   stroke-width: 2;
 }
 
-html body .period-shift-step-label {
-  display: inline-flex;
-  min-width: 52px;
-  height: calc(var(--control-height) - 6px);
-  align-items: center;
-  justify-content: center;
-  color: var(--text);
-  padding: 0 4px;
-  font-size: var(--font-12);
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
 html body .missing-filter-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
   gap: 14px;
   flex: 0 0 auto;
   margin-right: 8px;
@@ -276,13 +276,14 @@ html body .period-control-container {
 }
 
 html body .period-control input[type="date"] {
-  width: 148px;
+  width: var(--period-date-input-width);
+  min-width: var(--period-date-input-width);
   height: 100%;
   border: 0;
   background: transparent;
   color: var(--text);
   padding: 0 var(--field-padding-x);
-  font-size: var(--font-14);
+  font-size: var(--ui-font-size);
   line-height: 1.2;
   text-align: center;
   -webkit-user-select: none;
@@ -290,57 +291,9 @@ html body .period-control input[type="date"] {
   pointer-events: none;
 }
 
-html body .period-field-group {
-  cursor: pointer;
-}
-
 html body .period-separator {
   color: var(--text-muted);
   font-weight: 700;
-}
-
-html body .period-field-group:focus-within {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 16%, transparent);
-}
-
-html body .member-switch-button.is-active,
-html body .member-switch-button[aria-pressed="true"] {
-  border-color: var(--control-filter-selected-border);
-  background: var(--control-filter-selected-bg);
-  color: var(--control-filter-selected-text);
-}
-
-html body #showMissingCommentsButton.is-active,
-html body #showMissingCommentsButton[aria-pressed="true"] {
-  border-color: var(--control-filter-selected-border);
-  background: var(--control-filter-selected-bg);
-  color: var(--control-filter-selected-text);
-}
-
-html body #showMissingCommentsButton {
-  position: relative;
-  display: inline-flex;
-  height: calc(var(--control-height) + 4px);
-  align-items: center;
-  justify-content: center;
-  overflow: visible;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  padding: 0 var(--control-wide-padding-x);
-}
-
-html body #showMissingCommentsButton:hover {
-  border-color: var(--primary-border);
-  background: var(--surface-hover);
-  color: var(--primary-ink);
-}
-
-html body #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]):hover {
-  border-color: var(--control-filter-selected-border);
-  background: var(--control-filter-selected-bg);
-  color: var(--control-filter-selected-text);
 }
 
 html body .missing-filter-label {
@@ -366,6 +319,7 @@ html body .missing-count-badge {
   font-size: var(--font-10);
   font-weight: 800;
   line-height: 1;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -382,91 +336,19 @@ html body .missing-count-badge.is-loading {
   background: var(--missing-badge-loading-bg);
 }
 
-html body .member-switch-bar {
-  display: flex;
-  min-width: 0;
-  flex: 0 0 auto;
-  align-items: flex-start;
-  border-bottom: 0;
-  background: transparent;
-  padding: 4px 14px 14px;
+html body .member-switch-list > #showSelfButton {
+  margin-right: 10px;
 }
 
-html body .member-switch-list {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: var(--control-cluster-gap);
-  flex-wrap: wrap;
+html body #missingCommentsFilterGroup .period-filter-divider {
+  display: none;
 }
 
-html body .member-switch-button {
-  display: inline-flex;
-  max-width: 128px;
-  min-height: calc(var(--compact-control-height) + 4px);
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex: 0 0 auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  padding: 4px var(--control-padding-x);
-  font-size: var(--font-12);
-  font-weight: 600;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-html body .member-switch-button:not([data-id]) {
-  max-width: none;
-}
-
-html body .member-switch-button:is(.is-active, [aria-pressed="true"]) {
-  font-weight: 600;
-}
-
-html body .member-switch-button:hover {
-  border-color: var(--primary-border);
-  background: var(--surface-hover);
-  color: var(--primary-ink);
-}
-
-html body .member-switch-button:is(.is-active, [aria-pressed="true"]):hover {
-  border-color: var(--primary-ink);
-  background: var(--control-filter-selected-bg);
-  color: var(--primary-ink);
+html body #missingCommentsFilterGroup #showMissingCommentsButton {
+  margin-left: 8px;
 }
 
 /* Table */
-
-html body .table-card {
-  display: flex;
-  height: fit-content;
-  min-height: 0;
-  max-height: 100%;
-  flex: 0 1 auto;
-  align-self: stretch;
-  flex-direction: column;
-  overflow: hidden;
-  margin: 0;
-  padding: 0 10px 10px;
-  border: 0;
-  background: transparent;
-}
-
-html body .table-scroll {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  flex: 0 1 auto;
-  overflow: auto;
-  border-bottom: 1px solid var(--table-border);
-  isolation: isolate;
-}
 
 html body table {
   width: 100%;
@@ -480,13 +362,37 @@ html body table {
 html body th,
 html body td {
   border-right: 1px solid var(--table-border);
-  border-bottom: 1px solid var(--table-border);
+  border-bottom: 0;
   text-align: left;
+  position: relative;
+  height: var(--table-row-height);
+  min-height: var(--table-row-height);
+  padding: 0;
+  background: var(--table-cell-bg);
+  color: var(--text);
+  font-size: 14px;
+  vertical-align: top;
+  transition: background 0.08s ease;
 }
 
-html body thead th:first-child,
+html body thead th:first-child {
+  border-left: 1px solid var(--table-border);
+  border-top-left-radius: var(--radius-sm);
+}
+
 html body tbody th.user-col {
   border-left: 1px solid var(--table-border);
+  position: sticky;
+  z-index: 4;
+  top: auto;
+  height: auto;
+  padding: 0;
+  border-top: 0;
+  background: var(--table-cell-bg);
+  color: var(--text);
+  font-size: var(--font-14);
+  vertical-align: top;
+  white-space: normal;
 }
 
 html body th {
@@ -505,38 +411,8 @@ html body th {
   white-space: nowrap;
 }
 
-html body thead th:first-child {
-  border-top-left-radius: var(--radius-sm);
-}
-
 html body thead th:last-child {
   border-top-right-radius: var(--radius-sm);
-}
-
-html body td {
-  position: relative;
-  height: var(--table-row-height);
-  min-height: var(--table-row-height);
-  padding: 0;
-  background: var(--table-cell-bg);
-  color: var(--text);
-  font-size: 14px;
-  vertical-align: top;
-  transition: background 0.08s ease;
-}
-
-html body tbody th.user-col {
-  position: sticky;
-  z-index: 4;
-  top: auto;
-  height: auto;
-  padding: 0;
-  border-top: 0;
-  background: var(--table-cell-bg);
-  color: var(--text);
-  font-size: var(--font-14);
-  vertical-align: top;
-  white-space: normal;
 }
 
 html body .user-content {
@@ -562,25 +438,12 @@ html body .user-content small {
   font-weight: 500;
 }
 
-html body .member-pending-badge {
-  min-height: var(--badge-height);
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  border: 1px solid var(--primary-border);
-  border-radius: var(--radius-sm);
-  background: var(--primary-soft);
-  color: var(--primary-ink);
-  font-size: var(--font-12);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 html body :is(th, td).date-col {
   position: sticky;
   left: var(--sticky-date-left, 144px);
   z-index: 4;
   background: var(--table-cell-bg);
+  border-right: 1px solid var(--table-border);
 }
 
 html body th.date-col {
@@ -598,10 +461,6 @@ html body :is(th, td).user-col {
 html body thead th.user-col {
   z-index: 8;
   background: var(--table-header-bg);
-}
-
-html body :is(th, td).date-col {
-  border-right: 1px solid var(--table-border);
 }
 
 html body .date-col {
@@ -652,25 +511,26 @@ html body .column-header-content {
 html body #reportPanel table thead th .column-header-you,
 html body #reportPanel .date-today-label {
   display: inline-flex;
-  width: 30.328125px;
-  height: 20px;
+  width: max-content;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
   align-items: center;
+  align-self: center;
   justify-content: center;
-  padding: 0 5px;
+  padding: 2px 6px 1px;
   border-radius: 4px;
-  background: oklab(0.683029 -0.16619 0.102668 / 0.15);
-  color: #008635;
-  font: 600 12px/20px "OpenAI Sans", Helvetica, Arial, sans-serif;
+  background: var(--report-today-bg);
+  color: var(--report-today-fg);
+  font-family: var(--font-ui);
+  font-size: calc(var(--ui-font-size) - 2px);
+  font-weight: 600;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
 html body #reportPanel .date-today-label.is-empty {
   visibility: hidden;
-}
-
-html[data-theme="dark"] body #reportPanel table thead th .column-header-you,
-html[data-theme="dark"] body #reportPanel .date-today-label {
-  color: #04b84c;
 }
 
 html body .column-resize-handle {
@@ -735,28 +595,28 @@ html body .editable-content {
   line-height: 1.35;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  cursor: default;
+  background: transparent;
 }
 
 html body .date-content {
   white-space: nowrap;
-}
-
-html body .date-content {
   text-align: center;
 }
 
 html body .date-primary {
-  display: block;
-  min-height: 19px;
-  line-height: 1.35;
-}
-
-html body .date-label-row {
   display: flex;
   min-height: 20px;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  line-height: 1.35;
+}
+
+html body .date-value {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
 }
 
 html body .date-weekday,
@@ -776,11 +636,6 @@ html body .date-weekday-sun {
 
 html body tr.holiday td:not(.date-col, .user-col) {
   background: var(--holiday-row-bg);
-}
-
-html body .editable-content {
-  cursor: default;
-  background: transparent;
 }
 
 html body .editable-content.is-editable {
@@ -815,6 +670,23 @@ html body td:has(.editable-content.is-editable:not(.is-editing):hover)::after {
 
 html body .editable-content.is-empty {
   color: transparent;
+}
+
+html body .editable-content.is-empty .editable-empty-icon {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  color: var(--report-empty-icon);
+  opacity: 0.72;
+  vertical-align: middle;
+}
+
+html body .editable-empty-icon svg {
+  display: block;
+  width: 15px;
+  height: 15px;
 }
 
 html body .editable-content.is-editing,
@@ -886,45 +758,29 @@ html body .comment-stack {
 
 html body .boss-comment-actions {
   display: flex;
-  min-height: 0;
-  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
 }
 
 html body .boss-comment-link {
-  min-height: var(--compact-control-height);
-  border: 1px solid var(--border-strong);
+  min-height: calc(var(--control-height) - 4px);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-alt);
-  color: var(--text-muted);
-  padding: 3px var(--cell-padding-x);
-  font-size: 12px;
+  color: var(--report-action-ink);
+  padding: 0 var(--cell-padding-x);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
   font-weight: 600;
-  line-height: 1.25;
-  text-decoration: none;
+  line-height: normal;
 }
 
-html body .boss-comment-link[data-action="sign-comment"],
-html body .reply-toggle-button {
-  border-color: var(--border);
-  background: var(--surface-alt);
-  color: var(--text);
-}
-
-html body .boss-comment-link:hover {
+html body .boss-comment-link:hover,
+html body .boss-comment-link:focus-visible {
   border-color: var(--primary-border);
   background: var(--surface-hover);
-  color: var(--primary-ink);
-  text-decoration: none;
-}
-
-html body .boss-comment-link[data-action="sign-comment"]:hover,
-html body .reply-toggle-button:hover {
-  border-color: var(--primary-border);
-  background: var(--surface-hover);
-  color: var(--primary-ink);
+  color: var(--report-action-ink-hover);
 }
 
 html body .reply-toggle-button {
@@ -987,49 +843,6 @@ html body .empty {
   font-size: 13px;
 }
 
-/* Period modes */
-
-html body .period-presets {
-  display: inline-flex;
-  height: calc(var(--control-height) + 4px);
-  align-items: center;
-  flex: 0 0 auto;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--control-track-bg);
-  padding: 4px;
-}
-
-html body .preset-button {
-  height: calc(var(--control-height) - 6px);
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  padding: 0 var(--control-padding-x);
-  font-size: var(--font-12);
-  font-weight: 600;
-  line-height: 1;
-}
-
-html body .preset-button:hover {
-  background: var(--surface);
-  color: var(--primary-ink);
-  box-shadow: 0 1px 3px var(--shadow-color);
-}
-
-html body .preset-button.is-active {
-  border-color: var(--control-selected-border);
-  background: var(--control-selected-bg);
-  color: var(--text-strong);
-  box-shadow: 0 1px 3px var(--shadow-color);
-}
-
-html body .preset-button:disabled {
-  cursor: wait;
-  opacity: 0.58;
-}
-
 /* Only the table scrolls; filters and navigation stay fixed to the viewport. */
 
 html body .table-content {
@@ -1058,166 +871,44 @@ html body .toolbar-button-icon svg.is-spinning {
   animation: icon-spin 0.8s linear infinite;
 }
 
-/* Responsive guardrails. Preserve breathing room and stack groups when needed. */
-
-@media (max-width: 1100px) {
-  html body .toolbar-heading-row {
-    padding: 10px 12px;
-  }
-
-  html body .toolbar-filter-row {
-    padding: 10px 12px 12px;
-  }
-
-  html body .toolbar-filter-row .toolbar-left-wide {
-    column-gap: 14px;
-    row-gap: 10px;
-    overflow: visible;
-    flex-wrap: wrap;
-  }
-
-  html body .period-main-controls {
-    row-gap: 10px;
-  }
-
-  html body .member-switch-bar {
-    align-items: center;
-    gap: 12px;
-    padding: 4px 12px 12px;
-  }
-
-  html body .member-switch-list {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-  }
-
-  html body .member-switch-button {
-    max-width: 118px;
-    flex: 0 0 auto;
-  }
-}
-
-@media (max-width: 760px) {
-  html body .toolbar-filter-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-  }
-
-  html body .toolbar-filter-row .toolbar-left-wide {
-    align-items: stretch;
-    width: 100%;
-    gap: 0;
-  }
-
-  html body .view-label {
-    width: 100%;
-    padding: 0;
-  }
-
-  html body .period-control-container,
-  html body .period-mode-control,
-  html body .period-navigation {
-    width: 100%;
-  }
-
-  html body .period-main-controls {
-    grid-column: 1 / -1;
-    width: 100%;
-    flex-direction: row;
-    gap: 10px;
-  }
-
-  html body .period-presets {
-    flex: 1 1 auto;
-  }
-
-  html body .period-shift-button {
-    flex: 1 1 0;
-  }
-
-  html body .missing-filter-group {
-    align-self: flex-start;
-    margin-right: 8px;
-  }
-
-  html body .period-filter-divider {
-    display: none;
-  }
-
-  html body .period-control {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    width: 100%;
-  }
-
-  html body .period-field-group,
-  html body .period-control input[type="date"] {
-    width: 100%;
-    min-width: 0;
-  }
-
-  html body .period-presets .preset-button {
-    min-width: 0;
-    flex: 1 1 0;
-    padding-inline: 4px;
-  }
-
-  html body .toolbar-right {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    width: auto;
-    margin-left: 0;
-  }
-
-}
-
-@media (max-width: 520px) {
-  html body .toolbar-filter-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  html body .toolbar-right,
-  html body .period-main-controls {
-    grid-column: 1;
-    width: 100%;
-  }
-}
+/* Responsive layout is consolidated at the end of this stylesheet. */
 
 /* Daily report table typography follows the common-master table. */
 html body #tableWrap table th,
-html body #tableWrap table td,
-html body #tableWrap table th *,
-html body #tableWrap table td * {
+html body #tableWrap table td {
   font-weight: normal;
 }
 
-html body #tableWrap table th,
-html body #tableWrap table th * {
+html body #tableWrap table th {
   color: var(--text-muted);
-}
-
-html body #tableWrap table th,
-html body #tableWrap table th * {
   font-weight: 700;
 }
 
-/* Platform-style report controls and neutral table frame. */
+html body #tableWrap table th :is(.column-header-label, .column-header-content, .column-header-you, .column-resize-handle) {
+  color: inherit;
+  font-weight: 700;
+}
+
+html body #tableWrap table td,
+html body #tableWrap table td :is(.user-content, .editable-content, .comment-stack, .boss-reply-text) {
+  font-weight: 400;
+}
+
+/* Report control and table geometry. */
 html body #reportPanel .toolbar-filter-row {
   min-height: 58px;
   padding: 12px 18px 10px;
 }
 
 html body #reportPanel .period-field-group {
-  min-height: var(--period-control-height, 28px);
-  height: var(--period-control-height, 28px);
+  min-height: var(--control-height);
+  height: var(--control-height);
   border-color: transparent;
   border-radius: 8px;
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border);
   transition: box-shadow 0.14s ease;
+  cursor: pointer;
 }
 
 html body #reportPanel .period-field-group:hover,
@@ -1232,7 +923,7 @@ html body #reportPanel .period-field-group:focus-within {
 }
 
 html body #reportPanel .period-field-group:has(input:focus-visible) {
-  outline: 2px solid rgb(1 105 204);
+  outline: 2px solid var(--report-focus);
   outline-offset: 1px;
 }
 
@@ -1252,95 +943,28 @@ html body #reportPanel .member-switch-button:hover {
   color: var(--text-strong);
 }
 
-html body #reportPanel .member-switch-bar {
-  padding-right: 18px;
-  padding-bottom: 14px;
-  padding-left: 18px;
-}
-
-html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]) {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-on);
-}
-
-html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover {
-  border-color: var(--primary-hover);
-  background: var(--primary-hover);
-  color: var(--primary-on);
-}
-
-html body #reportPanel .table-card {
-  padding-right: 14px;
-  padding-left: 14px;
-}
-
-html body #reportPanel .table-scroll {
-  border: 1px solid var(--table-border);
-  border-radius: var(--radius-md);
-}
-
 /* Member type filter-style period control. */
-html body #reportPanel {
-  --period-control-height: 28px;
-  --period-button-height: 24px;
-}
-
-html body[data-font-size="compact"] #reportPanel {
-  --period-control-height: 26px;
-  --period-button-height: 22px;
-}
-
-html body[data-font-size="medium"] #reportPanel {
-  --period-control-height: 32px;
-  --period-button-height: 28px;
-}
-
-html body[data-font-size="large"] #reportPanel {
-  --period-control-height: 36px;
-  --period-button-height: 32px;
-}
-
-html body[data-font-size="xlarge"] #reportPanel {
-  --period-control-height: 48px;
-  --period-button-height: 44px;
-}
-
 html body #reportPanel .period-presets {
-  --period-filter-group: #ededed;
-  --period-filter-indicator: #ffffff;
-  --period-filter-on: #0d0d0d;
-  --period-filter-off: #5d5d5d;
-  --period-filter-hover: #cdcdcd;
-  --period-filter-focus: #0169cc;
-  --period-filter-shadow: 0 1px 4px -1px rgb(0 0 0 / .2);
-  --period-filter-font: "OpenAI Sans", Helvetica, Arial, sans-serif;
+  box-sizing: border-box;
+  min-height: var(--control-height);
+  height: var(--control-height);
+  line-height: 1;
+  white-space: nowrap;
   position: relative;
   display: inline-flex;
   width: max-content;
   max-width: 100%;
-  height: auto;
-  min-height: 28px;
   align-items: center;
   gap: 2px;
   overflow: auto;
   padding: 2px;
   border: 0;
   border-radius: 8px;
-  background: var(--period-filter-group);
+  background: var(--report-period-bg);
   outline: none;
   scrollbar-width: none;
   white-space: nowrap;
   -ms-overflow-style: none;
-}
-
-html[data-theme="dark"] body #reportPanel .period-presets {
-  --period-filter-group: #0d0d0d;
-  --period-filter-indicator: #303030;
-  --period-filter-on: #ffffff;
-  --period-filter-off: #afafaf;
-  --period-filter-hover: #303030;
-  --period-filter-focus: #0285ff;
 }
 
 html body #reportPanel .period-presets::-webkit-scrollbar { display: none; }
@@ -1353,8 +977,8 @@ html body #reportPanel .period-presets-indicator {
   left: 0;
   width: 0;
   border-radius: 6px;
-  background: var(--period-filter-indicator);
-  box-shadow: var(--period-filter-shadow);
+  background: var(--report-period-indicator);
+  box-shadow: var(--report-period-shadow);
   pointer-events: none;
   transform: translate3d(2px, 0, 0);
   transition: width 300ms cubic-bezier(.19, 1, .22, 1), transform 300ms cubic-bezier(.19, 1, .22, 1), opacity 150ms ease;
@@ -1363,17 +987,21 @@ html body #reportPanel .period-presets-indicator {
 html body #reportPanel .period-presets > .preset-button {
   position: relative;
   z-index: 1;
-  min-width: 0;
-  height: 24px;
-  min-height: 24px;
+  min-width: max-content;
+  height: calc(var(--control-height) - 4px);
+  min-height: calc(var(--control-height) - 4px);
   flex: 0 0 auto;
   align-items: center;
   padding: 0 10px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--period-filter-off);
-  font: 600 14px/14px var(--period-filter-font);
+  color: var(--report-period-muted);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   box-shadow: none;
   transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
@@ -1389,7 +1017,7 @@ html body #reportPanel .period-presets > .preset-button::before {
   z-index: -1;
   inset: 1px;
   border-radius: inherit;
-  background: var(--period-filter-hover);
+  background: var(--report-period-hover);
   content: "";
   opacity: 0;
   pointer-events: none;
@@ -1399,17 +1027,17 @@ html body #reportPanel .period-presets > .preset-button::before {
 }
 
 html body #reportPanel .period-presets > .preset-button[data-state="on"] {
-  color: var(--period-filter-on);
+  color: var(--report-period-fg);
 }
 
 html body #reportPanel .period-presets > .preset-button:focus-visible,
 html body #reportPanel .period-presets:focus-visible {
-  outline: 2px solid var(--period-filter-focus);
+  outline: 2px solid var(--report-focus);
   outline-offset: 0;
 }
 
 html body #reportPanel .period-presets > .preset-button[data-state="off"]:focus-visible {
-  color: var(--period-filter-on);
+  color: var(--report-period-fg);
 }
 
 html body #reportPanel .period-presets > .preset-button:active::before {
@@ -1418,7 +1046,7 @@ html body #reportPanel .period-presets > .preset-button:active::before {
 
 @media (hover: hover) and (pointer: fine) {
   html body #reportPanel .period-presets > .preset-button[data-state="off"]:not([data-disabled]):not(:disabled):hover {
-    color: var(--period-filter-on);
+    color: var(--report-period-fg);
   }
 
   html body #reportPanel .period-presets > .preset-button[data-state="off"]:not([data-disabled]):not(:disabled):hover::before {
@@ -1434,7 +1062,7 @@ html body #reportPanel .period-presets > .preset-button:disabled {
 
 html body #reportPanel .period-presets > .preset-button[data-disabled]::before,
 html body #reportPanel .period-presets > .preset-button:disabled::before {
-  opacity: 0 !important;
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1446,39 +1074,31 @@ html body #reportPanel .period-presets > .preset-button:disabled::before {
 }
 
 html body #reportPanel .period-navigation {
-  --period-filter-group: #ededed;
-  --period-filter-on: #0d0d0d;
-  --period-filter-off: #5d5d5d;
-  --period-filter-hover: #cdcdcd;
-  --period-filter-focus: #0169cc;
-  --period-filter-font: "OpenAI Sans", Helvetica, Arial, sans-serif;
-  height: var(--period-control-height);
+  box-sizing: border-box;
+  min-height: var(--control-height);
+  height: var(--control-height);
   border: 0;
   border-radius: 8px;
-  background: var(--period-filter-group);
+  background: var(--report-period-bg);
   padding: 2px;
 }
 
-html[data-theme="dark"] body #reportPanel .period-navigation {
-  --period-filter-group: #0d0d0d;
-  --period-filter-on: #ffffff;
-  --period-filter-off: #afafaf;
-  --period-filter-hover: #303030;
-  --period-filter-focus: #0285ff;
-}
-
-html body #reportPanel .period-navigation .period-shift-button,
-html body #reportPanel .period-navigation .period-shift-step-label {
-  height: var(--period-button-height);
-}
-
 html body #reportPanel .period-navigation .period-shift-button {
+  box-sizing: border-box;
   position: relative;
   z-index: 1;
   isolation: isolate;
   background: transparent;
-  color: var(--period-filter-off);
-  font: 600 14px/14px var(--period-filter-font);
+  color: var(--report-period-muted);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  line-height: 1;
+  height: calc(var(--control-height) - 4px);
+  min-height: calc(var(--control-height) - 4px);
+  padding: 0;
+  overflow: hidden;
+  overflow-wrap: normal;
   border-radius: 6px;
   box-shadow: none;
   transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
@@ -1489,7 +1109,7 @@ html body #reportPanel .period-navigation .period-shift-button::before {
   z-index: -1;
   inset: 1px;
   border-radius: inherit;
-  background: var(--period-filter-hover);
+  background: var(--report-period-hover);
   content: "";
   opacity: 0;
   pointer-events: none;
@@ -1500,7 +1120,7 @@ html body #reportPanel .period-navigation .period-shift-button::before {
 
 html body #reportPanel .period-navigation .period-shift-button:focus-visible,
 html body #reportPanel .period-navigation:focus-visible {
-  outline: 2px solid var(--period-filter-focus);
+  outline: 2px solid var(--report-focus);
   outline-offset: 0;
 }
 
@@ -1514,12 +1134,12 @@ html body #reportPanel .period-navigation .period-shift-button:disabled {
 }
 
 html body #reportPanel .period-navigation .period-shift-button:disabled::before {
-  opacity: 0 !important;
+  opacity: 0;
 }
 
 @media (hover: hover) and (pointer: fine) {
   html body #reportPanel .period-navigation .period-shift-button:not([data-disabled]):not(:disabled):hover {
-    color: var(--period-filter-on);
+    color: var(--report-period-fg);
   }
 
   html body #reportPanel .period-navigation .period-shift-button:not([data-disabled]):not(:disabled):hover::before {
@@ -1535,8 +1155,26 @@ html body #reportPanel .period-navigation .period-shift-button:disabled::before 
 }
 
 html body #reportPanel .period-navigation .period-shift-step-label {
-  color: var(--period-filter-off);
-  font: 600 14px/14px var(--period-filter-font);
+  box-sizing: border-box;
+  height: calc(var(--control-height) - 4px);
+  min-height: calc(var(--control-height) - 4px);
+  overflow: hidden;
+  overflow-wrap: normal;
+  color: var(--report-period-muted);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  line-height: 1;
+}
+
+html body #reportPanel .period-navigation.is-missing-range .period-shift-step-label {
+  min-width: max-content;
+  padding-inline: 8px;
+  color: var(--report-period-muted);
+}
+
+html body #reportPanel .period-navigation.is-missing-range .period-shift-button:disabled {
+  opacity: 0.32;
 }
 
 /* Logs-style report surface, horizontal dividers, and underline tabs. */
@@ -1550,13 +1188,36 @@ html body #mainPanel .table-content {
 }
 
 html body #reportPanel .table-card {
-  padding: 0;
+  position: relative;
+  display: flex;
+  height: fit-content;
+  min-height: 0;
+  max-height: 100%;
+  flex: 0 1 auto;
+  align-self: stretch;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 18px;
+  border: 0;
+  background: transparent;
 }
 
 html body #reportPanel .table-scroll {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 0 1 auto;
+  overflow: auto;
   border: 0;
+  border-bottom: 0;
   border-radius: 0;
-  border-bottom-color: var(--table-border);
+  isolation: isolate;
+}
+
+html body #reportPanel .table-content {
+  border-top: 0;
+  border-bottom: 1px solid var(--table-border);
 }
 
 html body #reportPanel table :is(th, td) {
@@ -1567,7 +1228,7 @@ html body #reportPanel table :is(th, td) {
 }
 
 html body #reportPanel table thead th {
-  border-top: 0;
+  border-top: 1px solid var(--table-border);
   border-bottom: 1px solid var(--table-border);
   background: var(--table-header-bg);
 }
@@ -1586,88 +1247,30 @@ html body #reportPanel table tbody th.user-col {
   border-left: 1px solid var(--table-border);
 }
 
-/* Service-account style secondary actions and member filters. */
-html body #reportPanel .member-switch-button {
-  min-height: var(--control-height);
-  height: var(--control-height);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  padding: 0 var(--control-padding-x);
-  font-size: var(--font-14);
-  font-weight: 500;
-  line-height: 1;
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-
-html body #reportPanel .member-switch-button:hover:not(:disabled) {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--text-strong) 12%, var(--surface));
-  color: var(--text-strong);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
-}
-
-html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]) {
-  border-color: transparent;
-  background: var(--primary);
-  color: var(--primary-on);
-  box-shadow: none;
-}
-
-html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--primary-hover);
-  color: var(--primary-on);
-  box-shadow: none;
-}
-
 /* Refresh-button style data reload action. */
 html body #reportPanel #refreshButton {
-  --realtime-soft-bg: oklab(0.159065 0 0 / 0.08);
-  --realtime-soft-fg: #0d0d0d;
-  --realtime-focus: #0169cc;
   position: relative;
   z-index: 0;
   isolation: isolate;
   display: inline-flex;
   width: 42px;
-  height: 32px;
-  min-height: 32px;
+  height: var(--control-height);
+  min-height: var(--control-height);
   flex: 0 0 42px;
   align-items: center;
   justify-content: center;
-  padding: 0 12px;
-  border: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: transparent;
-  color: var(--realtime-soft-fg);
-  font: 500 14px/14px var(--font-ui);
+  background: var(--surface);
+  color: var(--report-action-ink);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  line-height: 1;
   cursor: pointer;
   box-shadow: none;
-  transition: transform 100ms ease, color 150ms ease;
-}
-
-html[data-theme="dark"] body #reportPanel #refreshButton {
-  --realtime-soft-bg: oklab(1 0 0 / 0.08);
-  --realtime-soft-fg: #ffffff;
-  --realtime-focus: #0285ff;
-}
-
-html body #reportPanel #refreshButton::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--realtime-soft-bg);
-  content: "";
-  opacity: 1;
-  pointer-events: none;
-  transition: opacity 150ms ease;
-}
-
-html body #reportPanel #refreshButton:hover:not(:disabled)::before {
-  opacity: 1;
+  transition: transform 100ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 html body #reportPanel #refreshButton:active:not(:disabled) {
@@ -1675,7 +1278,7 @@ html body #reportPanel #refreshButton:active:not(:disabled) {
 }
 
 html body #reportPanel #refreshButton:focus-visible {
-  outline: 2px solid var(--realtime-focus);
+  outline: 2px solid var(--report-focus);
   outline-offset: 2px;
 }
 
@@ -1684,16 +1287,12 @@ html body #reportPanel #refreshButton:disabled {
   opacity: 0.5;
 }
 
-html body #reportPanel #refreshButton:disabled::before {
-  opacity: 0 !important;
-}
-
 html body #reportPanel #refreshButton > .toolbar-button-icon {
   position: relative;
   z-index: 1;
   display: inline-flex;
   width: 18px;
-  height: 32px;
+  height: 100%;
   align-items: center;
   justify-content: center;
 }
@@ -1720,19 +1319,12 @@ html body #reportPanel #refreshButton > .toolbar-button-icon svg.is-loader-icon 
 
 /* Add-member style primary save action. */
 html body #reportPanel #saveButton {
-  --member-toolbar-primary-bg: #181818;
-  --member-toolbar-primary-fg: #ffffff;
-  --member-toolbar-primary-hover: #343434;
-  --member-filter-focus: #0169cc;
-  --member-toolbar-font: "OpenAI Sans", Helvetica, Arial, sans-serif;
-  --member-disabled: #8f8f8f;
-  --member-action-disabled-bg: oklab(0.159065 0 0 / 0.05);
   position: relative;
   z-index: 0;
   isolation: isolate;
   display: inline-flex;
-  height: 32px;
-  min-height: 32px;
+  height: var(--control-height);
+  min-height: var(--control-height);
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -1740,21 +1332,20 @@ html body #reportPanel #saveButton {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--member-toolbar-primary-fg);
-  font: 500 14px/14px var(--member-toolbar-font);
+  color: var(--report-primary-fg);
+  overflow: visible;
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  line-height: normal;
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  line-height: 1;
   white-space: nowrap;
   cursor: pointer;
   box-shadow: none;
   transition: background-color 150ms ease, color 150ms ease, transform 100ms ease;
-}
-
-html[data-theme="dark"] body #reportPanel #saveButton {
-  --member-toolbar-primary-bg: #ffffff;
-  --member-toolbar-primary-fg: #0d0d0d;
-  --member-toolbar-primary-hover: #ededed;
-  --member-filter-focus: #0285ff;
-  --member-disabled: #5d5d5d;
-  --member-action-disabled-bg: oklab(1 0 0 / 0.05);
 }
 
 html body #reportPanel #saveButton::before {
@@ -1762,7 +1353,7 @@ html body #reportPanel #saveButton::before {
   z-index: -1;
   inset: 0;
   border-radius: inherit;
-  background: var(--member-toolbar-primary-bg);
+  background: var(--report-primary-bg);
   content: "";
   pointer-events: none;
 }
@@ -1773,7 +1364,7 @@ html body #reportPanel #saveButton > * {
 }
 
 html body #reportPanel #saveButton:hover:not(:disabled)::before {
-  background: var(--member-toolbar-primary-hover);
+  background: var(--report-primary-hover);
 }
 
 html body #reportPanel #saveButton:active:not(:disabled) {
@@ -1781,52 +1372,40 @@ html body #reportPanel #saveButton:active:not(:disabled) {
 }
 
 html body #reportPanel #saveButton:focus-visible {
-  outline: 2px solid var(--member-filter-focus);
+  outline: 2px solid var(--report-focus);
   outline-offset: 2px;
 }
 
 html body #reportPanel #saveButton:disabled {
   cursor: not-allowed;
   background: transparent;
-  color: var(--member-disabled);
+  color: var(--report-disabled);
   opacity: 1;
 }
 
 html body #reportPanel #saveButton:disabled::before {
-  background: var(--member-action-disabled-bg);
+  background: var(--report-disabled-bg);
   opacity: 1;
 }
 
-/* Prompt-preset style comment-target filters. */
+/* Comment-target filters. */
 html body #reportPanel .member-switch-list {
-  --comment-filter-font: "OpenAI Sans", Helvetica, Arial, sans-serif;
-  --comment-filter-soft-bg: oklab(0.159065 0 0 / 0.08);
-  --comment-filter-soft-fg: #0d0d0d;
-  --comment-filter-soft-hover: oklab(0.159065 0 0 / 0.12);
-  --comment-filter-primary-bg: #181818;
-  --comment-filter-primary-fg: #ffffff;
-  --comment-filter-primary-hover: #343434;
-  --comment-filter-focus: #0169cc;
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-html body #reportPanel .member-switch-divider {
-  width: 1px;
-  height: 24px;
-  flex: 0 0 1px;
-  align-self: center;
-  margin: 0 2px;
-  background: var(--border-strong);
-}
-
-html[data-theme="dark"] body #reportPanel .member-switch-list {
-  --comment-filter-soft-bg: oklab(1 0 0 / 0.08);
-  --comment-filter-soft-fg: #ffffff;
-  --comment-filter-soft-hover: oklab(1 0 0 / 0.12);
-  --comment-filter-primary-bg: #ffffff;
-  --comment-filter-primary-fg: #0d0d0d;
-  --comment-filter-primary-hover: #ededed;
-  --comment-filter-focus: #0285ff;
+html body #reportPanel .member-switch-bar {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  border-bottom: 0;
+  background: transparent;
+  padding: 12px 18px 14px;
 }
 
 html body #reportPanel .member-switch-button {
@@ -1838,16 +1417,20 @@ html body #reportPanel .member-switch-button {
   max-width: min(220px, 100%);
   height: auto;
   min-height: 28px;
+  height: var(--control-height);
   align-items: center;
   justify-content: center;
   overflow: hidden;
   flex: 0 0 auto;
-  padding: 8px 16px;
+  padding: 0 16px;
   border: 0;
   border-radius: 9999px;
   background: transparent;
-  color: var(--comment-filter-soft-fg);
-  font: 500 14px/14px var(--comment-filter-font);
+  color: var(--report-filter-idle-fg);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  line-height: normal;
   letter-spacing: -0.75px;
   text-align: center;
   cursor: pointer;
@@ -1861,7 +1444,7 @@ html body #reportPanel .member-switch-button::before {
   z-index: -1;
   inset: 0;
   border-radius: inherit;
-  background: var(--comment-filter-soft-bg);
+  background: var(--report-filter-idle-bg);
   content: "";
   pointer-events: none;
 }
@@ -1882,22 +1465,31 @@ html body #reportPanel .member-switch-button > .relative {
 }
 
 html body #reportPanel .member-switch-button:hover:not(:disabled)::before {
-  background: var(--comment-filter-soft-hover);
+  background: var(--report-filter-idle-hover-bg);
+}
+
+html body #reportPanel .member-switch-button:hover:not(:disabled) {
+  color: var(--report-filter-idle-hover-fg);
 }
 
 html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]) {
   border: 0;
-  background: transparent;
-  color: var(--comment-filter-primary-fg);
+  background: var(--report-period-indicator);
+  color: var(--report-filter-selected-fg);
   box-shadow: none;
 }
 
 html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"])::before {
-  background: var(--comment-filter-primary-bg);
+  background: var(--report-filter-selected-bg);
+  box-shadow: inset 0 0 0 1px var(--report-filter-selected-border);
 }
 
 html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover:not(:disabled)::before {
-  background: var(--comment-filter-primary-hover);
+  background: var(--report-filter-selected-hover);
+}
+
+html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover:not(:disabled) {
+  color: var(--report-filter-selected-fg);
 }
 
 html body #reportPanel .member-switch-button:active:not(:disabled) {
@@ -1905,7 +1497,7 @@ html body #reportPanel .member-switch-button:active:not(:disabled) {
 }
 
 html body #reportPanel .member-switch-button:focus-visible {
-  outline: 2px solid var(--comment-filter-focus);
+  outline: 2px solid var(--report-focus);
   outline-offset: 2px;
 }
 
@@ -1915,11 +1507,173 @@ html body #reportPanel .member-switch-button:disabled {
 }
 
 html body #reportPanel .member-switch-button:disabled::before {
-  opacity: 0 !important;
+  opacity: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html body #reportPanel .member-switch-button {
-    transition-duration: 1ms;
+html body #reportPanel #showMissingCommentsButton {
+  position: relative;
+  display: inline-flex;
+  box-sizing: border-box;
+  min-height: var(--control-height);
+  height: var(--control-height);
+  line-height: normal;
+  white-space: nowrap;
+  overflow: visible;
+  overflow-wrap: normal;
+  padding-block: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--report-action-ink);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  width: max-content;
+  min-width: max-content;
+  flex: 0 0 auto;
+  padding-inline: var(--control-wide-padding-x);
   }
+
+html body #reportPanel #refreshButton:hover:not(:disabled),
+html body #reportPanel #showMissingCommentsButton:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  color: var(--report-action-ink-hover);
+}
+
+html body #reportPanel #showMissingCommentsButton:focus-visible {
+  outline: 2px solid var(--report-focus);
+  outline-offset: 2px;
+}
+
+html body #reportPanel #showMissingCommentsButton:disabled {
+  cursor: not-allowed;
+}
+
+html body #reportPanel .toolbar-right > .toolbar-button {
+  box-sizing: border-box;
+  min-height: var(--control-height);
+  height: var(--control-height);
+  line-height: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  overflow-wrap: normal;
+  padding-block: 0;
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+}
+
+html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]) {
+  border-color: transparent;
+  background: var(--report-filter-selected-bg) !important;
+  color: var(--report-filter-selected-fg);
+  box-shadow: inset 0 0 0 1px var(--report-filter-selected-border);
+}
+
+/* Active missing-comment filtering keeps the same hover contrast as active member filters. */
+html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]):hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--report-filter-selected-hover) !important;
+  color: var(--report-filter-selected-fg);
+  box-shadow: inset 0 0 0 1px var(--report-filter-selected-border);
+}
+
+/* At compact window widths, keep the date range and period actions on explicit rows. */
+@media (max-width: 1100px) {
+  html body #reportPanel .toolbar-filter-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 10px;
+  }
+
+  html body #reportPanel .toolbar-filter-row .toolbar-left-wide {
+    grid-column: 1;
+    grid-row: 1;
+    width: auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+
+  html body #reportPanel .toolbar-filter-row .period-main-controls {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow: visible;
+  }
+
+  html body #reportPanel .toolbar-filter-row .toolbar-right {
+    grid-column: 2;
+    grid-row: 1;
+    margin-left: 0;
+  }
+
+  html body #reportPanel .member-switch-list {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  html body #reportPanel .member-switch-list > .member-switch-button {
+    max-width: 118px;
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 760px) {
+  html body #reportPanel .toolbar-filter-row .toolbar-left-wide {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  html body #reportPanel .toolbar-filter-row .toolbar-right {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-content: flex-end;
+  }
+
+  html body #reportPanel .toolbar-filter-row .period-main-controls {
+    grid-row: 2;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
+@media (max-width: 520px) {
+  html body #reportPanel .toolbar-filter-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html body #reportPanel .toolbar-right,
+  html body #reportPanel .period-main-controls {
+    grid-column: 1;
+    width: 100%;
+  }
+}
+
+/* Keep report cells on the selected size through explicit component scopes. */
+html body[data-font-size] #tableWrap table :is(th, td),
+html body[data-font-size] #tableWrap .user-content,
+html body[data-font-size] #tableWrap .editable-content,
+html body[data-font-size] #tableWrap .comment-stack,
+html body[data-font-size] #tableWrap .boss-reply-text {
+  font-size: var(--ui-font-size);
+}
+
+/* The two inline labels sit two pixels below the selected content size. */
+html body[data-font-size] #reportPanel .date-today-label,
+html body[data-font-size] #reportPanel table thead th .column-header-you {
+  font-size: max(1px, calc(var(--ui-font-size) - 2px));
+  line-height: 1.1;
 }

@@ -14,18 +14,18 @@ const IME_DIAGNOSTIC_BATCH_SIZE = 200;
 const IME_DIAGNOSTIC_MAX_BUFFERED_EVENTS = 1000;
 
 const TABLE_COLUMN_WIDTH_PROFILES = Object.freeze({
-  compact: { user: 112, date: 80, name: 170, detail: 300, comment: 230 },
-  standard: { user: 128, date: 86, name: 190, detail: 350, comment: 260 },
-  medium: { user: 136, date: 94, name: 205, detail: 390, comment: 280 },
-  large: { user: 144, date: 102, name: 220, detail: 420, comment: 300 },
-  xlarge: { user: 160, date: 114, name: 240, detail: 460, comment: 330 },
+  compact: { user: 112, date: 136, name: 170, detail: 300, comment: 230 },
+  standard: { user: 128, date: 140, name: 190, detail: 350, comment: 260 },
+  medium: { user: 136, date: 144, name: 205, detail: 390, comment: 280 },
+  large: { user: 144, date: 148, name: 220, detail: 420, comment: 300 },
+  xlarge: { user: 160, date: 156, name: 240, detail: 460, comment: 330 },
 });
 const TABLE_COLUMN_MIN_WIDTH_PROFILES = Object.freeze({
-  compact: { user: 88, date: 68, name: 112, detail: 160, comment: 145 },
-  standard: { user: 96, date: 72, name: 120, detail: 180, comment: 155 },
-  medium: { user: 104, date: 78, name: 130, detail: 195, comment: 165 },
-  large: { user: 112, date: 84, name: 140, detail: 210, comment: 175 },
-  xlarge: { user: 124, date: 110, name: 160, detail: 235, comment: 195 },
+  compact: { user: 88, date: 136, name: 112, detail: 160, comment: 145 },
+  standard: { user: 96, date: 140, name: 120, detail: 180, comment: 155 },
+  medium: { user: 104, date: 144, name: 130, detail: 195, comment: 165 },
+  large: { user: 112, date: 148, name: 140, detail: 210, comment: 175 },
+  xlarge: { user: 124, date: 156, name: 160, detail: 235, comment: 195 },
 });
 const TABLE_COLUMN_MAX_WIDTHS = Object.freeze({
   user: 360,
@@ -42,6 +42,7 @@ const TABLE_FONT_SIZES = Object.freeze([
   "xlarge",
 ]);
 let tableColumnResizeState = null;
+let editingSnapshot = null;
 
 function getTableColumnKind(columnId) {
   if (["user", "date", "name", "detail"].includes(columnId)) return columnId;
@@ -55,7 +56,19 @@ function clampTableColumnWidth(columnKind, width, fontSize = state.fontSize) {
   return Math.round(Math.min(maximum, Math.max(minimum, Number(width))));
 }
 
-function parseStoredColumnWidths(rawValue) {
+function normalizeColumnWidthProfile(profile, fontSize = state.fontSize) {
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) return {};
+  const size = TABLE_COLUMN_WIDTH_PROFILES[fontSize] ? fontSize : "large";
+  const normalized = {};
+  Object.entries(profile).forEach(([columnId, width]) => {
+    const columnKind = getTableColumnKind(columnId);
+    if (!columnKind || !Number.isFinite(Number(width))) return;
+    normalized[columnId] = clampTableColumnWidth(columnKind, width, size);
+  });
+  return normalized;
+}
+
+function parseStoredColumnWidths(rawValue, fontSize = state.fontSize) {
   let parsed = rawValue;
   if (typeof parsed === "string") {
     try {
@@ -66,24 +79,25 @@ function parseStoredColumnWidths(rawValue) {
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
 
-  const normalized = {};
-  TABLE_FONT_SIZES.forEach((fontSize) => {
-    const profile = parsed[fontSize];
-    if (!profile || typeof profile !== "object" || Array.isArray(profile)) return;
-    const widths = {};
-    Object.entries(profile).forEach(([columnId, width]) => {
-      const columnKind = getTableColumnKind(columnId);
-      if (!columnKind || !Number.isFinite(Number(width))) return;
-      widths[columnId] = clampTableColumnWidth(columnKind, width, fontSize);
-    });
-    if (Object.keys(widths).length) normalized[fontSize] = widths;
-  });
-  return normalized;
+  const size = TABLE_COLUMN_WIDTH_PROFILES[fontSize] ? fontSize : "large";
+  const sharedProfile = normalizeColumnWidthProfile(parsed, size);
+  if (Object.keys(sharedProfile).length) return sharedProfile;
+
+  // Migrate the former per-font-size format to one shared profile. Prefer the
+  // profile matching the restored font size so the current appearance is kept.
+  const legacyProfileOrder = [size, ...TABLE_FONT_SIZES].filter(
+    (candidate, index, values) => values.indexOf(candidate) === index,
+  );
+  for (const legacySize of legacyProfileOrder) {
+    const migratedProfile = normalizeColumnWidthProfile(parsed[legacySize], size);
+    if (Object.keys(migratedProfile).length) return migratedProfile;
+  }
+  return {};
 }
 
 function getTableColumnWidth(columnId, columnKind, fontSize = state.fontSize) {
   const size = TABLE_COLUMN_WIDTH_PROFILES[fontSize] ? fontSize : "large";
-  const storedWidth = state.columnWidths?.[size]?.[columnId];
+  const storedWidth = state.columnWidths?.[columnId];
   const width = Number.isFinite(Number(storedWidth))
     ? Number(storedWidth)
     : TABLE_COLUMN_WIDTH_PROFILES[size][columnKind];
@@ -94,10 +108,12 @@ function setTableColumnWidth(columnId, columnKind, width) {
   const fontSize = TABLE_COLUMN_WIDTH_PROFILES[state.fontSize]
     ? state.fontSize
     : "large";
-  const profile = { ...(state.columnWidths?.[fontSize] || {}) };
-  profile[columnId] = clampTableColumnWidth(columnKind, width, fontSize);
-  state.columnWidths = { ...(state.columnWidths || {}), [fontSize]: profile };
-  return profile[columnId];
+  const normalizedWidth = clampTableColumnWidth(columnKind, width, fontSize);
+  state.columnWidths = {
+    ...(state.columnWidths || {}),
+    [columnId]: normalizedWidth,
+  };
+  return normalizedWidth;
 }
 
 function createImeEditorState(textarea) {
@@ -313,12 +329,6 @@ function isMemberFilterLevelEnabled(level) {
     state.memberFilterLevels.includes(level);
 }
 
-function getCurrentTeamEntry(level) {
-  return (Array.isArray(state.currentTeam) ? state.currentTeam : []).find(
-    (team) => team?.team_level === level && team?.team_id,
-  );
-}
-
 function memberMatchesTeamEntry(member, teamEntry) {
   return Array.isArray(member?.team_path) &&
     member.team_path.some((team) => team?.team_id === teamEntry?.team_id);
@@ -326,22 +336,36 @@ function memberMatchesTeamEntry(member, teamEntry) {
 
 function getAvailableTeamFilterScopes() {
   if (state.restrictToSelf) return [];
-  return ["large", "medium", "small"]
-    .filter((level) => isMemberFilterLevelEnabled(level))
-    .map((level) => {
-      const team = getCurrentTeamEntry(level);
-      if (!team) return null;
-      const memberCount = state.viewableMembers.filter((member) =>
-        memberMatchesTeamEntry(member, team),
-      ).length;
-      return {
-        level,
-        scope: `team:${level}`,
-        team,
-        memberCount,
-      };
-    })
-    .filter((scope) => scope && scope.memberCount > 0);
+  const members = Array.isArray(state.viewableMembers)
+    ? state.viewableMembers
+    : [];
+  const scopes = [];
+  const seenTeamIds = new Set();
+  ["department", "section"].forEach((level) => {
+    if (!isMemberFilterLevelEnabled(level)) return;
+    members.forEach((member) => {
+      (Array.isArray(member?.team_path) ? member.team_path : []).forEach((team) => {
+        const teamLevel = team?.team_type || team?.team_level;
+        const teamId = String(team?.team_id || "");
+        if (teamLevel !== level || !teamId || seenTeamIds.has(teamId)) return;
+        seenTeamIds.add(teamId);
+        const memberCount = members.filter(
+          (candidate) =>
+            candidate.employee_id !== state.employeeId &&
+            memberMatchesTeamEntry(candidate, team),
+        ).length;
+        if (memberCount > 0) {
+          scopes.push({
+            level,
+            scope: `team:${teamId}`,
+            team,
+            memberCount,
+          });
+        }
+      });
+    });
+  });
+  return scopes;
 }
 
 function isAvailableMemberScope(scope) {
@@ -417,11 +441,6 @@ function updateSubordinateFilterUi() {
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
-  const missingButton = $("showMissingCommentsButton");
-  if (missingButton) {
-    syncMissingCommentCount();
-  }
-
   container.querySelectorAll(".member-switch-button[data-id]").forEach((btn) => {
     const isActive =
       state.memberScope === "member" && btn.dataset.id === state.selectedSubordinateId;
@@ -465,10 +484,21 @@ function syncMissingCommentCount() {
   if (!button) return;
   const summary = getMissingCommentSummary();
   const isLoading = state.busyAction === "load";
-  const label = document.createElement("span");
-  label.className = "missing-filter-label";
-  label.textContent = "未確認のみ";
-  const badge = document.createElement("span");
+  button.disabled = state.isBusy || summary.count === 0;
+  let label = button.querySelector(":scope > .missing-filter-label");
+  let badge = button.querySelector(":scope > .missing-count-badge");
+  if (!label) {
+    label = document.createElement("span");
+    label.className = "missing-filter-label";
+    label.textContent = "未確認のみ";
+    button.appendChild(label);
+  }
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "missing-count-badge";
+    badge.setAttribute("aria-hidden", "true");
+    button.appendChild(badge);
+  }
   badge.className = [
     "missing-count-badge",
     isLoading ? "is-loading" : "",
@@ -478,20 +508,28 @@ function syncMissingCommentCount() {
     .filter(Boolean)
     .join(" ");
   badge.textContent = isLoading ? "…" : `${summary.count}日`;
-  badge.setAttribute("aria-hidden", "true");
-  button.replaceChildren(label, badge);
-  let statusDescription = "未確認の日報だけを表示、対象0日";
+  const isDirectorSummary =
+    state.isDirector && state.missingCommentMode === "weekly_director";
+  let statusDescription = isDirectorSummary
+    ? "部長コメントの未確認対象はありません。最長経過0日"
+    : "未確認の日報はありません。対象0日";
   if (isLoading) {
     statusDescription = "未確認の日数を確認中";
   } else if (summary.count > 0) {
-    const overdueDescription = summary.hasOverdue
-      ? "、過去日の未確認あり"
-      : "";
-    statusDescription = `未確認の日報だけを表示、対象${summary.count}日${overdueDescription}`;
+    if (isDirectorSummary) {
+      statusDescription = `部長コメントが未確認の対象者だけを表示、最長経過${summary.count}稼働日`;
+    } else {
+      const overdueDescription = summary.hasOverdue
+        ? "、過去日の未確認あり"
+        : "";
+      statusDescription = `未確認の日報だけを表示、対象${summary.count}日${overdueDescription}`;
+    }
   }
-  const todayScopeDescription = state.includeTodayInMissingComments
-    ? "今日分を含む"
-    : "今日分は対象外";
+  const todayScopeDescription = isDirectorSummary
+    ? "今日までの稼働日を集計"
+    : state.includeTodayInMissingComments
+      ? "今日分を含む"
+      : "今日分は対象外";
   const rangeDescription =
     summary.rangeStart &&
     summary.rangeEnd &&
@@ -501,6 +539,26 @@ function syncMissingCommentCount() {
   const description = `${statusDescription}${rangeDescription}`;
   button.setAttribute("aria-label", description);
   button.removeAttribute("title");
+}
+
+function exitMissingCommentsFilter() {
+  if (!state.showMissingCommentsOnly) return false;
+  const previous = state.periodBeforeMissing || {
+    preset: "default",
+    startDate: "",
+    endDate: "",
+  };
+  state.activePeriodPreset = previous.preset || "default";
+  state.startDate = previous.startDate || state.startDate;
+  state.endDate = previous.endDate || state.endDate;
+  state.showMissingCommentsOnly = false;
+  state.periodBeforeMissing = null;
+  const startInput = $("startDate");
+  const endInput = $("endDate");
+  if (startInput) startInput.value = state.startDate;
+  if (endInput) endInput.value = state.endDate;
+  syncPeriodPresets();
+  return true;
 }
 
 function getPeriodPresetOptions() {
@@ -557,29 +615,6 @@ function initializePeriodPresetControl() {
         applyPreset(option.dataset.periodMode);
       }
     });
-  });
-  group.addEventListener("keydown", (event) => {
-    if (event.target !== group) return;
-    const currentIndex = options.findIndex((option) => option.tabIndex === 0);
-    const selectedIndex = options.findIndex(
-      (option) => option.getAttribute("aria-checked") === "true",
-    );
-    const baseIndex = currentIndex >= 0 ? currentIndex : selectedIndex;
-    let nextIndex = -1;
-    if (event.key === "ArrowRight") nextIndex = (baseIndex + 1) % options.length;
-    if (event.key === "ArrowLeft") {
-      nextIndex = (baseIndex - 1 + options.length) % options.length;
-    }
-    if (event.key === "Home") nextIndex = 0;
-    if (event.key === "End") nextIndex = options.length - 1;
-    if (nextIndex >= 0) {
-      event.preventDefault();
-      movePeriodPresetFocus(nextIndex);
-    } else if (event.key === " " || event.key === "Enter") {
-      event.preventDefault();
-      const option = options[baseIndex >= 0 ? baseIndex : options.length - 1];
-      if (option) applyPreset(option.dataset.periodMode);
-    }
   });
   window.addEventListener("resize", updatePeriodPresetIndicator, { passive: true });
   if ("ResizeObserver" in window) {
@@ -644,14 +679,27 @@ function syncPeriodPresets() {
       "aria-pressed",
       String(state.showMissingCommentsOnly),
     );
-    syncMissingCommentCount();
   }
+  syncMissingCommentCount();
   syncPeriodShiftButtons();
 }
 
 function syncPeriodShiftButtons() {
   const stepLabel = $("periodShiftStepLabel");
   if (stepLabel) stepLabel.textContent = getPeriodShiftStepLabel();
+  const navigation = document.querySelector("#reportPanel .period-navigation");
+  if (navigation instanceof HTMLElement) {
+    navigation.classList.toggle(
+      "is-missing-range",
+      state.showMissingCommentsOnly,
+    );
+    navigation.setAttribute(
+      "aria-label",
+      state.showMissingCommentsOnly
+        ? `${getPeriodShiftStepLabel()}。期間移動は利用できません`
+        : "表示期間を移動",
+    );
+  }
   [
     ["periodPrevButton", -1],
     ["periodNextButton", 1],
@@ -674,6 +722,9 @@ function syncPeriodShiftButtons() {
 }
 
 function getPeriodShiftStepLabel() {
+  if (state.showMissingCommentsOnly) {
+    return "未確認のみ表示中";
+  }
   if (state.activePeriodPreset === "month") return "1か月";
   if (state.activePeriodPreset === "week") return "1週間";
   return "1日";
@@ -783,7 +834,7 @@ async function refreshData() {
   finishEditing();
   if (!(await confirmDiscardUnsaved("最新データを取得"))) return;
   discardDirtyEdits();
-  await loadData({ preserveDirty: false });
+  await loadData({ preserveDirty: false, forceRefresh: true });
 }
 
 function discardDirtyEdits() {
@@ -796,17 +847,29 @@ async function loadData({
   silent = false,
   preserveDirty = true,
   preserveTableScroll = false,
+  forceRefresh = false,
 } = {}) {
   finishEditing();
+  const requestSequence = ++state.loadRequestSequence;
   setBusy(true, "load");
-  const result = await window.pywebview.api.load_data({
-    start_date: state.startDate || null,
-    end_date: state.endDate || null,
-    period_preset: state.showMissingCommentsOnly
-      ? "missing"
-      : state.legacyLoadPreset || state.activePeriodPreset || null,
-  });
-  setBusy(false);
+  let result;
+  try {
+    result = await window.pywebview.api.load_data({
+      start_date: state.startDate || null,
+      end_date: state.endDate || null,
+      period_preset: state.showMissingCommentsOnly
+        ? "missing"
+        : state.legacyLoadPreset || state.activePeriodPreset || null,
+      force_refresh: forceRefresh,
+    });
+  } catch (error) {
+    if (requestSequence !== state.loadRequestSequence) return;
+    notify({ text: error?.message || "日報の取得に失敗しました。", type: "error" });
+    return;
+  } finally {
+    if (requestSequence === state.loadRequestSequence) setBusy(false);
+  }
+  if (requestSequence !== state.loadRequestSequence) return;
   if (!result.ok) {
     if (result.access_denied) {
       showAccessDenied(result.message);
@@ -818,10 +881,11 @@ async function loadData({
     return;
   }
   state.displayName = result.data.display_name || result.data.employee_id || "";
-  syncCurrentUserName();
+  syncCurrentUserDisplay();
   state.canInputOwnReport = result.data.can_input_own_report !== false;
   state.restrictToSelf = result.data.restrict_to_self === true;
   state.isSuperior = Boolean(result.data.is_superior);
+  state.isDirector = Boolean(result.data.is_director);
   if (!state.hasInitializedReportView) {
     state.activeView = "reports";
     state.hasInitializedReportView = true;
@@ -854,12 +918,27 @@ async function loadData({
     ? result.data.my_rank
     : 9999;
   state.rows = Array.isArray(result.data.rows) ? result.data.rows : [];
+  state.cacheGeneration = Number(result.cache_generation || 0);
   const missingCommentSummary = result.data.missing_comment_summary;
   state.missingCommentDates = Array.isArray(missingCommentSummary?.dates)
     ? missingCommentSummary.dates
     : null;
   state.missingCommentRangeStart = missingCommentSummary?.start_date || "";
   state.missingCommentRangeEnd = missingCommentSummary?.end_date || "";
+  state.missingCommentMode = missingCommentSummary?.mode || "daily";
+  state.missingCommentMemberCounts =
+    missingCommentSummary?.member_counts &&
+    typeof missingCommentSummary.member_counts === "object"
+      ? { ...missingCommentSummary.member_counts }
+      : {};
+  state.directorMissingDays = Math.max(
+    0,
+    Number(
+      missingCommentSummary?.director_missing_days ??
+        missingCommentSummary?.max_elapsed_workdays ??
+        0,
+    ) || 0,
+  );
   state.startDate = result.data.start_date || state.startDate;
   state.endDate = result.data.end_date || state.endDate;
   state.legacyLoadPreset = "";
@@ -913,13 +992,13 @@ async function loadData({
       btn.type = "button";
       btn.className = "member-switch-button";
       btn.dataset.memberScope = scope;
-      btn.dataset.teamFilter = level;
+      btn.dataset.teamFilter = team.team_id;
       const label = document.createElement("span");
       label.className = "relative";
       const teamName = team.team_name || MEMBER_FILTER_LABELS[level];
-      label.textContent = `${MEMBER_FILTER_LABELS[level]}：${teamName}`;
+      label.textContent = teamName;
       btn.appendChild(label);
-      btn.setAttribute("aria-label", `${teamName}（${MEMBER_FILTER_LABELS[level]}）`);
+      btn.setAttribute("aria-label", teamName);
       btn.setAttribute("aria-pressed", "false");
       container.appendChild(btn);
     });
@@ -944,12 +1023,6 @@ async function loadData({
       setMemberFilterButtonLabel(allButton, "全員");
       allButton.classList.toggle("hidden", commentTargetMembers.length === 0);
     }
-    const memberFilterDivider = $("memberFilterDivider");
-    memberFilterDivider?.classList.toggle(
-      "hidden",
-      !allButton || allButton.classList.contains("hidden"),
-    );
-
     updateSubordinateFilterUi();
   }
 
@@ -960,13 +1033,27 @@ async function loadData({
   showMain(true);
   showSettings(false);
   const warningCount = Number(result.data.load_warning_count || 0);
-  if (warningCount > 0) {
+  const refreshResult = result.refresh_result || {};
+  const refreshFailed = Number(refreshResult.failed || 0);
+  const refreshChanged =
+    Number(refreshResult.changed || 0) +
+    Number(refreshResult.added || 0) +
+    Number(refreshResult.deleted || 0);
+  if (forceRefresh && refreshFailed > 0) {
+    notify({
+      text: "一部ファイルを更新できず、直前のデータを表示しています。詳細はログを確認してください。",
+      type: "warning",
+    });
+  } else if (warningCount > 0 && result.cache_status === "built") {
     notify({
       text: `${warningCount}件のCSVを読み込めませんでした。読み込めたデータのみ表示しています。詳細はログを確認してください。`,
       type: "warning",
     });
-  } else if (!silent) {
-    notify({ text: "最新データを取得しました。", type: "info" });
+  } else if (forceRefresh && !silent) {
+    notify({
+      text: refreshChanged > 0 ? "最新データを取得しました。" : "データは最新です。",
+      type: "info",
+    });
   }
 }
 
@@ -1126,16 +1213,7 @@ async function applyPreset(presetName) {
   discardDirtyEdits();
 
   if (presetName === "missing" && state.showMissingCommentsOnly) {
-    const previous = state.periodBeforeMissing || {
-      preset: "default",
-      startDate: "",
-      endDate: "",
-    };
-    state.activePeriodPreset = previous.preset;
-    state.startDate = previous.startDate;
-    state.endDate = previous.endDate;
-    state.showMissingCommentsOnly = false;
-    state.periodBeforeMissing = null;
+    exitMissingCommentsFilter();
   } else if (presetName === "missing") {
     state.periodBeforeMissing = {
       preset: state.activePeriodPreset,
@@ -1146,7 +1224,9 @@ async function applyPreset(presetName) {
     state.startDate = range.startDate;
     state.endDate = range.endDate;
     state.showMissingCommentsOnly = true;
+    state.memberScope = "all";
     state.selectedSubordinateId = "";
+    updateSubordinateFilterUi();
   } else {
     const range = getPresetRange(presetName);
     state.activePeriodPreset = presetName;
@@ -1201,7 +1281,9 @@ function getPresetRange(presetName, today = getTodayJST()) {
     const startDate = configuredStart || offsetDateStr(today, -defaultPastDays);
     const endDate =
       state.missingCommentRangeEnd ||
-      (state.includeTodayInMissingComments ? today : offsetDateStr(today, -1));
+      (state.isDirector || state.includeTodayInMissingComments
+        ? today
+        : offsetDateStr(today, -1));
     return {
       startDate: startDate <= endDate ? startDate : endDate,
       endDate,
@@ -1240,7 +1322,6 @@ function getCalendarMonthRange(referenceDate, monthOffset = 0) {
 }
 
 function renderTable({ preserveScroll = false } = {}) {
-  syncMissingCommentCount();
   const wrap = $("tableWrap");
   const scrollState = preserveScroll ? captureTableScrollState(wrap) : null;
   const rows = getFilteredRows();
@@ -1424,7 +1505,7 @@ function getViewableMember(employeeId) {
 
 function renderReportRow(row, idx, context, memberContext) {
   const contentCells = row.__holidayPlaceholder
-    ? renderHolidayPlaceholderCells(context)
+    ? renderHolidayPlaceholderCells(context, row)
     : `${renderReportNameCell(row)}
     ${renderReportDetailCell(row)}
     ${renderCommentCells(row)}`;
@@ -1444,9 +1525,12 @@ function renderUserCell(memberContext) {
   </th>`;
 }
 
-function renderHolidayPlaceholderCells(context) {
-  const commentCells = context.sampleComments
-    .map(() => '<td class="comment-col holiday-placeholder-cell"></td>')
+function renderHolidayPlaceholderCells(context, row) {
+  const commentCells = getVisibleComments(row.comments || [])
+    .map((cell, index) => {
+      const originalIndex = row.comments.indexOf(cell);
+      return renderCommentCell(row, cell, row.__index, originalIndex);
+    })
     .join("");
   return `<td class="name-col holiday-placeholder-cell" aria-label="休日のため日報なし"></td>
     <td class="detail-col holiday-placeholder-cell"></td>
@@ -1470,9 +1554,14 @@ function renderDateCell(row, idx, context) {
   const todayLabel = row.is_today
     ? `<span class="date-today-label">今日</span>`
     : `<span class="date-today-label is-empty" aria-hidden="true"></span>`;
+  const holidayLabel = renderHolidayLabel(row);
   const content = renderCellFrame(
-    `<div class="date-primary">${formatDisplayDateHTML(row.date)}</div>
-      <div class="date-label-row">${todayLabel}${renderHolidayLabel(row)}</div>`,
+    `<div class="date-primary">
+        <span class="date-value">${formatDisplayDateHTML(row.date)}</span>
+        ${todayLabel}
+        ${holidayLabel}
+      </div>
+      `,
     "cell-frame-static date-content",
   );
   return `<td class="date-col">${content}</td>`;
@@ -1498,6 +1587,8 @@ function renderReportNameCell(row) {
     rowIndex: row.__index,
     value: row.business_name,
     editable: row.can_edit_report,
+    showEmptyIcon: !row.is_holiday,
+    editLabel: `${formatNavigationDate(row.date, true)}の業務名`,
   })}</td>`;
 }
 
@@ -1509,6 +1600,8 @@ function renderReportDetailCell(row) {
     rowIndex: row.__index,
     value: row.business_detail,
     editable: row.can_edit_report,
+    showEmptyIcon: !row.is_holiday,
+    editLabel: `${formatNavigationDate(row.date, true)}の業務詳細`,
   })}</td>`;
 }
 
@@ -1538,12 +1631,6 @@ function getDateShiftDirectionLabel(isPrevious) {
     return isPrevious ? "前日" : "翌日";
   }
   return isPrevious ? "前の期間" : "次の期間";
-}
-
-function formatNavigationDateRange(startDate, endDate) {
-  const formattedStart = formatNavigationDate(startDate, false);
-  if (startDate === endDate) return formattedStart;
-  return `${formattedStart}〜${formatNavigationDate(endDate, false)}`;
 }
 
 function formatNavigationDateRangeDescription(startDate, endDate) {
@@ -1621,10 +1708,9 @@ function renderBossCommentCell(context) {
 
 function renderBossCommentActions(context) {
   if (!context.canAddBossComment) return "";
-
   return `<div class="cell-frame boss-comment-actions${context.hasBossComment ? " hidden" : ""}" data-boss-comment-actions="true">
     <button class="boss-comment-link" type="button" data-action="sign-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}">サイン</button>
-    <button class="boss-comment-link" type="button" data-action="edit-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}">コメントを追加</button>
+    <button class="boss-comment-link" type="button" data-action="edit-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}">コメント入力</button>
   </div>`;
 }
 
@@ -1633,7 +1719,18 @@ function renderBossCommentDisplay(context) {
     return renderBossCommentEditor(context, context.canEditComment);
   }
 
-  return `<div class="cell-frame editable-content boss-content is-empty hidden" data-kind="comment" data-type="boss" data-row="${context.rowIndex}" data-field="comment" data-comment="${context.commentIndex}" data-editable="${context.canEditComment ? "true" : "false"}"></div>`;
+  return renderEditableCell({
+    kind: "comment",
+    type: "boss",
+    field: "comment",
+    rowIndex: context.rowIndex,
+    commentIndex: context.commentIndex,
+    value: "",
+    editable: context.canEditComment,
+    showEmptyIcon: false,
+    hidden: context.canAddBossComment,
+    editLabel: `${formatNavigationDate(context.row.date, true)}の${context.cell.superior_name || "上司"}へのコメント`,
+  });
 }
 
 function renderBossCommentEditor(context, editable) {
@@ -1646,6 +1743,7 @@ function renderBossCommentEditor(context, editable) {
     value: context.cell.comment,
     editable,
     dirty: isBossCommentDirty(context.row, context.cell),
+    editLabel: `${formatNavigationDate(context.row.date, true)}の${context.cell.superior_name || "上司"}へのコメント`,
   });
 }
 
@@ -1664,7 +1762,7 @@ function renderReplySection(context) {
 }
 
 function canShowReplySection(context) {
-  return context.hasBossComment || context.hasReply;
+  return context.canEditReply || context.hasReply;
 }
 
 function isReplySectionExpanded(context) {
@@ -1672,7 +1770,7 @@ function isReplySectionExpanded(context) {
 }
 
 function renderReplyToggleButton(context) {
-  if (isReplySectionExpanded(context)) return "";
+  if (!context.canEditReply || isReplySectionExpanded(context)) return "";
   return `<button class="reply-toggle-button" type="button" data-action="toggle-reply" data-row="${context.rowIndex}" data-comment="${context.commentIndex}">返信する</button>`;
 }
 
@@ -1688,6 +1786,7 @@ function renderReplyEditor(context) {
     editable: context.canEditReply,
     dirty: isReplyDirty(context.row, context.cell),
     dataAttributes: { "reply-key": context.replyKey },
+    editLabel: `${formatNavigationDate(context.row.date, true)}の${context.cell.superior_name || "上司"}への返信`,
   });
 }
 
@@ -1756,7 +1855,10 @@ function renderEditableCell({
   value,
   editable,
   dirty = false,
+  showEmptyIcon = true,
+  hidden = false,
   dataAttributes = {},
+  editLabel = "セル",
 }) {
   const display = displayText(value);
   const empty = isEmpty(value);
@@ -1765,13 +1867,15 @@ function renderEditableCell({
     "editable-content",
     `${type}-content`,
     empty ? "is-empty" : "",
+    !showEmptyIcon ? "empty-icon-hidden" : "",
     editable ? "is-editable" : "is-readonly",
     dirty ? "is-dirty" : "",
+    hidden ? "hidden" : "",
   ]
     .filter(Boolean)
     .join(" ");
   const accessibilityAttributes = editable
-    ? ' role="button" tabindex="0"'
+    ? ` role="button" tabindex="0" aria-label="${escapeHtml(`${editLabel}を${empty ? "入力" : "編集"}`)}"`
     : "";
   const serializedDataAttributes = Object.entries(dataAttributes)
     .map(([name, attributeValue]) => {
@@ -1779,7 +1883,14 @@ function renderEditableCell({
       return ` data-${name}="${escapeHtml(attributeValue)}"`;
     })
     .join("");
-  return `<div class="${classes}" data-kind="${kind}" data-type="${type}" data-row="${rowIndex}" data-field="${field}" data-comment="${commentIndex}" data-editable="${editable ? "true" : "false"}"${accessibilityAttributes}${serializedDataAttributes}>${escapeHtml(display)}</div>`;
+  const content = empty && editable && showEmptyIcon
+    ? renderEmptyEditableIcon()
+    : escapeHtml(display);
+  return `<div class="${classes}" data-kind="${kind}" data-type="${type}" data-row="${rowIndex}" data-field="${field}" data-comment="${commentIndex}" data-editable="${editable ? "true" : "false"}"${accessibilityAttributes}${serializedDataAttributes}>${content}</div>`;
+}
+
+function renderEmptyEditableIcon() {
+  return `<span class="editable-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M16.793 2.793a3.121 3.121 0 1 1 4.414 4.414l-8.5 8.5A1 1 0 0 1 12 16H9a1 1 0 0 1-1-1v-3a1 1 0 0 1 .293-.707l8.5-8.5Zm3 1.414a1.121 1.121 0 0 0-1.586 0L10 12.414V14h1.586l8.207-8.207a1.121 1.121 0 0 0 0-1.586ZM6 5a1 1 0 0 1-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 1-1-1v-4a1 1 0 1 1 2 0v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h4a1 1 0 1 1 0 2H6Z" clip-rule="evenodd" /></svg></span>`;
 }
 
 function renderCellFrame(content, extraClass = "") {
@@ -1934,16 +2045,11 @@ function handleColumnResizeKeydown(event, handle) {
   return true;
 }
 
-function resetCurrentColumnWidths() {
-  const fontSize = TABLE_COLUMN_WIDTH_PROFILES[state.fontSize]
-    ? state.fontSize
-    : "large";
-  const nextWidths = { ...(state.columnWidths || {}) };
-  delete nextWidths[fontSize];
-  state.columnWidths = nextWidths;
+function resetColumnWidths() {
+  state.columnWidths = {};
   applyColumnWidthsToRenderedTable();
   persistUiState();
-  notify({ text: "現在の文字サイズの列幅をリセットしました。", type: "info" });
+  notify({ text: "列幅を初期値に戻しました。", type: "info" });
 }
 
 function handleTableClick(event) {
@@ -1958,7 +2064,6 @@ function handleTableClick(event) {
     openBossCommentEditor(editComment);
     return;
   }
-
   const replyToggle = event.target.closest('[data-action="toggle-reply"]');
   if (replyToggle) {
     toggleReplyEditor(replyToggle);
@@ -2002,28 +2107,16 @@ function toggleReplyEditor(button) {
 function openBossCommentEditor(button) {
   const { target } = getBossCommentTarget(button);
   if (!target) return;
-
-  const actions = button.closest(".boss-comment-actions");
-  if (actions) actions.classList.add("hidden");
-
-  target.classList.remove("hidden");
   startEditingTarget(target, { preventScroll: true });
 }
 
 function applyBossCommentSignature(button) {
-  const actions = button.closest(".boss-comment-actions");
-  if (actions) actions.classList.add("hidden");
-
   const { row, cell } = getBossCommentTarget(button);
   if (!row || !cell) return;
-
+  button.closest(".boss-comment-actions")?.classList.add("hidden");
   finishEditing();
-
-  const signature = normalizeCellValue(
-    state.commentSignature || cell.superior_name,
-  );
+  const signature = normalizeCellValue(state.commentSignature || cell.superior_name);
   recordCommentChange(row, cell, signature);
-
   syncChrome();
   renderTable({ preserveScroll: true });
 }
@@ -2061,6 +2154,36 @@ function startEditingTarget(target, { preventScroll = false } = {}) {
   if (target === currentEditingElement) return;
 
   finishEditing();
+  const row = state.rows[Number(target.dataset.row)];
+  const commentCell = row?.comments?.[Number(target.dataset.comment)];
+  const reportChange = row
+    ? state.reportChanges.get(getReportRowKey(row))
+    : null;
+  const commentKey = row && commentCell ? getReplyKey(row, commentCell) : "";
+  editingSnapshot = {
+    kind: target.dataset.kind,
+    row,
+    field: target.dataset.field || "",
+    commentCell,
+    originalValue:
+      target.dataset.kind === "report"
+        ? normalizeCellValue(row?.[target.dataset.field])
+        : target.dataset.kind === "reply"
+          ? normalizeCellValue(commentCell?.reply)
+          : normalizeCellValue(commentCell?.comment),
+    reportChange: reportChange
+      ? { date: reportChange.date, fields: { ...reportChange.fields }, replies: { ...reportChange.replies } }
+      : null,
+    commentChange: commentKey ? state.commentChanges.get(commentKey) : null,
+    commentKey,
+    elementDirty: target.classList.contains("is-dirty"),
+    cellDirty: Boolean(target.closest("td")?.classList.contains("is-dirty-cell")),
+    elementHidden: target.classList.contains("hidden"),
+    actionsHidden: Boolean(target.parentElement?.querySelector(".boss-comment-actions")?.classList.contains("hidden")),
+  };
+  const actions = target.parentElement?.querySelector(".boss-comment-actions");
+  actions?.classList.add("hidden");
+  target.classList.remove("hidden");
   currentEditingElement = target;
   currentEditingElement.classList.add("is-editing");
 
@@ -2087,7 +2210,7 @@ function startEditingTarget(target, { preventScroll = false } = {}) {
       queueImeDiagnostic("keydown_handled", textarea, keyEvent, {
         reason: "escape",
       });
-      finishEditing();
+      cancelEditing();
       return;
     }
     if (keyEvent.key === "Tab") {
@@ -2109,6 +2232,41 @@ function startEditingTarget(target, { preventScroll = false } = {}) {
   });
   textarea.focus({ preventScroll });
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+function cancelEditing() {
+  if (!currentEditingElement) return;
+  const editingElement = currentEditingElement;
+  const snapshot = editingSnapshot;
+  if (snapshot?.row) {
+    if (snapshot.kind === "report") snapshot.row[snapshot.field] = snapshot.originalValue;
+    if (snapshot.kind === "reply" && snapshot.commentCell) snapshot.commentCell.reply = snapshot.originalValue;
+    if (snapshot.kind === "comment" && snapshot.commentCell) snapshot.commentCell.comment = snapshot.originalValue;
+    const reportKey = getReportRowKey(snapshot.row);
+    if (snapshot.reportChange) state.reportChanges.set(reportKey, snapshot.reportChange);
+    else state.reportChanges.delete(reportKey);
+    if (snapshot.commentKey) {
+      if (snapshot.commentChange) state.commentChanges.set(snapshot.commentKey, snapshot.commentChange);
+      else state.commentChanges.delete(snapshot.commentKey);
+    }
+  }
+  editingElement.innerHTML =
+    isEmpty(snapshot?.originalValue) && !editingElement.classList.contains("empty-icon-hidden")
+      ? renderEmptyEditableIcon()
+      : escapeHtml(displayText(snapshot?.originalValue || ""));
+  editingElement.classList.toggle("is-empty", isEmpty(snapshot?.originalValue));
+  editingElement.classList.toggle("is-dirty", Boolean(snapshot?.elementDirty));
+  editingElement.closest("td")?.classList.toggle("is-dirty-cell", Boolean(snapshot?.cellDirty));
+  editingElement.classList.toggle("hidden", Boolean(snapshot?.elementHidden));
+  editingElement.parentElement?.querySelector(".boss-comment-actions")?.classList.toggle(
+    "hidden",
+    Boolean(snapshot?.actionsHidden),
+  );
+  editingElement.classList.remove("is-editing");
+  currentEditingElement = null;
+  editingSnapshot = null;
+  syncChrome();
+  scheduleImeDiagnosticFlush();
 }
 
 function moveEditingFocus(direction) {
@@ -2186,7 +2344,18 @@ function finishEditing() {
       deferred: wasComposing,
     });
     const normalized = normalizeCellValue(textarea.value);
-    editingElement.textContent = displayText(normalized);
+    if (isEmpty(normalized) && !editingElement.classList.contains("empty-icon-hidden")) {
+      editingElement.innerHTML = renderEmptyEditableIcon();
+    } else {
+      editingElement.textContent = displayText(normalized);
+    }
+    const currentLabel = editingElement.getAttribute("aria-label");
+    if (currentLabel) {
+      editingElement.setAttribute(
+        "aria-label",
+        currentLabel.replace(/を(?:入力|編集)$/, `を${isEmpty(normalized) ? "入力" : "編集"}`),
+      );
+    }
     editingElement.classList.toggle("is-empty", isEmpty(normalized));
     editingElement.classList.remove("is-editing");
 
@@ -2194,10 +2363,9 @@ function finishEditing() {
       const bossCommentActions = editingElement.parentElement?.querySelector(
         ".boss-comment-actions",
       );
-      editingElement.classList.toggle("hidden", isEmpty(normalized));
-      if (bossCommentActions) {
-        bossCommentActions.classList.toggle("hidden", !isEmpty(normalized));
-      }
+      const hasActions = Boolean(bossCommentActions);
+      editingElement.classList.toggle("hidden", isEmpty(normalized) && hasActions);
+      bossCommentActions?.classList.toggle("hidden", !isEmpty(normalized));
     }
 
     const isEmptyReply =
@@ -2212,6 +2380,7 @@ function finishEditing() {
     }
   }
   currentEditingElement = null;
+  editingSnapshot = null;
   scheduleImeDiagnosticFlush();
 }
 
@@ -2225,7 +2394,7 @@ function rowHasReportData(row) {
 function rowCanReceiveBossComment(row) {
   if (!row) return false;
   if (row.date > getTodayJST()) return false;
-  return !row.is_holiday || rowHasReportData(row);
+  return !row.is_holiday;
 }
 
 function rowNeedsBossComment(row) {
@@ -2236,7 +2405,14 @@ function rowNeedsBossComment(row) {
   return Boolean(myCell && (isEmpty(myCell.comment) || isBossCommentDirty(row, myCell)));
 }
 
-function getMissingCommentSummary() {
+function rowMatchesMissingCommentFilter(row) {
+  if (state.isDirector && state.missingCommentMode === "weekly_director") {
+    return Number(state.missingCommentMemberCounts?.[row?.employee_id] || 0) > 0;
+  }
+  return rowNeedsBossComment(row);
+}
+
+function getMissingCommentSummary({ useCurrentRows = false } = {}) {
   const today = getTodayJST();
   const rangeEnd =
     state.missingCommentRangeEnd ||
@@ -2249,12 +2425,24 @@ function getMissingCommentSummary() {
     rangeEnd,
   };
   if (!state.isSuperior) return emptySummary;
+  if (state.isDirector && state.missingCommentMode === "weekly_director") {
+    const count = Math.max(0, Number(state.directorMissingDays || 0));
+    return {
+      count,
+      hasOverdue: count > 0,
+      dates: Array.isArray(state.missingCommentDates)
+        ? [...state.missingCommentDates]
+        : [],
+      rangeStart: state.missingCommentRangeStart || "",
+      rangeEnd: state.missingCommentRangeEnd || today,
+    };
+  }
 
   const rangeStart =
     state.missingCommentRangeStart || state.missingCommentStartDate || "";
-  const sourceDates = Array.isArray(state.missingCommentDates)
-    ? state.missingCommentDates
-    : state.rows.filter(rowNeedsBossComment).map((row) => row.date);
+  const sourceDates = useCurrentRows || !Array.isArray(state.missingCommentDates)
+    ? state.rows.filter(rowNeedsBossComment).map((row) => row.date)
+    : state.missingCommentDates;
   const dates = [
     ...new Set(
       sourceDates.filter(
@@ -2299,9 +2487,12 @@ function getFilteredRows() {
         }
         if (member.employee_id === state.employeeId) return false;
         if (state.memberScope?.startsWith("team:")) {
-          const level = state.memberScope.slice("team:".length);
-          const team = getCurrentTeamEntry(level);
-          return Boolean(team && memberMatchesTeamEntry(member, team));
+          const teamScope = getAvailableTeamFilterScopes().find(
+            (scope) => scope.scope === state.memberScope,
+          );
+          return Boolean(
+            teamScope && memberMatchesTeamEntry(member, teamScope.team),
+          );
         }
         if (state.memberScope === "team") return relations.includes("same_small_team");
         if (state.memberScope === "subordinates") {
@@ -2317,7 +2508,7 @@ function getFilteredRows() {
   );
   let visibleRows = filteredByDate.filter((row) => allowedIds.has(row.employee_id));
   if (state.showMissingCommentsOnly) {
-    visibleRows = visibleRows.filter(rowNeedsBossComment);
+    visibleRows = visibleRows.filter(rowMatchesMissingCommentFilter);
   }
 
   const memberOrder = new Map(
@@ -2476,11 +2667,18 @@ async function saveUpdates() {
     type: "info",
   });
   setBusy(true, "save");
-  const result = await window.pywebview.api.save_updates({
-    user_updates: userUpdates,
-    comment_updates: commentUpdates,
-  });
-  setBusy(false);
+  let result;
+  try {
+    result = await window.pywebview.api.save_updates({
+      user_updates: userUpdates,
+      comment_updates: commentUpdates,
+    });
+  } catch (error) {
+    notify({ text: error?.message || "保存に失敗しました。", type: "error" });
+    return;
+  } finally {
+    setBusy(false);
+  }
   const userSaved = Boolean(result.result?.user?.saved);
   const commentSaved = Boolean(result.result?.comment?.saved);
   if (userSaved) {
@@ -2489,9 +2687,26 @@ async function saveUpdates() {
   if (commentSaved) {
     state.commentChanges.clear();
   }
+  const shouldExitMissingFilter =
+    commentSaved &&
+    state.showMissingCommentsOnly &&
+    !state.isDirector &&
+    getMissingCommentSummary({ useCurrentRows: true }).count === 0;
+  if (shouldExitMissingFilter) {
+    exitMissingCommentsFilter();
+  }
   if (userSaved || commentSaved) {
     syncChrome();
     await loadData({ silent: true, preserveTableScroll: true });
+    if (
+      commentSaved &&
+      state.showMissingCommentsOnly &&
+      getMissingCommentSummary().count === 0
+    ) {
+      exitMissingCommentsFilter();
+      await loadData({ silent: true, preserveTableScroll: true });
+      persistUiState();
+    }
   } else {
     syncChrome();
   }

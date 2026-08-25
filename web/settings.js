@@ -1,21 +1,4 @@
 // Settings screen behavior and validation.
-function setSettingsTab(tabName = "general") {
-  const tabs = [...document.querySelectorAll("[data-settings-tab]")];
-  const panels = [...document.querySelectorAll("[data-settings-panel]")];
-  const activeTab = tabs.find((tab) => tab.dataset.settingsTab === tabName) || tabs[0];
-  const activeName = activeTab?.dataset.settingsTab || "general";
-  tabs.forEach((tab) => {
-    const isActive = tab === activeTab;
-    tab.classList.toggle("is-active", isActive);
-    tab.setAttribute("aria-selected", String(isActive));
-  });
-  panels.forEach((panel) => {
-    const isActive = panel.dataset.settingsPanel === activeName;
-    panel.classList.toggle("hidden", !isActive);
-    panel.hidden = !isActive;
-  });
-}
-
 function fillSettings(settings) {
   $("usersDir").value = settings.users_dir || "";
   $("commentsDir").value = settings.comments_dir || "";
@@ -140,7 +123,7 @@ function validateSettingsInputs() {
     errors.comments_dir = "上司コメントフォルダを入力してください。";
   }
   if (!$("commonDir").value.trim()) {
-    errors.common_dir = "共通マスターフォルダを入力してください。";
+    errors.common_dir = "管理フォルダを入力してください。";
   }
   return errors;
 }

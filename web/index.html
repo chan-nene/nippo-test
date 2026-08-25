@@ -21,22 +21,25 @@
   <body>
     <header class="title-bar">
       <div class="title-bar-leading">
-        <button
-          id="toggleSidebarButton"
-          class="header-icon-button sidebar-toggle"
-          type="button"
-          title="サイドバーを閉じる"
-          aria-label="サイドバーを閉じる"
-          aria-controls="sidebar"
-          aria-expanded="true"
-        >
-          <span class="sidebar-toggle-icon" aria-hidden="true"></span>
-        </button>
         <div class="title-bar-brand">
           <span class="title-bar-title">NIPPO</span>
         </div>
       </div>
       <div class="title-bar-actions" aria-label="アプリ操作">
+        <button
+          id="resetColumnWidthsButton"
+          class="header-icon-button column-width-reset-button"
+          type="button"
+          aria-label="列幅を初期値に戻す"
+          title="列幅を初期値に戻す"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 5h10" />
+            <path d="M4 12h16" />
+            <path d="M4 19h10" />
+            <path d="m17 4 3 3-3 3" />
+          </svg>
+        </button>
         <div id="fontSizeControl" class="font-size-control">
           <button
             id="fontSizeButton"
@@ -61,20 +64,6 @@
             <button type="button" data-font-size="xlarge" aria-pressed="false">極大</button>
           </div>
         </div>
-        <button
-          id="resetColumnWidthsButton"
-          class="header-icon-button column-width-reset-button"
-          type="button"
-          aria-label="現在の文字サイズの列幅をリセット"
-          title="現在の文字サイズの列幅をリセット"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 5h10" />
-            <path d="M4 12h16" />
-            <path d="M4 19h10" />
-            <path d="m17 4 3 3-3 3" />
-          </svg>
-        </button>
         <div
           id="colorThemeControl"
           class="theme-mode-switch"
@@ -96,7 +85,7 @@
             aria-checked="true"
             tabindex="-1"
           >
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path fill="currentColor" fill-rule="evenodd" d="M12 1C12.5523 1 13 1.44772 13 2V4C13 4.55228 12.5523 5 12 5C11.4477 5 11 4.55228 11 4V2C11 1.44772 11.4477 1 12 1ZM4.22183 4.22183C4.61235 3.8313 5.24551 3.8313 5.63604 4.22183L7.05025 5.63604C7.44078 6.02656 7.44078 6.65973 7.05025 7.05025C6.65973 7.44078 6.02656 7.44078 5.63604 7.05025L4.22183 5.63604C3.8313 5.24551 3.8313 4.61235 4.22183 4.22183ZM19.7782 4.22183C20.1687 4.61235 20.1687 5.24551 19.7782 5.63604L18.364 7.05025C17.9734 7.44078 17.3403 7.44078 16.9497 7.05025C16.5592 6.65973 16.5592 6.02656 16.9497 5.63604L18.364 4.22183C18.7545 3.8313 19.3876 3.8313 19.7782 4.22183ZM12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9ZM7 12C7 9.23858 9.23858 7 12 7C14.7614 7 17 9.23858 17 12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12ZM1 12C1 11.4477 1.44772 11 2 11H4C4.55228 11 5 11.4477 5 12C5 12.5523 4.55228 13 4 13H2C1.44772 13 1 12.5523 1 12ZM19 12C19 11.4477 19.4477 11 20 11H22C22.5523 11 23 11.4477 23 12C23 12.5523 22.5523 13 22 13H20C19.4477 13 19 12.5523 19 12ZM7.05025 16.9497C7.44078 17.3403 7.44078 17.9734 7.05025 18.364L5.63604 19.7782C5.24551 20.1687 4.61235 20.1687 4.22183 19.7782C3.8313 19.3876 3.8313 18.7545 4.22183 18.364L5.63604 16.9497C6.02656 16.5592 6.65973 16.5592 7.05025 16.9497ZM16.9497 16.9497C17.3403 16.5592 17.9734 16.5592 18.364 16.9497L19.7782 18.364C20.1687 18.7545 20.1687 19.3876 19.7782 19.7782C19.3877 20.1687 18.7545 20.1687 18.364 19.7782L16.9497 18.364C16.5592 17.9734 16.5592 17.3403 16.9497 16.9497ZM12 19C12.5523 19 13 19.4477 13 20V22C13 22.5523 12.5523 23 12 23C11.4477 23 11 22.5523 11 22V20C11 19.4477 11.4477 19 12 19Z" />
             </svg>
           </button>
@@ -110,16 +99,26 @@
             aria-checked="false"
             tabindex="-1"
           >
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path fill="currentColor" d="M12.7836 2.47048C12.9676 2.76512 12.9855 3.13415 12.8309 3.44525C12.2994 4.51497 12 5.7211 12 7.00001C12 11.4183 15.5817 15 20 15L20.0575 14.9998C20.4049 14.9974 20.7287 15.1754 20.9127 15.47C21.0968 15.7647 21.1147 16.1337 20.9601 16.4448C19.325 19.7352 15.9279 22 12 22C6.47715 22 2 17.5229 2 12C2 6.50107 6.43841 2.03886 11.9284 2.00027C12.2758 1.99783 12.5995 2.17584 12.7836 2.47048ZM10.4099 4.15803C6.75344 4.8954 4 8.12619 4 12C4 16.4183 7.58172 20 12 20C14.587 20 16.8886 18.7721 18.3516 16.8648C13.6131 16.0789 10 11.9614 10 7.00001C10 6.01361 10.1431 5.05953 10.4099 4.15803Z" />
             </svg>
           </button>
+        </div>
+        <div id="currentUserDisplay" class="current-user-display" aria-label="ログイン中のユーザー: 未取得">
+          <span class="current-user-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="10" r="4" />
+              <path d="M18 20a6 6 0 0 0-12 0" />
+            </svg>
+          </span>
+          <strong id="currentUserName" class="current-user">未取得</strong>
         </div>
       </div>
     </header>
 
     <div class="app-shell">
-      <aside id="sidebar" class="sidebar is-open">
+      <aside id="sidebar" class="sidebar">
         <nav class="sidebar-nav" aria-label="メインメニュー">
           <ul>
             <li>
@@ -127,7 +126,7 @@
                 id="dailyViewButton"
                 class="sidebar-item is-active"
                 type="button"
-                title="日報"
+                title="日報" aria-label="日報"
               >
                 <span class="sidebar-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" role="img">
@@ -145,7 +144,7 @@
             id="adminViewButton"
             class="sidebar-item hidden"
             type="button"
-            title="共通マスター"
+            title="管理" aria-label="管理"
           >
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" role="img">
@@ -154,13 +153,13 @@
                 <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
               </svg>
             </span>
-            <span class="sidebar-text">共通マスター</span>
+            <span class="sidebar-text">管理</span>
           </button>
           <button
             id="openSettingsButton"
             class="sidebar-item"
             type="button"
-            title="設定"
+            title="設定" aria-label="設定"
           >
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" role="img">
@@ -171,13 +170,6 @@
             <span class="sidebar-text">設定</span>
           </button>
         </nav>
-        <div class="sidebar-user" aria-label="ログイン中のユーザー">
-          <span id="currentUserAvatar" class="sidebar-user-avatar" aria-hidden="true">ユ</span>
-          <span class="sidebar-user-copy">
-            <strong id="currentUserName" class="current-user">ユーザー</strong>
-            <small>ログイン中</small>
-          </span>
-        </div>
       </aside>
 
       <main class="main-area">
@@ -228,10 +220,9 @@
                     <div class="period-mode-control">
                       <div
                         class="period-presets"
-                        role="group"
+                        role="radiogroup"
                         aria-label="表示期間"
                         dir="ltr"
-                        tabindex="0"
                       >
                         <div class="period-presets-indicator" aria-hidden="true"></div>
                         <button
@@ -358,13 +349,6 @@
                 >
                   <span class="relative">自分</span>
                 </button>
-                <span
-                  id="memberFilterDivider"
-                  class="member-switch-divider hidden"
-                  role="separator"
-                  aria-orientation="vertical"
-                  aria-hidden="true"
-                ></span>
                 <button
                   id="showAllSubordinatesButton"
                   class="member-switch-button"
@@ -379,41 +363,25 @@
             </div>
             <div id="tableWrap" class="table-card hidden"></div>
           </div>
-          <section id="adminPanel" class="admin-panel hidden" aria-label="共通マスター">
+          <section id="adminPanel" class="admin-panel hidden" aria-label="管理">
             <header class="admin-header">
-              <div class="admin-heading">
-                <div class="admin-title-line">
-                  <div>
-                    <p class="admin-eyebrow">ADMINISTRATION</p>
-                    <h2 id="adminPageTitle">組織・ユーザー管理</h2>
-                    <p id="adminPageDescription" class="admin-page-description">
-                      ユーザー情報を正として、ユーザー側・チーム側のどちらからでも所属とコメント担当を変更できます。
-                    </p>
-                  </div>
-                </div>
-                <nav
-                  id="masterNav"
-                  class="master-nav"
-                  role="tablist"
-                  aria-label="共通マスターの種類"
-                ></nav>
-              </div>
-              <div class="admin-header-actions">
-                <button id="adminReloadButton" class="toolbar-button hidden" type="button" hidden>
-                  <span class="toolbar-button-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v6h-6" /></svg>
-                  </span>
-                  再読み込み
-                </button>
-                <button id="adminSaveButton" class="admin-page-save" type="button" disabled>
-                  変更を保存
-                </button>
-              </div>
+              <button id="adminReloadButton" class="toolbar-button hidden" type="button" hidden>
+                <span class="toolbar-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v6h-6" /></svg>
+                </span>
+                再読み込み
+              </button>
+              <nav
+                id="masterNav"
+                class="master-nav"
+                role="tablist"
+                aria-label="管理の種類"
+              ></nav>
             </header>
 
             <div id="adminLoading" class="admin-loading">
               <span class="admin-loading-mark" aria-hidden="true"></span>
-              <p>共通マスターを読み込んでいます</p>
+                      <p>管理を読み込んでいます</p>
             </div>
 
             <div
@@ -427,15 +395,14 @@
                 <div class="master-table-toolbar">
                   <div class="master-table-heading">
                     <div>
-                      <p id="adminTableEyebrow" class="master-table-eyebrow">共通マスター</p>
-                      <h3 id="adminTableTitle">ユーザー</h3>
+                      <p id="adminTableEyebrow" class="master-table-eyebrow">管理</p>
+                      <h3 id="adminTableTitle" hidden>ユーザー</h3>
                     </div>
-                    <span id="adminTableCount" class="master-table-count"></span>
                   </div>
                   <div class="master-table-tools">
                     <label id="adminSearchControl" class="master-search">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.2" /><path d="m16 16 4.5 4.5" /></svg>
-                      <input id="adminSearchInput" type="search" autocomplete="off" placeholder="ユーザーを検索" aria-label="ユーザーを検索" />
+                      <input id="adminSearchInput" type="search" autocomplete="off" placeholder="社員ID・ユーザー名を検索" aria-label="社員ID・ユーザー名を検索" />
                     </label>
                     <button id="adminAddRowButton" class="admin-add-button" type="button">
                       <span aria-hidden="true">＋</span>
@@ -460,15 +427,35 @@
                 <div id="adminInspectorForm" class="inspector-form hidden"></div>
               </aside>
             </div>
+            <dialog
+              id="userEditorDialog"
+              class="user-editor-dialog"
+              aria-labelledby="userEditorDialogTitle"
+            >
+              <div class="user-editor-dialog-content">
+                <header class="user-editor-dialog-header">
+                  <h2 id="userEditorDialogTitle">ユーザーを編集</h2>
+                </header>
+                <div id="userEditorDialogForm" class="inspector-form user-editor-dialog-form"></div>
+              </div>
+            </dialog>
+            <dialog
+              id="teamEditorDialog"
+              class="user-editor-dialog team-editor-dialog"
+              aria-labelledby="teamEditorDialogTitle"
+            >
+              <div class="user-editor-dialog-content">
+                <header class="user-editor-dialog-header">
+                  <h2 id="teamEditorDialogTitle">組織を編集</h2>
+                </header>
+                <div id="teamEditorDialogForm" class="inspector-form user-editor-dialog-form team-editor-dialog-form"></div>
+              </div>
+            </dialog>
           </section>
           <section id="settingsPanel" class="settings-panel hidden" aria-label="設定">
             <div class="settings-card">
-              <nav class="settings-tabs" role="tablist" aria-label="設定の種類">
-                <button id="settingsGeneralTab" class="settings-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="settingsGeneralPanel" data-settings-tab="general">一般</button>
-                <button id="settingsDisplayTab" class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsDisplayPanel" data-settings-tab="display">表示</button>
-                <button id="settingsNotificationTab" class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsNotificationPanel" data-settings-tab="notifications">通知</button>
-              </nav>
-              <div id="settingsGeneralPanel" class="settings-tab-panel" role="tabpanel" aria-labelledby="settingsGeneralTab" data-settings-panel="general">
+              <section id="settingsGeneralPanel" class="settings-section" aria-labelledby="settingsGeneralTitle">
+                <h2 id="settingsGeneralTitle">一般</h2>
                 <label class="settings-field">
                   <span>ユーザー日報フォルダ</span>
                   <input id="usersDir" type="text" autocomplete="off" aria-describedby="usersDirError" />
@@ -480,7 +467,7 @@
                   <span id="commentsDirError" class="field-error hidden" role="alert"></span>
                 </label>
                 <label class="settings-field">
-                  <span>共通マスターフォルダ</span>
+                  <span>管理フォルダ</span>
                   <input id="commonDir" type="text" autocomplete="off" aria-describedby="commonDirError" />
                   <span id="commonDirError" class="field-error hidden" role="alert"></span>
                 </label>
@@ -494,8 +481,9 @@
                     placeholder="未設定の場合は上司名を使用"
                   />
                 </label>
-              </div>
-              <div id="settingsDisplayPanel" class="settings-tab-panel hidden" role="tabpanel" aria-labelledby="settingsDisplayTab" data-settings-panel="display" hidden>
+              </section>
+              <section id="settingsDisplayPanel" class="settings-section" aria-labelledby="settingsDisplayTitle">
+                <h2 id="settingsDisplayTitle">表示</h2>
                 <section class="appearance-setting" aria-labelledby="appearanceSettingTitle">
                   <div class="settings-section-heading">
                     <h3 id="appearanceSettingTitle">外観</h3>
@@ -525,16 +513,12 @@
                     aria-label="日報フィルター"
                   >
                     <label class="member-filter-option">
-                      <input id="memberFilterLarge" type="checkbox" value="large" data-member-filter-level checked />
+                      <input id="memberFilterDepartment" type="checkbox" value="department" data-member-filter-level checked />
                       <span>課</span>
                     </label>
                     <label class="member-filter-option">
-                      <input id="memberFilterMedium" type="checkbox" value="medium" data-member-filter-level checked />
+                      <input id="memberFilterSection" type="checkbox" value="section" data-member-filter-level checked />
                       <span>係</span>
-                    </label>
-                    <label class="member-filter-option">
-                      <input id="memberFilterSmall" type="checkbox" value="small" data-member-filter-level checked />
-                      <span>チーム</span>
                     </label>
                     <label class="member-filter-option">
                       <input id="memberFilterMember" type="checkbox" value="member" data-member-filter-level checked />
@@ -590,8 +574,9 @@
                 </div>
                 <p id="defaultRangePreview" class="default-range-preview"></p>
                 </section>
-              </div>
-              <div id="settingsNotificationPanel" class="settings-tab-panel hidden" role="tabpanel" aria-labelledby="settingsNotificationTab" data-settings-panel="notifications" hidden>
+              </section>
+              <section id="settingsNotificationPanel" class="settings-section" aria-labelledby="settingsNotificationTitle">
+                <h2 id="settingsNotificationTitle">通知</h2>
                 <section class="missing-comment-setting" aria-labelledby="missingCommentSettingTitle">
                 <div class="settings-section-heading">
                   <h3 id="missingCommentSettingTitle">未確認の集計</h3>
@@ -609,7 +594,7 @@
                   </span>
                 </label>
                 </section>
-              </div>
+              </section>
               <div class="actions">
                 <button
                   id="saveSettingsButton"
@@ -654,10 +639,10 @@
       <div class="confirmation-dialog-content">
         <h2 id="resetColumnWidthsDialogTitle">列幅をリセット</h2>
         <p id="resetColumnWidthsDialogDescription">
-          現在の文字サイズ「<strong id="resetColumnWidthsSizeLabel">大</strong>」の列幅を初期値に戻しますか？
+          保存した列幅を初期値に戻しますか？
         </p>
         <p id="resetColumnWidthsDialogNote" class="confirmation-dialog-note">
-          ほかの文字サイズの列幅は変更されません。
+          列幅設定はすべての文字サイズで共通です。
         </p>
         <div class="confirmation-dialog-actions">
           <button id="cancelResetColumnWidthsButton" class="dialog-button" type="button">
@@ -678,22 +663,21 @@
     >
       <form id="teamCreateForm" class="team-create-dialog-content">
         <div>
-          <p class="team-create-eyebrow">新規チーム</p>
-          <h2 id="teamCreateDialogTitle">チームを追加</h2>
+          <p class="team-create-eyebrow">新規組織</p>
+          <h2 id="teamCreateDialogTitle">課・係を追加</h2>
           <p id="teamCreateDialogDescription" class="team-create-description">
-            親チームを選ぶと、階層をパンくずで確認できます。
+            係を作る場合は親となる課を選択してください。
           </p>
         </div>
         <label class="inspector-field">
           <span class="inspector-field-label"><span>階層</span></span>
           <select id="teamCreateLevel" data-team-create-level required>
-            <option value="large">課</option>
-            <option value="medium">係</option>
-            <option value="small">チーム</option>
+            <option value="department">課</option>
+            <option value="section">係</option>
           </select>
         </label>
         <label class="inspector-field">
-          <span class="inspector-field-label"><span>親チーム</span></span>
+          <span class="inspector-field-label"><span>親課</span></span>
           <select id="teamCreateParent" data-team-create-parent></select>
         </label>
         <div class="team-create-breadcrumb-wrap">
@@ -701,7 +685,7 @@
           <div id="teamCreateBreadcrumb" class="team-create-breadcrumb" aria-live="polite"></div>
         </div>
         <label class="inspector-field">
-          <span class="inspector-field-label"><span>チーム名</span></span>
+          <span class="inspector-field-label"><span>組織名</span></span>
           <input id="teamCreateName" data-team-create-name type="text" required autocomplete="off" />
         </label>
         <p id="teamCreateError" class="team-create-error" role="alert"></p>
@@ -714,6 +698,7 @@
 
     <script src="reports.js"></script>
     <script src="settings.js"></script>
+    <script src="Sortable.min.js"></script>
     <script src="admin.js"></script>
     <script src="app.js"></script>
   </body>

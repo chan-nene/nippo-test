@@ -4,8 +4,9 @@ import logging
 import os
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import urlsplit
 from urllib.request import url2pathname
 
@@ -13,7 +14,6 @@ import webview
 
 from app.api import DailyReportApi
 from app.instance_lock import SingleInstanceLock
-
 
 logger = logging.getLogger(__name__)
 
@@ -158,12 +158,13 @@ def main() -> None:
     try:
         configure_webview_security(webview.settings)
         window = webview.create_window(
-            "日報",
+            "NIPPO",
             app_url,
             js_api=api,
             width=1280,
             height=800,
             min_size=(960, 600),
+            text_select=True,
         )
 
         close_approved = False

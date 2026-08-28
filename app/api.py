@@ -356,6 +356,7 @@ class DailyReportApi:
                 return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
+            self._validate_protected_administrator_changes(repo, users)
             if teams is None:
                 validate_user_team_references(
                     users, repo.load_common_masters().get("team_master", [])
@@ -584,6 +585,18 @@ class DailyReportApi:
             logger.exception("Failed to check administrator permission")
             return False
         return self._user_is_admin(user)
+
+    def _validate_protected_administrator_changes(
+        self, repo: DailyReportRepository, users: list[dict[str, Any]]
+    ) -> None:
+        current_user = self._current_user_master_row(repo)
+        if not self._user_is_admin(current_user):
+            return
+        employee_id = str(self._employee_id or "").strip()
+        if not any(
+            str(row.get("employee_id", "")).strip() == employee_id for row in users
+        ):
+            raise RequestValidationError("ログイン中の管理者は削除できません。")
 
     @staticmethod
     def _user_is_admin(user: dict[str, Any] | None) -> bool:

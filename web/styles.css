@@ -686,6 +686,14 @@ html body .dialog-button.danger:hover {
   color: var(--primary-on);
 }
 
+html body .confirmation-dialog[data-confirmation-variant="delete"]
+  .confirmation-dialog-actions
+  .dialog-button {
+  width: 120px;
+  min-width: 120px;
+  flex: 0 0 120px;
+}
+
 html body .dialog-button:disabled {
   border-color: var(--border);
   background: var(--surface-soft);
@@ -1173,6 +1181,14 @@ html body :is(
 
   html body .confirmation-dialog-actions .dialog-button {
     width: 100%;
+  }
+
+  html body .confirmation-dialog[data-confirmation-variant="delete"]
+    .confirmation-dialog-actions
+    .dialog-button {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
   }
 }
 

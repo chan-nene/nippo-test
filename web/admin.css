@@ -359,10 +359,70 @@ html body .team-create-error:empty {
   display: none;
 }
 
-html body .team-create-dialog .confirmation-dialog-actions {
-  margin-top: 0;
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
+html body .team-create-dialog .team-create-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 120px));
+  justify-content: end;
+  gap: 8px;
+  margin-top: 4px;
+  border-top: 0;
+  padding-top: 0;
+}
+
+html body .team-create-dialog .team-create-actions > :is(.inspector-cancel-button, .inspector-save-button) {
+  box-sizing: border-box;
+  width: 120px;
+  min-width: 120px;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  padding: 0 13px;
+  font-size: var(--font-12);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+html body .team-create-dialog .team-create-actions .inspector-cancel-button {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+html body .team-create-dialog .team-create-actions .inspector-cancel-button:hover,
+html body .team-create-dialog .team-create-actions .inspector-cancel-button:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+html body .team-create-dialog .team-create-actions .inspector-save-button {
+  display: inline-flex;
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: var(--primary-on);
+}
+
+html body .team-create-dialog .team-create-actions .inspector-save-button:hover:not(:disabled),
+html body .team-create-dialog .team-create-actions .inspector-save-button:focus-visible:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+html body .team-create-dialog .team-create-actions .inspector-save-button:disabled {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+html body .team-create-dialog #teamCreateParent[readonly] {
+  background: var(--surface-soft);
+  color: var(--text-strong);
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 html body .admin-table-wrap {
@@ -2106,7 +2166,6 @@ html body #adminPanel {
   --org-calendar-holiday: #dceaff;
   --org-calendar-holiday-hover: #cfe2fc;
   --org-calendar-holiday-ink: #194f8a;
-  --org-calendar-workday-mark: #b56716;
   --org-focus: #56565b;
   --org-radius-sm: 8px;
   --org-radius-md: 12px;
@@ -2143,7 +2202,6 @@ html[data-theme="dark"] body #adminPanel {
   --org-calendar-holiday: #25415e;
   --org-calendar-holiday-hover: #2d4d6d;
   --org-calendar-holiday-ink: #d2e7ff;
-  --org-calendar-workday-mark: #f2b869;
   --org-focus: #d0d0d0;
   --org-shadow: 0 10px 30px rgb(0 0 0 / 24%);
 }
@@ -2431,6 +2489,15 @@ html body #adminPanel :is(.admin-add-button, .team-browser-add):focus-visible {
   border-color: transparent;
   background: var(--org-action-hover);
   color: var(--org-action-ink);
+}
+
+html body #adminPanel .admin-add-button:disabled,
+html body #adminPanel .admin-add-button:disabled:hover,
+html body #adminPanel .admin-add-button:disabled:focus-visible {
+  border-color: transparent;
+  background: var(--org-disabled);
+  color: var(--org-disabled-ink);
+  cursor: not-allowed;
 }
 
 html body #adminPanel .admin-table-wrap {
@@ -2953,6 +3020,21 @@ html body #adminPanel .api-key-action.delete::before {
   background: color-mix(in srgb, var(--org-danger) 16%, transparent);
 }
 
+html body #adminPanel .api-key-action:disabled {
+  color: var(--org-disabled-ink);
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+html body #adminPanel .api-key-action:disabled::before {
+  opacity: 0;
+}
+
+html body #adminPanel .api-key-action:disabled:active {
+  transform: none;
+}
+
 html body #adminPanel .api-key-action:hover::before,
 html body #adminPanel .api-key-action:focus-visible::before {
   opacity: 1;
@@ -2966,6 +3048,12 @@ html body #adminPanel .api-key-action:active {
 html body #adminPanel .api-key-action:focus-visible {
   outline: 2px solid var(--org-focus);
   outline-offset: -1px;
+}
+
+html body #adminPanel .api-key-action:disabled:hover::before,
+html body #adminPanel .api-key-action:disabled:focus-visible::before {
+  opacity: 0;
+  transform: none;
 }
 
 html body #adminPanel .organization-user-table tbody tr {
@@ -3020,6 +3108,17 @@ html body #adminPanel .comment-assignment-editor .inspector-field select {
   font-weight: 400;
 }
 
+html body #adminPanel .user-editor-fields .inspector-field :is(
+  input:not([type="radio"]),
+  select
+):disabled {
+  border-color: var(--org-rule);
+  background: var(--org-subtle);
+  color: var(--org-disabled-ink);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 html body #adminPanel .inspector-radio-field {
   display: grid;
 }
@@ -3042,11 +3141,48 @@ html body #adminPanel .inspector-radio-option {
 }
 
 html body #adminPanel .inspector-radio-option input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
   width: 16px;
   height: 16px;
+  flex: 0 0 16px;
   margin: 0;
   padding: 0;
-  accent-color: var(--org-ink-strong);
+  border: 1.5px solid var(--org-rule-strong);
+  border-radius: 50%;
+  background: var(--org-surface);
+  display: grid;
+  place-content: center;
+  color: var(--org-ink-strong);
+  cursor: pointer;
+}
+
+html body #adminPanel .inspector-radio-option input[type="radio"]::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--org-surface);
+  content: "";
+  transform: scale(0);
+  transition: transform 0.12s ease;
+}
+
+html body #adminPanel .inspector-radio-option input[type="radio"]:checked {
+  background: var(--org-ink-strong);
+  border-color: var(--org-ink-strong);
+}
+
+html body #adminPanel .inspector-radio-option input[type="radio"]:checked::before {
+  transform: scale(1);
+}
+
+html body #adminPanel .inspector-radio-option input[type="radio"]:hover {
+  border-color: var(--org-ink-strong);
+}
+
+html body #adminPanel .inspector-radio-option input[type="radio"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 html body #adminPanel .user-tag-row {
@@ -3183,6 +3319,215 @@ html body #adminPanel .user-editor-dialog-form {
   padding: 22px 24px 24px;
 }
 
+html body #adminPanel .team-editor-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+}
+
+html body #adminPanel .team-editor-dialog .user-editor-dialog-content {
+  display: block;
+}
+
+html body #adminPanel .team-editor-dialog .team-editor-dialog-header {
+  border-bottom: 0;
+  padding: 22px 24px 0;
+}
+
+html body #adminPanel .team-editor-dialog .team-editor-dialog-form {
+  min-height: 0;
+}
+
+html body #adminPanel .team-editor-modal-toolbar {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: flex-end;
+  margin: -8px -8px 8px 0;
+}
+
+html body #adminPanel .team-editor-modal-fields {
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin-top: 0;
+}
+
+html body #adminPanel .team-editor-modal-members {
+  display: grid;
+  gap: 10px;
+  margin-top: 3px;
+}
+
+html body #adminPanel .team-editor-modal-members h3 {
+  margin: 0;
+  color: var(--org-ink-strong);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+html body #adminPanel .team-editor-modal-member-list {
+  display: grid;
+  max-height: min(34dvh, 320px);
+  min-height: 0;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+  scrollbar-gutter: stable;
+}
+
+html body #adminPanel .team-editor-modal-member-card {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-subtle);
+  padding: 8px 10px;
+}
+
+html body #adminPanel .team-editor-modal-member-card.is-dragging {
+  position: relative;
+  z-index: 2;
+  opacity: 0.2;
+  box-shadow: none;
+  cursor: grabbing;
+  transform: none;
+}
+
+html body #adminPanel .team-editor-modal-member-sortable-ghost {
+  border-style: dashed;
+  border-color: var(--org-rule-strong);
+  background: color-mix(in srgb, var(--org-active) 68%, var(--org-surface));
+  opacity: 0.2;
+  box-shadow: none;
+}
+
+/* Sortable marks the source member card as both dragging and ghost. */
+html body #adminPanel .team-editor-modal-member-card.is-dragging.team-editor-modal-member-sortable-ghost {
+  border-style: dashed;
+  border-color: var(--org-rule-strong);
+  background: color-mix(in srgb, var(--org-active) 68%, var(--org-surface));
+  opacity: 0.2;
+  box-shadow: none;
+  transform: none;
+}
+
+html body #adminPanel .team-editor-modal-member-sortable-chosen,
+html body #adminPanel .team-editor-modal-member-sortable-drag {
+  cursor: grabbing;
+}
+
+/* Keep the cursor-following fallback readable; only the in-list placeholder
+   should be subdued while a member is being moved. */
+html body #adminPanel .team-editor-modal-member-sortable-drag,
+html body #adminPanel .team-editor-modal-member-list .sortable-fallback {
+  opacity: 0.96 !important;
+  box-shadow: 0 12px 24px rgb(20 20 20 / 16%);
+}
+
+html body #adminPanel .team-editor-modal-member-drag-handle {
+  display: inline-flex;
+  width: 24px;
+  height: 28px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--org-radius-sm);
+  color: var(--org-muted);
+  cursor: grab;
+  user-select: none;
+}
+
+html body #adminPanel .team-editor-modal-member-drag-handle:hover {
+  background: var(--org-hover);
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .team-editor-modal-member-drag-handle:active,
+html body #adminPanel .team-editor-modal-member-card.is-dragging
+  .team-editor-modal-member-drag-handle {
+  cursor: grabbing;
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .team-editor-modal-member-drag-handle svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+html body #adminPanel .team-editor-modal-member-id {
+  min-width: 76px;
+  flex: 0 0 auto;
+  color: var(--org-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+html body #adminPanel .team-editor-modal-member-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--org-ink-strong);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .team-editor-modal-member-empty {
+  margin: 0;
+  color: var(--org-muted);
+  font-size: 13px;
+}
+
+html body #adminPanel .team-editor-dialog .team-editor-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 120px));
+  justify-content: end;
+  gap: 8px;
+  border-top: 0;
+  margin-top: 22px;
+  padding-top: 0;
+}
+
+html body #adminPanel .team-editor-dialog
+  .team-editor-modal-actions > :is(.inspector-cancel-button, .inspector-save-button) {
+  width: 120px;
+  min-width: 120px;
+  flex: 0 0 120px;
+}
+
+html body #adminPanel .user-editor-dialog:not(.team-editor-dialog) .user-editor-dialog-content {
+  display: block;
+}
+
+html body #adminPanel .user-editor-dialog:not(.team-editor-dialog) {
+  width: min(520px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+}
+
+html body #adminPanel .user-editor-dialog:not(.team-editor-dialog)
+  .user-comment-assignment-section {
+  border-bottom: 0;
+}
+
+html body #adminPanel .user-editor-dialog:not(.team-editor-dialog) .user-editor-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 120px));
+  justify-content: end;
+  border-top: 0;
+}
+
+html body #adminPanel .user-editor-dialog:not(.team-editor-dialog)
+  .user-editor-actions > :is(.inspector-cancel-button, .inspector-save-button) {
+  width: 120px;
+  min-width: 120px;
+  flex: 0 0 120px;
+}
+
 html body #adminPanel .inspector-cancel-button {
   display: inline-flex;
   min-height: 34px;
@@ -3304,6 +3649,17 @@ html body #adminPanel .fiscal-year-button:hover {
   background: var(--org-hover);
 }
 
+html body #adminPanel .fiscal-year-button svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
 html body #adminPanel .fiscal-calendar-legend {
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -3321,13 +3677,6 @@ html body #adminPanel .calendar-holiday-swatch {
   height: 13px;
   border-radius: 4px;
   background: var(--org-calendar-holiday);
-}
-
-html body #adminPanel .calendar-workday-swatch {
-  width: 15px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--org-calendar-workday-mark);
 }
 
 html body #adminPanel .fiscal-calendar-summary {
@@ -3421,10 +3770,6 @@ html body #adminPanel .fiscal-calendar-day.is-holiday:hover {
   background: var(--org-calendar-holiday-hover);
 }
 
-html body #adminPanel .fiscal-calendar-day.is-weekend-workday {
-  box-shadow: inset 0 -3px var(--org-calendar-workday-mark);
-}
-
 html body #adminPanel .admin-table-empty,
 html body #adminPanel .inspector-empty {
   color: var(--org-muted);
@@ -3506,6 +3851,271 @@ html body #adminPanel .inspector-empty {
   }
 }
 
+/* Split department and section cards into two focused, independent panes. */
+html body #adminPanel .admin-workspace.is-team-master {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+html body #adminPanel .admin-workspace.is-team-master .master-table-pane {
+  min-width: 0;
+  overflow: hidden;
+}
+
+html body #adminPanel .organization-browser-v2 {
+  min-width: 0;
+  min-height: 100%;
+  overflow: hidden;
+  padding: 16px;
+}
+
+html body #adminPanel .organization-browser-v2 > .team-browser-heading {
+  margin-bottom: 14px;
+  padding: 0;
+}
+
+html body #adminPanel .organization-browser-eyebrow {
+  margin: 0 0 2px;
+  color: var(--org-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+html body #adminPanel .organization-browser-v2 > .team-browser-heading h2 {
+  margin: 0;
+  color: var(--org-ink-strong);
+  font-size: 18px;
+}
+
+html body #adminPanel .organization-browser-columns {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 12px;
+}
+
+html body #adminPanel .organization-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-md);
+  background: var(--org-surface);
+  overflow: hidden;
+}
+
+html body #adminPanel .organization-pane-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--org-rule);
+  padding: 14px 15px 12px;
+}
+
+html body #adminPanel .organization-pane-heading > div {
+  min-width: 0;
+}
+
+html body #adminPanel .organization-pane-heading h2 {
+  overflow: hidden;
+  margin: 0 0 3px;
+  color: var(--org-ink-strong);
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-pane-heading p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--org-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-pane-count {
+  flex: 0 0 auto;
+  color: var(--org-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-section-pane .organization-pane-heading {
+  align-items: center;
+}
+
+html body #adminPanel .organization-section-pane .organization-pane-heading > .team-browser-add {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 30px;
+  margin: 0;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
+html body #adminPanel .organization-section-pane .organization-pane-heading > .organization-pane-count {
+  display: none;
+}
+
+html body #adminPanel .organization-card-list {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px;
+  overscroll-behavior: contain;
+}
+
+html body #adminPanel .organization-card-list > .organization-pane-empty {
+  margin: 0;
+  border: 1px dashed var(--org-rule-strong);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-subtle);
+  padding: 18px 12px;
+  color: var(--org-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+html body #adminPanel .organization-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  gap: 0;
+  border-radius: var(--org-radius-sm);
+  padding: 10px 11px;
+}
+
+html body #adminPanel .organization-card-header {
+  min-width: 0;
+  gap: 8px;
+}
+
+html body #adminPanel .organization-card-select {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  padding: 4px 5px;
+  text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html body #adminPanel .organization-card-copy {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html body #adminPanel .organization-card-select:hover,
+html body #adminPanel .organization-card-select:focus-visible {
+  background: var(--org-hover);
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .organization-card-select:focus-visible {
+  outline-offset: -1px;
+}
+
+/* Pointer dragging should not leave a text-selection focus ring; keyboard focus remains visible. */
+html body #adminPanel .organization-card-select:focus:not(:focus-visible),
+html body #adminPanel .organization-card.is-dragging .organization-card-select:focus {
+  outline: none;
+}
+
+html body #adminPanel .organization-card.is-selected {
+  border-color: var(--org-rule-strong);
+  background: var(--org-active);
+  box-shadow: inset 3px 0 0 var(--org-ink-strong);
+}
+
+html body #adminPanel .organization-card.is-selected .organization-card-select {
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .organization-card .organization-section-count {
+  align-self: center;
+  color: var(--org-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+html body #adminPanel .organization-section-card .organization-card-copy {
+  gap: 7px;
+}
+
+html body #adminPanel .organization-section-card .organization-card-copy .team-level-label {
+  min-width: 24px;
+}
+
+html body #adminPanel .organization-card-list .organization-card-sortable-ghost {
+  min-height: 52px;
+}
+
+@media (max-width: 900px) {
+  html body #adminPanel .admin-workspace.is-team-master {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html body #adminPanel .organization-browser-v2 {
+    overflow: visible;
+  }
+
+  html body #adminPanel .organization-browser-columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(220px, 1fr) minmax(220px, 1fr);
+    overflow: hidden;
+  }
+
+  html body #adminPanel .organization-pane {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  html body #adminPanel .organization-browser-v2 {
+    padding: 10px;
+  }
+
+  html body #adminPanel .organization-browser-columns {
+    gap: 10px;
+  }
+
+  html body #adminPanel .organization-pane-heading {
+    padding-inline: 12px;
+  }
+
+  html body #adminPanel .organization-pane-heading p {
+    white-space: normal;
+  }
+
+  html body #adminPanel .organization-card-list {
+    padding: 10px;
+  }
+
+  html body #adminPanel .organization-section-pane .organization-pane-heading > .team-browser-add {
+    min-width: 80px;
+    padding-inline: 7px;
+  }
+}
+
 /* Organization/comment-assignment workbench (two-level organization model). */
 html body #adminPanel .organization-migration-notice {
   display: grid;
@@ -3579,6 +4189,10 @@ html body #adminPanel .organization-card-header {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+html body #adminPanel .organization-card-header > .organization-drag-handle {
+  flex: 0 0 28px;
 }
 
 html body #adminPanel .organization-card-header-actions {
@@ -3719,8 +4333,18 @@ html body #adminPanel .organization-card-sortable-ghost {
   border-style: dashed;
   border-color: var(--org-rule-strong);
   background: color-mix(in srgb, var(--org-active) 68%, var(--org-surface));
-  opacity: 0.45;
+  opacity: 0.2;
   box-shadow: none;
+}
+
+/* Sortable marks the source card as both dragging and ghost; keep the placeholder quiet. */
+html body #adminPanel .organization-card.is-dragging.organization-card-sortable-ghost {
+  border-style: dashed;
+  border-color: var(--org-rule-strong);
+  background: color-mix(in srgb, var(--org-active) 68%, var(--org-surface));
+  opacity: 0.2;
+  box-shadow: none;
+  transform: none;
 }
 
 html body #adminPanel .organization-card-sortable-chosen,
@@ -3945,11 +4569,19 @@ html body #adminPanel .inspector-record-actions {
   flex-wrap: wrap;
 }
 
+html body #adminPanel .admin-workspace.is-calendar-master
+  .fiscal-calendar-toolbar .inspector-save-button {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding-inline: 12px;
+}
+
 html body #adminPanel .fiscal-year-button,
 html body #adminPanel .inspector-save-button,
 html body #adminPanel .inspector-delete-button,
 html body #adminPanel .admin-page-save {
-  font-family: "IBM Plex Sans", "IBM Plex Sans JP", "Yu Gothic UI", sans-serif !important;
+  font-family: var(--font-ui) !important;
   font-size: var(--ui-font-size) !important;
   font-weight: 700 !important;
 }
@@ -3968,8 +4600,22 @@ html body #adminPanel {
   --org-rule-strong: var(--border-strong);
   --org-control-border: var(--border);
   --org-control-border-hover: var(--border-strong);
+  --org-calendar-holiday: var(--holiday-row-bg);
+  --org-calendar-holiday-hover: var(--holiday-row-hover-bg);
+  --org-calendar-holiday-ink: var(--text);
   background: var(--surface);
   color: var(--text);
+}
+
+/* Keep calendar holidays visibly distinct from the report table's lighter tint. */
+html:not([data-theme="dark"]) body #adminPanel {
+  --org-calendar-holiday: #e6e6e6;
+  --org-calendar-holiday-hover: #dedede;
+}
+
+html[data-theme="dark"] body #adminPanel {
+  --org-calendar-holiday: #263241;
+  --org-calendar-holiday-hover: #304054;
 }
 
 html body #adminPanel .fiscal-calendar-grid {
@@ -4050,7 +4696,8 @@ html body #adminPanel .admin-workspace {
 }
 
 html body #adminPanel .admin-workspace.is-user-master {
-  grid-template-columns: minmax(0, 1fr);
+  --user-table-width: 1200px;
+  grid-template-columns: min(100%, max(60%, var(--user-table-width)));
 }
 
 html body #adminPanel .admin-workspace.is-user-master .master-inspector {
@@ -4071,6 +4718,27 @@ html body #adminPanel .admin-workspace.is-team-master .master-table-pane {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+html body #adminPanel .admin-workspace.is-calendar-master .master-table-pane {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html body #adminPanel .admin-workspace.is-calendar-master .master-table-toolbar {
+  display: none;
+}
+
+html body #adminPanel.is-calendar-master .master-nav {
+  /* Keep the calendar tabs separated like the user-management tabs. */
+  border-bottom: 1px solid var(--org-rule);
+}
+
+html body #adminPanel.is-calendar-master .fiscal-calendar-toolbar {
+  border-top: 0;
+  border-bottom: 0;
 }
 
 html body #adminPanel .master-table-pane,
@@ -4121,7 +4789,8 @@ html body #adminPanel .organization-browser-v2 .organization-card-children > .or
 }
 
 html body #adminPanel .organization-user-table {
-  min-width: 1160px;
+  width: 100%;
+  min-width: 0;
   table-layout: fixed;
 }
 
@@ -4147,6 +4816,55 @@ html body #adminPanel .admin-workspace.is-user-master .master-table-heading {
 html body #adminPanel .admin-workspace.is-user-master .master-table-tools {
   width: 100%;
   justify-content: space-between;
+}
+
+html body #adminPanel .master-search input[type="search"] {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+}
+
+html body #adminPanel .master-search input[type="search"]::-webkit-search-cancel-button,
+html body #adminPanel .master-search input[type="search"]::-webkit-search-decoration {
+  display: none;
+  -webkit-appearance: none;
+}
+
+html body #adminPanel .master-search-clear {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--org-muted);
+  padding: 0;
+}
+
+html body #adminPanel .master-search-clear svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+html body #adminPanel .master-search-clear:hover,
+html body #adminPanel .master-search-clear:focus-visible {
+  background: var(--org-hover);
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .master-search-clear[hidden] {
+  display: none;
 }
 
 html body #adminPanel .admin-workspace.is-user-master :is(.master-table-pane, .master-inspector) {
@@ -4175,31 +4893,31 @@ html body #adminPanel .organization-user-table :is(th, td) {
 }
 
 html body #adminPanel .organization-user-table :is(th, td):nth-child(1) {
-  width: 120px;
+  width: 96px;
 }
 
 html body #adminPanel .organization-user-table :is(th, td):nth-child(2) {
-  width: 190px;
+  width: 180px;
 }
 
 html body #adminPanel .organization-user-table :is(th, td):nth-child(3) {
-  width: 130px;
+  width: 112px;
 }
 
 html body #adminPanel .organization-user-table :is(th, td):nth-child(4) {
-  width: 105px;
+  width: 100px;
 }
 
 html body #adminPanel .organization-user-table :is(th, td):nth-child(5) {
-  width: 105px;
+  width: 100px;
 }
 
 html body #adminPanel .organization-user-table :is(th, td):nth-child(6) {
-  width: 190px;
+  width: 300px;
 }
 
 html body #adminPanel .organization-user-table :is(th, td):nth-child(7) {
-  width: 225px;
+  width: 190px;
 }
 
 @media (max-width: 900px) {
@@ -4254,4 +4972,205 @@ html body #adminPanel .organization-user-table :is(th, td):nth-child(7) {
   html body #adminPanel .admin-table-wrap {
     overflow-x: auto;
   }
+}
+
+/* Hallmark · component: organization browser · macrostructure: open dual-pane card lists
+ * Genre: modern-minimal · tone: restrained · theme: existing monochrome · anchor: neutral.
+ * Pre-emit critique: P5 H5 E5 S5 R5 V5 · slop: pass · contrast: pass (40–41).
+ * Honest: pass (46) · chrome: pass (47) · tokens: pass (48) · mobile: pass (34, 49–57).
+ */
+html body #adminPanel .admin-workspace.is-team-master {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+html body #adminPanel .admin-workspace.is-team-master .master-table-pane {
+  min-width: 0;
+  overflow: hidden;
+}
+
+html body #adminPanel .organization-browser-v2 {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  align-self: flex-start;
+  overflow: hidden;
+  padding: 16px;
+}
+
+html body #adminPanel .organization-browser-columns {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 1 auto;
+  grid-template-columns: repeat(2, minmax(0, var(--organization-card-width)));
+  gap: 40px;
+  overflow: hidden;
+}
+
+html body #adminPanel .organization-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  width: var(--organization-card-width);
+  max-width: 100%;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+html body #adminPanel .organization-pane-heading {
+  align-items: center;
+  border-bottom: 0;
+  padding: 0 4px 12px;
+}
+
+html body #adminPanel .organization-pane-heading h2 {
+  min-width: 0;
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+html body #adminPanel .organization-pane-heading > .admin-add-button {
+  width: auto;
+  min-height: 34px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+html body #adminPanel .organization-card-list {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  align-content: start;
+  gap: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px 0 0;
+  overscroll-behavior: contain;
+}
+
+html body #adminPanel .organization-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  gap: 0;
+  border: 1px solid var(--org-rule);
+  border-radius: var(--org-radius-sm);
+  background: var(--org-surface);
+  box-shadow: none;
+  padding: 10px 11px;
+}
+
+html body #adminPanel .organization-department-card {
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html body #adminPanel .organization-department-card:hover {
+    border-color: var(--org-rule-strong);
+  }
+}
+
+html body #adminPanel .organization-card-select {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: var(--org-radius-sm);
+  background: transparent;
+  color: inherit;
+  padding: 4px 5px;
+  text-align: left;
+}
+
+html body #adminPanel .organization-card-select:hover,
+html body #adminPanel .organization-card-select:focus-visible {
+  background: var(--org-hover);
+  color: var(--org-ink-strong);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html body #adminPanel .organization-department-card .organization-card-select:hover {
+    background: transparent;
+  }
+}
+
+html body #adminPanel .organization-card-select:active {
+  background: var(--org-active);
+}
+
+html body #adminPanel .organization-card-select:disabled {
+  background: var(--org-subtle);
+  color: var(--org-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+html body #adminPanel .organization-card.is-selected {
+  border-color: var(--org-rule-strong);
+  background: var(--org-active);
+  box-shadow: none;
+}
+
+html body #adminPanel .organization-card.is-selected .organization-card-select {
+  color: var(--org-ink-strong);
+}
+
+html body #adminPanel .organization-card-list > .organization-pane-empty {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 20px 4px;
+  color: var(--org-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  html body #adminPanel .admin-workspace.is-team-master {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html body #adminPanel .organization-browser-v2,
+  html body #adminPanel .organization-browser-columns {
+    width: min(100%, var(--organization-card-width));
+  }
+
+  html body #adminPanel .organization-browser-columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(220px, 1fr) minmax(220px, 1fr);
+    gap: 24px;
+  }
+
+  html body #adminPanel .organization-pane {
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  html body #adminPanel .organization-browser-v2 {
+    padding: 10px;
+  }
+
+  html body #adminPanel .admin-workspace.is-team-master .admin-table-wrap {
+    overflow-x: hidden;
+  }
+}
+
+html body #adminPanel .organization-browser-v2 .organization-department-list > .organization-department-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
 }

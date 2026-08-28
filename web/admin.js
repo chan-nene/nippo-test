@@ -88,7 +88,7 @@
       hidden: true,
       columns: [
         { key: "commenter_employee_id", label: "コメント担当者", type: "text", required: true },
-        { key: "target_type", label: "対象方式", type: "text", required: true, defaultValue: "none" },
+        { key: "target_type", label: "コメント対象", type: "text", required: true, defaultValue: "none" },
         { key: "target_organization_ids", label: "対象組織", type: "text" },
         { key: "target_employee_ids", label: "対象ユーザー", type: "text" },
       ],
@@ -106,6 +106,8 @@
 
   const EMBEDDED_EDIT_ICON_PATH =
     "M16.793 2.793a3.121 3.121 0 1 1 4.414 4.414l-8.5 8.5A1 1 0 0 1 12 16H9a1 1 0 0 1-1-1v-3a1 1 0 0 1 .293-.707l8.5-8.5Zm3 1.414a1.121 1.121 0 0 0-1.586 0L10 12.414V14h1.586l8.207-8.207a1.121 1.121 0 0 0 0-1.586ZM6 5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4a1 1 0 1 1 2 0v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h4a1 1 0 1 1 0 2H6Z";
+  const EMBEDDED_DELETE_ICON_PATH =
+    "M10.556 4a1 1 0 0 0-.97.751l-.292 1.14h5.421l-.293-1.14A1 1 0 0 0 13.453 4h-2.897Zm6.224 1.892-.421-1.639A3 3 0 0 0 13.453 2h-2.897A3 3 0 0 0 7.65 4.253l-.421 1.639H4a1 1 0 1 0 0 2h.1l1.215 11.425A3 3 0 0 0 8.3 22h7.4a3 3 0 0 0 2.984-2.683l1.214-11.425H20a1 1 0 1 0 0-2h-3.22Zm1.108 2H6.112l1.192 11.214A1 1 0 0 0 8.3 20h7.4a1 1 0 0 0 .995-.894l1.192-11.214ZM10 10a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1Zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1Z";
 
   let isLoaded = false;
   let isLoading = false;
@@ -125,9 +127,13 @@
   let organizationMigrationState = null;
   let selectedOrganizationSpecial = "";
   let userEditorModalState = null;
+  let currentEmployeeId = "";
   let teamEditorModalState = null;
   let organizationDragState = null;
   let organizationSortableInstances = [];
+  let teamEditorMemberDragState = null;
+  let teamEditorMemberSortableInstances = [];
+  let selectedOrganizationDepartmentId = "";
 
   const byId = (id) => document.getElementById(id);
   const getDefinition = (key = activeMaster) =>
@@ -406,6 +412,14 @@
       renderTableHeading();
       renderTable();
     });
+    byId("adminSearchClearButton").addEventListener("click", () => {
+      const searchInput = byId("adminSearchInput");
+      searchInput.value = "";
+      searchText = "";
+      renderTableHeading();
+      renderTable();
+      searchInput.focus();
+    });
     byId("masterNav").addEventListener("click", (event) => {
       const button = event.target.closest("[data-master]");
       if (button) selectMaster(button.dataset.master);
@@ -430,6 +444,14 @@
         openTeamCreateDialog("department", "");
         return;
       }
+      const addChildLevel = event.target.closest("[data-add-child-level]");
+      if (addChildLevel) {
+        openTeamCreateDialog(
+          addChildLevel.dataset.addChildLevel,
+          addChildLevel.dataset.parentTeamId,
+        );
+        return;
+      }
       const organizationToggle = event.target.closest("[data-organization-toggle]");
       if (organizationToggle) {
         toggleOrganizationSections(organizationToggle.dataset.organizationToggle);
@@ -445,8 +467,19 @@
         setAllTeamsCollapsed(expandAction.dataset.teamExpandAction === "collapse");
         return;
       }
+      const organizationSelect = event.target.closest("[data-organization-select]");
+      if (organizationSelect) {
+        selectOrganizationDepartment(organizationSelect.dataset.organizationSelect);
+        return;
+      }
       const userAction = event.target.closest("[data-user-row-action]");
       if (userAction) {
+        if (
+          userAction.disabled ||
+          userAction.getAttribute("aria-disabled") === "true"
+        ) {
+          return;
+        }
         if (userAction.dataset.userRowAction === "edit") {
           openUserEditor(userAction.dataset.userId);
         } else if (userAction.dataset.userRowAction === "delete") {
@@ -463,12 +496,27 @@
         }
         return;
       }
+      if (event.target.closest("[data-organization-drag-handle]")) return;
+      const departmentCard = event.target.closest(
+        ".organization-department-card[data-team-id]",
+      );
+      if (departmentCard) {
+        selectOrganizationDepartment(departmentCard.dataset.teamId);
+        return;
+      }
       const row = event.target.closest("[data-row-id]");
       if (row) {
         if (activeMaster !== "team_master" && activeMaster !== "user_master") {
           selectRow(row.dataset.rowId);
         }
         return;
+      }
+      if (
+        activeMaster === "team_master" &&
+        selectedOrganizationDepartmentId &&
+        event.target.closest(".organization-browser-v2")
+      ) {
+        clearSelectedOrganizationDepartment();
       }
     });
     byId("adminTableWrap").addEventListener("input", (event) => {
@@ -488,7 +536,7 @@
       if (!["Enter", " "].includes(event.key)) return;
       if (
         event.target.closest(
-          "[data-user-row-action], [data-organization-edit], [data-organization-toggle], [data-organization-drag-handle]",
+          "[data-user-row-action], [data-organization-edit], [data-organization-toggle], [data-organization-drag-handle], [data-organization-select], [data-add-child-level]",
         )
       ) return;
       const row = event.target.closest("[data-row-id]");
@@ -512,10 +560,6 @@
       form.addEventListener("click", handleInspectorClick);
     });
     byId("teamCreateForm").addEventListener("submit", submitTeamCreateDialog);
-    byId("teamCreateLevel").addEventListener("change", () => {
-      renderTeamCreateParentChoices();
-    });
-    byId("teamCreateParent").addEventListener("change", updateTeamCreateDialogState);
     byId("teamCreateName").addEventListener("input", updateTeamCreateDialogState);
     byId("cancelTeamCreateButton").addEventListener("click", closeTeamCreateDialog);
     byId("teamCreateDialog").addEventListener("cancel", (event) => {
@@ -620,7 +664,14 @@
       else void save();
       return;
     }
-    if (event.target.closest("[data-delete-row]")) {
+    const deleteAction = event.target.closest("[data-delete-row]");
+    if (deleteAction) {
+      if (
+        deleteAction.disabled ||
+        deleteAction.getAttribute("aria-disabled") === "true"
+      ) {
+        return;
+      }
       void deleteSelectedRow();
       return;
     }
@@ -701,6 +752,7 @@
       drafts.clear();
       collapsedTeamIds.clear();
       expandedOrganizationIds.clear();
+      selectedOrganizationDepartmentId = "";
       const schemaMode = result.data?.organization_schema?.[0]?.mode || "new";
       organizationMigrationState =
         schemaMode === "legacy"
@@ -737,11 +789,11 @@
       searchText = "";
       byId("adminLoading").classList.add("hidden");
       byId("adminWorkspace").classList.remove("hidden");
-      render();
     } finally {
       isLoading = false;
       setBusy(false);
-      syncAdminChrome();
+      if (isLoaded) render();
+      else syncAdminChrome();
     }
   }
 
@@ -768,6 +820,10 @@
       ? isOrganizationAdministrationDirty()
       : saveCalendar && isDraftDirty(drafts.get("calendar"));
     if (!targetIsDirty) return true;
+    if (saveAdministration && regularAdministratorCount() < 1) {
+      notifyAdministratorGuard("保存");
+      return false;
+    }
     if (isLoading) return false;
     const api = window.pywebview?.api;
     setBusy(true, "admin-save");
@@ -886,6 +942,12 @@
       notify({ text: "編集中の変更を保存してから移動してください。", type: "warning" });
       return;
     }
+    if (activeMaster === "team_master" && teamEditorModalState) {
+      closeTeamEditorModal(true);
+    }
+    if (activeMaster === "team_master") {
+      selectedOrganizationDepartmentId = "";
+    }
     activeMaster = key;
     searchText = "";
     render();
@@ -907,6 +969,38 @@
     renderTable();
     renderInspector();
     syncAdminChrome();
+  }
+
+  function selectOrganizationDepartment(teamId) {
+    if (activeMaster !== "team_master") return;
+    const entry = teamEntryFor(teamId);
+    if (!entry || valueFor(entry, "team_type") !== "department") return;
+    if (selectedOrganizationDepartmentId === teamId) return;
+    selectedOrganizationDepartmentId = teamId;
+    renderTable();
+    syncAdminChrome();
+  }
+
+  function clearSelectedOrganizationDepartment() {
+    if (activeMaster !== "team_master" || !selectedOrganizationDepartmentId) return;
+    selectedOrganizationDepartmentId = "";
+    renderTable();
+    syncAdminChrome();
+  }
+
+  function regularAdministratorCount() {
+    return (drafts.get("user_master")?.entries || []).filter(
+      (entry) => valueFor(entry, "employment_type") === "regular" && valueFor(entry, "is_admin") === "1",
+    ).length;
+  }
+
+  function isProtectedAdministratorEntry(entry) {
+    if (!entry || valueFor(entry, "is_admin") !== "1") return false;
+    return valueFor(entry, "employee_id") === currentEmployeeId || regularAdministratorCount() <= 1;
+  }
+
+  function notifyAdministratorGuard(action = "変更") {
+    notify({ text: `正社員の管理者を1人以上残す必要があるため、${action}できません。`, type: "error" });
   }
 
   function captureUserEditorSnapshot() {
@@ -1030,23 +1124,35 @@
     const state = teamEditorModalState;
     const form = byId("teamEditorDialogForm");
     if (!state || !form) return;
+    destroyTeamEditorMemberSortables();
+    const content = form.closest(".user-editor-dialog-content");
+    content?.querySelector(".team-editor-dialog-header")?.remove();
     form.replaceChildren();
     if (state.kind === "director") {
-      byId("teamEditorDialogTitle").textContent = "部長を編集";
-      renderOrganizationMembersInspector(form, "director", "", null, true, { modal: true });
+      const header = document.createElement("header");
+      header.className = "user-editor-dialog-header team-editor-dialog-header";
+      const title = document.createElement("h2");
+      title.id = "teamEditorDialogTitle";
+      title.textContent = "部長を編集";
+      header.append(title);
+      content?.insertBefore(header, form);
+      form.append(
+        renderTeamEditorMembers("", "director"),
+        createEditorActionBar({ modal: true }),
+      );
       return;
     }
     const entry = drafts
       .get("team_master")
       ?.entries.find((item) => item.id === state?.entryId);
     if (!entry || !form) return;
-    byId("teamEditorDialogTitle").textContent = "組織を編集";
-    renderOrganizationInspector(form, entry, { modal: true });
+    renderTeamEditorModal(form, entry);
   }
 
   function closeTeamEditorModal(discard = true) {
     const state = teamEditorModalState;
     if (!state) return;
+    destroyTeamEditorMemberSortables();
     if (discard) restoreUserEditorSnapshot(state.snapshot);
     else {
       const draft = drafts.get("team_master");
@@ -1295,6 +1401,8 @@
     );
     draft.entries.push(entry);
     draft.selectedId = entry.id;
+    selectedOrganizationDepartmentId =
+      level === "department" ? valueFor(entry, "team_id") : parentTeamId;
     if (parentTeamId) expandedOrganizationIds.add(parentTeamId);
     searchText = "";
     openTeamEditor(entry.id, snapshotState);
@@ -1308,9 +1416,10 @@
     if (teamEditorModalState) closeTeamEditorModal(false);
     const dialog = byId("teamCreateDialog");
     const levelInput = byId("teamCreateLevel");
-    levelInput.value = ["department", "section"].includes(level)
-      ? level
-      : "department";
+    const nextLevel = ["department", "section"].includes(level) ? level : "department";
+    levelInput.value = nextLevel;
+    byId("teamCreateDialogTitle").textContent = nextLevel === "section" ? "係を追加" : "課を追加";
+    byId("teamCreateNameLabel").textContent = nextLevel === "section" ? "係名" : "課名";
     byId("teamCreateName").value = "";
     byId("teamCreateError").textContent = "";
     renderTeamCreateParentChoices(parentTeamId);
@@ -1334,7 +1443,7 @@
       return;
     }
     const level = byId("teamCreateLevel").value;
-    const parentTeamId = byId("teamCreateParent").value;
+    const parentTeamId = byId("teamCreateParent")?.dataset.teamId || "";
     const teamName = byId("teamCreateName").value.trim();
     if (level !== "department" && !teamEntryFor(parentTeamId)) {
       byId("teamCreateError").textContent = "親課を選択してください。";
@@ -1346,36 +1455,44 @@
 
   function renderTeamCreateParentChoices(preferredParentId = null) {
     const level = byId("teamCreateLevel").value;
-    const parentSelect = byId("teamCreateParent");
-    const currentParentId = preferredParentId ?? parentSelect.value;
-    const parentLevels = level === "section" ? ["department"] : [];
-    const choices =
-      level === "department"
-        ? [["", "組織直下"]]
-        : [["", "親チームを選択してください"], ...teamParentChoices(parentLevels, "")];
-    parentSelect.replaceChildren();
-    choices.forEach(([value, label]) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = label;
-      parentSelect.append(option);
-    });
-    parentSelect.value = choices.some(([value]) => value === currentParentId)
-      ? currentParentId
-      : "";
-    parentSelect.disabled = level === "department";
-    parentSelect.required = level !== "department";
+    const nameField = byId("teamCreateName").closest(".inspector-field");
+    let parentField = byId("teamCreateParentField");
+    if (level === "section" && !parentField) {
+      parentField = document.createElement("label");
+      parentField.id = "teamCreateParentField";
+      parentField.className = "inspector-field";
+      const label = document.createElement("span");
+      label.className = "inspector-field-label";
+      label.textContent = "親課";
+      const input = document.createElement("input");
+      input.id = "teamCreateParent";
+      input.dataset.teamCreateParent = "true";
+      input.type = "text";
+      input.readOnly = true;
+      input.setAttribute("aria-readonly", "true");
+      input.autocomplete = "off";
+      parentField.append(label, input);
+      nameField?.before(parentField);
+    } else if (level !== "section") {
+      parentField?.remove();
+      parentField = null;
+    }
+    const parentInput = byId("teamCreateParent");
+    const currentParentId = preferredParentId ?? parentInput?.dataset.teamId ?? "";
+    const parent = level === "section" ? teamEntryFor(currentParentId) : null;
+    if (parentField && parentInput) {
+      parentInput.dataset.teamId = parent ? currentParentId : "";
+      parentInput.value = parent ? teamPathLabel(parent) : "";
+      parentInput.required = level === "section";
+    }
     updateTeamCreateDialogState();
   }
 
   function updateTeamCreateDialogState() {
     const level = byId("teamCreateLevel").value;
-    const parentTeamId = byId("teamCreateParent").value;
+    const parentTeamId = byId("teamCreateParent")?.dataset.teamId || "";
     const teamName = byId("teamCreateName").value.trim();
     const parent = teamEntryFor(parentTeamId);
-    const parentLabel = parent ? `組織 ＞ ${teamPathLabel(parent)}` : "組織";
-    byId("teamCreateBreadcrumb").textContent =
-      `${parentLabel} ＞ ${teamName || "新しいチーム"}`;
     byId("confirmTeamCreateButton").disabled =
       !teamName || (level !== "department" && !parent);
   }
@@ -1418,6 +1535,9 @@
     );
     if (index < 0) return;
     const entry = draft.entries[index];
+    if (activeMaster === "user_master" && isProtectedAdministratorEntry(entry)) {
+      return;
+    }
     const relatedDraftSnapshots = [
       "user_master",
       "team_master",
@@ -1462,10 +1582,11 @@
     const identifyingValue = valueFor(entry, definition.columns[0]?.key);
     const confirmed = await requestConfirmationDialog({
       title: "削除の確認",
-      description: `「${identifyingValue || "この行"}」を削除します。削除後、変更を保存します。`,
-      confirmLabel: "削除して保存",
-      cancelLabel: "削除しない",
+      description: `「${identifyingValue || "この行"}」を削除します。`,
+      confirmLabel: "削除",
+      cancelLabel: "キャンセル",
       confirmTone: "danger",
+      confirmationVariant: "delete",
     });
     if (!confirmed) return;
     if (teamEditorModalState) closeTeamEditorModal(false);
@@ -1524,6 +1645,15 @@
     const previousValue = entry.values[input.dataset.column];
     const nextValue =
       input.type === "checkbox" ? (input.checked ? "1" : "0") : input.value;
+    if (
+      activeMaster === "user_master" && input.dataset.column === "is_admin" &&
+      nextValue === "0" && valueFor(entry, "is_admin") === "1" &&
+      regularAdministratorCount() <= 1
+    ) {
+      input.checked = true;
+      notifyAdministratorGuard("権限を変更");
+      return;
+    }
     if (
       event.type === "change" &&
       input.tagName === "INPUT" &&
@@ -1597,6 +1727,10 @@
   }
 
   function render() {
+    byId("adminPanel").classList.toggle(
+      "is-calendar-master",
+      activeMaster === "calendar",
+    );
     byId("adminWorkspace").classList.toggle(
       "is-user-master",
       activeMaster === "user_master",
@@ -1677,7 +1811,7 @@
         : definition.key === "team_master"
           ? "チーム"
           : `${activeFiscalYear}年度カレンダー`;
-    title.hidden = definition.key === "user_master";
+    title.hidden = ["user_master", "calendar"].includes(definition.key);
     addButton.hidden = isTeam || definition.key === "calendar";
     searchControl.hidden = isTeam || definition.key === "calendar";
     searchInput.placeholder =
@@ -1695,6 +1829,7 @@
           : "日付を検索",
     );
     searchInput.value = searchText;
+    byId("adminSearchClearButton").hidden = !searchInput.value;
   }
 
   function filteredEntries() {
@@ -1811,7 +1946,7 @@
       const employment = document.createElement("td");
       employment.textContent = employmentTypeLabel(valueFor(entry, "employment_type"));
       const administrator = document.createElement("td");
-      administrator.textContent = valueFor(entry, "is_admin") === "1" ? "管理者" : "-";
+      administrator.textContent = valueFor(entry, "is_admin") === "1" ? "管理者" : "一般";
       const team = document.createElement("td");
       team.textContent = affiliationLabel(entry);
       const managed = document.createElement("td");
@@ -1855,12 +1990,12 @@
     toolbar.className = "fiscal-calendar-toolbar";
     const yearNavigation = document.createElement("div");
     yearNavigation.className = "fiscal-year-navigation";
-    const previous = createFiscalYearButton(-1, "前年度を表示", "‹");
+    const previous = createFiscalYearButton(-1, "前年度を表示");
     const year = document.createElement("strong");
     year.className = "fiscal-year-label";
     year.textContent = `${activeFiscalYear}年度`;
     year.setAttribute("aria-live", "polite");
-    const next = createFiscalYearButton(1, "次年度を表示", "›");
+    const next = createFiscalYearButton(1, "次年度を表示");
     yearNavigation.append(previous, year, next);
 
     const legend = document.createElement("div");
@@ -1868,13 +2003,10 @@
     const holidayLegend = document.createElement("span");
     holidayLegend.className = "calendar-legend-item";
     holidayLegend.innerHTML = '<i class="calendar-holiday-swatch" aria-hidden="true"></i>休日';
-    const workdayLegend = document.createElement("span");
-    workdayLegend.className = "calendar-legend-item";
-    workdayLegend.innerHTML = '<i class="calendar-workday-swatch" aria-hidden="true"></i>土日の稼働日';
     const summary = document.createElement("span");
     summary.className = "fiscal-calendar-summary";
-    summary.textContent = `休日 ${holidayCount}日`;
-    legend.append(holidayLegend, workdayLegend, summary);
+    summary.textContent = `休日（計 ${holidayCount}日）`;
+    legend.append(holidayLegend, summary);
     const toolbarActions = document.createElement("div");
     toolbarActions.className = "fiscal-calendar-toolbar-actions";
     toolbarActions.append(legend, createEditorActionBar());
@@ -1914,14 +2046,18 @@
     return calendarIsoDate(activeFiscalYear, 3, 1);
   }
 
-  function createFiscalYearButton(direction, label, text) {
+  function createFiscalYearButton(direction, label) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "fiscal-year-button";
     button.dataset.calendarYearAction = String(direction);
     button.setAttribute("aria-label", label);
     button.disabled = direction < 0 && activeFiscalYear <= MIN_FISCAL_YEAR;
-    button.textContent = text;
+    button.append(
+      createTeamSvgIcon(
+        direction < 0 ? "m15 18-6-6 6-6" : "m9 18 6-6-6-6",
+      ),
+    );
     return button;
   }
 
@@ -1972,8 +2108,6 @@
     for (let day = 1; day <= lastDay; day += 1) {
       const dateText = calendarIsoDate(year, monthIndex, day);
       const entry = entriesByDate.get(dateText);
-      const weekday = new Date(Date.UTC(year, monthIndex, day)).getUTCDay();
-      const isWeekend = [0, 6].includes(weekday);
       const isHoliday = Boolean(entry);
       const cell = document.createElement("span");
       cell.className = "fiscal-calendar-cell";
@@ -1984,7 +2118,6 @@
       button.dataset.calendarDate = dateText;
       button.tabIndex = dateText === calendarFocusDate ? 0 : -1;
       button.classList.toggle("is-holiday", isHoliday);
-      button.classList.toggle("is-weekend-workday", isWeekend && !isHoliday);
       button.setAttribute("aria-pressed", String(isHoliday));
       button.setAttribute(
         "aria-label",
@@ -2007,51 +2140,136 @@
     wrap.replaceChildren();
     const browser = document.createElement("section");
     browser.className = "team-browser organization-browser-v2";
-    browser.setAttribute("aria-label", "課・係一覧");
-    const toolbar = document.createElement("div");
-    toolbar.className = "team-browser-heading";
-    const addDepartment = document.createElement("button");
-    addDepartment.type = "button";
-    addDepartment.className = "admin-add-button";
-    addDepartment.dataset.addTeamRoot = "true";
-    const addIcon = document.createElement("span");
-    addIcon.setAttribute("aria-hidden", "true");
-    addIcon.textContent = "＋";
-    addDepartment.append(addIcon, "組織を追加");
-    toolbar.append(addDepartment);
+    browser.setAttribute("aria-label", "課と係の管理");
+    const columns = document.createElement("div");
+    columns.className = "organization-browser-columns";
 
-    const tree = document.createElement("div");
-    tree.className = "team-tree organization-tree-v2";
-    tree.setAttribute("role", "tree");
+    const departmentPane = document.createElement("section");
+    departmentPane.className = "organization-pane organization-department-pane";
+    departmentPane.setAttribute("aria-labelledby", "organization-departments-heading");
+    const departmentHeading = createOrganizationPaneHeading(
+      "organization-departments-heading",
+      "課",
+    );
+    const addDepartment = createOrganizationAddButton("課を追加");
+    addDepartment.dataset.addTeamRoot = "true";
+    addDepartment.classList.add("organization-department-add");
+    departmentHeading.append(addDepartment);
     const departmentList = document.createElement("div");
     departmentList.className = "organization-card-list organization-department-list";
     departmentList.dataset.organizationSortList = "departments";
-    departmentList.setAttribute("role", "group");
-    tree.append(createOrganizationDirectorCard(), departmentList);
+    departmentList.setAttribute("role", "list");
+    departmentList.setAttribute("aria-label", "課一覧");
 
     const departments = draft.entries
       .filter((entry) => valueFor(entry, "team_type") === "department")
       .sort(compareTeamEntries);
+    const selectedDepartment = departments.find(
+      (entry) => valueFor(entry, "team_id") === selectedOrganizationDepartmentId,
+    );
+    if (selectedOrganizationDepartmentId && !selectedDepartment) {
+      selectedOrganizationDepartmentId = "";
+    }
     departments.forEach((department) => {
       const departmentId = valueFor(department, "team_id");
-      const sections = draft.entries
-        .filter(
-          (entry) =>
-            valueFor(entry, "team_type") === "section" &&
-            valueFor(entry, "parent_team_id") === departmentId,
-        )
-        .sort(compareTeamEntries);
-      departmentList.append(createOrganizationCard(department, sections));
+      departmentList.append(
+        createOrganizationCard(department, {
+          organizationId: departmentId,
+          draggable: true,
+          selectable: true,
+          selected: departmentId === selectedOrganizationDepartmentId,
+        }),
+      );
     });
     if (!departments.length) {
       const empty = document.createElement("p");
-      empty.className = "admin-table-empty team-browser-empty";
-      empty.textContent = "組織がありません。";
+      empty.className = "admin-table-empty team-browser-empty organization-pane-empty";
+      empty.textContent = "課がありません。「課を追加」から作成してください。";
       departmentList.append(empty);
     }
-    browser.append(toolbar, tree);
+    departmentPane.append(departmentHeading, departmentList);
+
+    const sectionPane = document.createElement("section");
+    sectionPane.className = "organization-pane organization-section-pane";
+    sectionPane.setAttribute("aria-labelledby", "organization-sections-heading");
+    const activeDepartment = departments.find(
+      (entry) => valueFor(entry, "team_id") === selectedOrganizationDepartmentId,
+    );
+    const activeDepartmentId = valueFor(activeDepartment, "team_id");
+    const activeDepartmentName = valueFor(activeDepartment, "team_name") || "選択した課";
+    const sections = activeDepartmentId
+      ? draft.entries
+          .filter(
+            (entry) =>
+              valueFor(entry, "team_type") === "section" &&
+              valueFor(entry, "parent_team_id") === activeDepartmentId,
+          )
+          .sort(compareTeamEntries)
+      : [];
+    const sectionHeading = createOrganizationPaneHeading(
+      "organization-sections-heading",
+      activeDepartmentId ? `${activeDepartmentName}の係` : "係",
+    );
+    sectionHeading.querySelector("h2")?.setAttribute("aria-live", "polite");
+    const addSection = createOrganizationAddButton("係を追加");
+    addSection.classList.add("organization-section-add");
+    addSection.dataset.addChildLevel = "section";
+    addSection.dataset.parentTeamId = activeDepartmentId;
+    addSection.disabled = !activeDepartmentId;
+    addSection.hidden = !activeDepartmentId;
+    sectionHeading.append(addSection);
+    const sectionList = document.createElement("div");
+    sectionList.className = "organization-card-list organization-section-list";
+    sectionList.dataset.organizationSortList = "sections";
+    sectionList.dataset.organizationParentTeamId = activeDepartmentId;
+    sectionList.setAttribute("role", "list");
+    sectionList.setAttribute("aria-label", activeDepartmentId ? `${activeDepartmentName}の係一覧` : "係一覧");
+    sections.forEach((section) => {
+      sectionList.append(
+        createOrganizationCard(section, {
+          organizationId: valueFor(section, "team_id"),
+          draggable: true,
+          selectable: false,
+        }),
+      );
+    });
+    if (!activeDepartmentId) {
+      const empty = document.createElement("p");
+      empty.className = "admin-table-empty team-browser-empty organization-pane-empty";
+      empty.textContent = departments.length ? "課を選択してください。" : "課がありません。";
+      sectionList.append(empty);
+    } else if (!sections.length) {
+      const empty = document.createElement("p");
+      empty.className = "admin-table-empty team-browser-empty organization-pane-empty";
+      empty.textContent = "この課には係がありません。";
+      sectionList.append(empty);
+    }
+    sectionPane.append(sectionHeading, sectionList);
+    columns.append(departmentPane, sectionPane);
+    browser.append(columns);
     wrap.append(browser);
     initializeOrganizationSortables();
+  }
+
+  function createOrganizationPaneHeading(id, titleText) {
+    const heading = document.createElement("div");
+    heading.className = "organization-pane-heading";
+    const title = document.createElement("h2");
+    title.id = id;
+    title.textContent = titleText;
+    heading.append(title);
+    return heading;
+  }
+
+  function createOrganizationAddButton(label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "admin-add-button";
+    const icon = document.createElement("span");
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "＋";
+    button.append(icon, label);
+    return button;
   }
 
   function createOrganizationDirectorCard() {
@@ -2061,16 +2279,14 @@
     card.setAttribute("role", "treeitem");
     card.append(
       createOrganizationCardHeader(
-        "director",
         "部長",
-        directMembersFor("director", "").length,
         "director",
       ),
     );
     return card;
   }
 
-  function createOrganizationCard(entry, sections = []) {
+  function createOrganizationCard(entry, options = {}) {
     const teamId = valueFor(entry, "team_id");
     const type = valueFor(entry, "team_type");
     const card = document.createElement("article");
@@ -2079,66 +2295,53 @@
     card.dataset.teamId = teamId;
     card.dataset.organizationCard = "true";
     card.dataset.organizationLevel = type;
-    card.setAttribute("role", "treeitem");
-    const isExpanded = expandedOrganizationIds.has(teamId);
+    card.setAttribute("role", "listitem");
+    if (type === "department" && options.selectable) {
+      card.classList.toggle("is-selected", Boolean(options.selected));
+    }
     card.append(
       createOrganizationCardHeader(
-        type,
         valueFor(entry, "team_name") || "名称未設定",
-        directMembersFor("organization", teamId).length,
         entry.id,
         {
           organizationId: teamId,
-          draggable: true,
-          expanded: isExpanded,
-          sectionCount: sections.length,
+          draggable: options.draggable !== false,
+          selectable: Boolean(options.selectable),
+          selected: Boolean(options.selected),
         },
       ),
     );
-    if (type === "department" && sections.length) {
-      const children = document.createElement("div");
-      children.className = "organization-card-children";
-      children.dataset.organizationSortList = "sections";
-      children.dataset.organizationParentTeamId = teamId;
-      children.hidden = !isExpanded;
-      children.setAttribute("role", "group");
-      sections.forEach((section) => children.append(createOrganizationCard(section)));
-      card.append(children);
-    }
     return card;
   }
 
-  function createOrganizationCardHeader(type, nameText, memberCount, editId, options = {}) {
+  function createOrganizationCardHeader(nameText, editId, options = {}) {
     const header = document.createElement("div");
     header.className = "organization-card-header";
-    const label = document.createElement("span");
-    label.className = `team-level-label is-${type}`;
-    label.textContent = type === "department" ? "課" : "係";
-    if (type === "director") label.textContent = "部長";
+    if (options.draggable) {
+      header.append(createOrganizationDragHandle(options.organizationId, nameText));
+    }
     const name = document.createElement("strong");
     name.textContent = nameText;
-    const count = document.createElement("span");
-    count.className = "organization-member-count";
-    count.textContent = `${memberCount}人`;
     const copy = document.createElement("div");
     copy.className = "organization-card-copy";
-    copy.append(label, name, count);
+    copy.append(name);
+    if (options.selectable) {
+      const select = document.createElement("button");
+      select.type = "button";
+      select.className = "organization-card-select";
+      select.dataset.organizationSelect = options.organizationId;
+      select.setAttribute("aria-label", `${nameText}を選択`);
+      select.setAttribute("aria-pressed", String(Boolean(options.selected)));
+      select.setAttribute("aria-current", options.selected ? "true" : "false");
+      select.append(copy);
+      header.append(select);
+    } else {
+      header.append(copy);
+    }
     const actions = document.createElement("div");
     actions.className = "organization-card-header-actions";
-    if (options.draggable) {
-      actions.append(createOrganizationDragHandle(options.organizationId, nameText));
-    }
-    if (type === "department" && options.sectionCount) {
-      actions.append(
-        createOrganizationToggleButton(
-          options.organizationId,
-          options.sectionCount,
-          options.expanded,
-        ),
-      );
-    }
     actions.append(createOrganizationEditButton(editId, nameText));
-    header.append(copy, actions);
+    header.append(actions);
     return header;
   }
 
@@ -2208,6 +2411,11 @@
         fallbackOnBody: false,
         fallbackTolerance: 3,
         forceFallback: true,
+        group: {
+          name: "organization-same-level",
+          pull: false,
+          put: false,
+        },
         ghostClass: "organization-card-sortable-ghost",
         handle: "[data-organization-drag-handle]",
         invertSwap: false,
@@ -2242,6 +2450,100 @@
     organizationSortableInstances.forEach((sortable) => sortable.destroy());
     organizationSortableInstances = [];
     organizationDragState = null;
+  }
+
+  function teamEditorMemberCardsIn(list) {
+    return [...(list?.children || [])].filter((child) =>
+      child.matches("[data-team-editor-member-card]"),
+    );
+  }
+
+  function teamEditorMemberOrderIn(list) {
+    return teamEditorMemberCardsIn(list).map((card) => card.dataset.employeeId || "");
+  }
+
+  function initializeTeamEditorMemberSortables() {
+    if (typeof window.Sortable !== "function") return;
+    const form = byId("teamEditorDialogForm");
+    if (!form) return;
+    form.querySelectorAll("[data-team-editor-member-list]").forEach((list) => {
+      if (!teamEditorMemberCardsIn(list).length || list.dataset.teamEditorMemberSortable === "true") {
+        return;
+      }
+      const sortable = new window.Sortable(list, {
+        animation: 160,
+        bubbleScroll: true,
+        chosenClass: "team-editor-member-sortable-chosen",
+        draggable: "[data-team-editor-member-card]",
+        dragClass: "team-editor-member-sortable-drag",
+        fallbackOnBody: false,
+        fallbackTolerance: 3,
+        forceFallback: true,
+        ghostClass: "team-editor-member-sortable-ghost",
+        handle: "[data-team-editor-member-drag-handle]",
+        group: {
+          name: "team-editor-members",
+          pull: false,
+          put: false,
+        },
+        scroll: true,
+        scrollSensitivity: 60,
+        scrollSpeed: 12,
+        swapThreshold: 0.55,
+        onMove: (event) => event.from === list && event.to === list,
+        onStart: (event) => {
+          if (activeMaster !== "team_master" || !teamEditorModalState || isLoading || teamEditorMemberDragState) {
+            event.preventDefault?.();
+            return;
+          }
+          teamEditorMemberDragState = {
+            item: event.item,
+            list,
+            previousOrder: teamEditorMemberOrderIn(list),
+          };
+          event.item.classList.add("is-dragging");
+        },
+        onEnd: () => {
+          commitTeamEditorMemberDrag();
+        },
+      });
+      list.dataset.teamEditorMemberSortable = "true";
+      teamEditorMemberSortableInstances.push(sortable);
+    });
+  }
+
+  function destroyTeamEditorMemberSortables() {
+    teamEditorMemberSortableInstances.forEach((sortable) => sortable.destroy());
+    teamEditorMemberSortableInstances = [];
+    if (teamEditorMemberDragState?.item) {
+      teamEditorMemberDragState.item.classList.remove("is-dragging");
+    }
+    teamEditorMemberDragState = null;
+    byId("teamEditorDialogForm")?.querySelectorAll(
+      "[data-team-editor-member-list]",
+    ).forEach((list) => {
+      delete list.dataset.teamEditorMemberSortable;
+    });
+  }
+
+  function commitTeamEditorMemberDrag() {
+    const state = teamEditorMemberDragState;
+    if (!state) return;
+    const nextOrder = teamEditorMemberOrderIn(state.list);
+    const previousOrder = state.previousOrder;
+    const changed = nextOrder.some((employeeId, index) => employeeId !== previousOrder[index]);
+    state.item.classList.remove("is-dragging");
+    teamEditorMemberDragState = null;
+    if (!changed) return;
+    const userEntries = drafts.get("user_master")?.entries || [];
+    const usersByEmployeeId = new Map(
+      userEntries.map((entry) => [valueFor(entry, "employee_id"), entry]),
+    );
+    nextOrder.forEach((employeeId, index) => {
+      const user = usersByEmployeeId.get(employeeId);
+      if (user) user.values.member_order = String((index + 1) * 10);
+    });
+    syncAdminChrome();
   }
 
   function commitOrganizationDrag() {
@@ -3318,6 +3620,10 @@
   }
 
   function renderOrganizationInspector(form, entry, options = {}) {
+    if (options.modal) {
+      renderTeamEditorModal(form, entry);
+      return;
+    }
     const teamId = valueFor(entry, "team_id");
     const teamType = valueFor(entry, "team_type");
     const modal = Boolean(options.modal);
@@ -3387,6 +3693,94 @@
     } else {
       form.append(createEditorActionBar(), deleteActions);
     }
+  }
+
+  function renderTeamEditorModal(form, entry) {
+    const definition = getDefinition("team_master");
+    const teamId = valueFor(entry, "team_id");
+    const teamType = valueFor(entry, "team_type");
+    const toolbar = document.createElement("div");
+    toolbar.className = "team-editor-modal-toolbar";
+    toolbar.append(
+      createDeleteIconButton(`${teamType === "department" ? "課" : "係"}を削除`),
+    );
+
+    const fields = document.createElement("div");
+    fields.className = "inspector-fields team-editor-fields team-editor-modal-fields";
+    ["team_type", "team_name"].forEach((key) => {
+      const column = definition.columns.find((item) => item.key === key);
+      if (!column) return;
+      fields.append(
+        createInspectorField(column, valueFor(entry, key), {
+          required: true,
+          disabled: key === "team_type",
+          hideKey: true,
+        }),
+      );
+    });
+
+    form.append(
+      toolbar,
+      fields,
+      renderTeamEditorMembers(teamId),
+      createEditorActionBar({ modal: true }),
+    );
+    initializeTeamEditorMemberSortables();
+  }
+
+  function renderTeamEditorMembers(teamId, affiliationType = "organization") {
+    const section = document.createElement("section");
+    section.className = "organization-members-section team-editor-modal-members";
+    const heading = document.createElement("h3");
+    heading.textContent = "所属ユーザー";
+    const list = document.createElement("div");
+    list.className = "team-editor-modal-member-list";
+    const sortableMembers = affiliationType === "organization";
+    if (sortableMembers) {
+      list.dataset.teamEditorMemberList = "true";
+      list.dataset.teamEditorMemberTeamId = teamId;
+      list.dataset.teamEditorMemberAffiliation = affiliationType;
+    }
+    list.setAttribute("role", "list");
+    const members = directMembersFor(affiliationType, teamId);
+    members.forEach((member) => {
+      const employeeId = valueFor(member, "employee_id");
+      const card = document.createElement("div");
+      card.className = "team-editor-modal-member-card";
+      card.dataset.teamEditorMemberCard = "true";
+      card.dataset.employeeId = employeeId;
+      card.setAttribute("role", "listitem");
+      const id = document.createElement("span");
+      id.className = "team-editor-modal-member-id";
+      id.textContent = employeeId;
+      const name = document.createElement("strong");
+      name.className = "team-editor-modal-member-name";
+      name.textContent = valueFor(member, "display_name") || employeeId;
+      if (sortableMembers) {
+        const handle = document.createElement("span");
+        handle.className = "team-editor-modal-member-drag-handle";
+        handle.dataset.teamEditorMemberDragHandle = employeeId;
+        handle.setAttribute("role", "img");
+        handle.setAttribute("aria-label", `${valueFor(member, "display_name") || employeeId}の並び順をドラッグで変更`);
+        handle.title = "ドラッグで並び替え";
+        handle.append(
+          createTeamSvgIcon(
+            "M7 5h2v2H7V5Zm4 0h2v2h-2V5ZM7 11h2v2H7v-2Zm4 0h2v2h-2v-2ZM7 17h2v2H7v-2Zm4 0h2v2h-2v-2Z",
+          ),
+        );
+        card.append(handle);
+      }
+      card.append(id, name);
+      list.append(card);
+    });
+    if (!members.length) {
+      const empty = document.createElement("p");
+      empty.className = "team-editor-modal-member-empty";
+      empty.textContent = "所属ユーザーはいません。";
+      list.append(empty);
+    }
+    section.append(heading, list);
+    return section;
   }
 
   function renderOrganizationMembersInspector(
@@ -3780,9 +4174,6 @@
       ?.entries.find((item) => item.id === state?.entryId);
     const form = byId("userEditorDialogForm");
     if (!entry || !form) return;
-    byId("userEditorDialogTitle").textContent = entry.isNew
-      ? "ユーザーを追加"
-      : "ユーザーを編集";
     form.replaceChildren();
     renderOrganizationUserInspector(form, entry, { modal: true });
   }
@@ -3831,6 +4222,7 @@
           required: Boolean(column.required),
           disabled:
             (key === "is_admin" && valueFor(entry, "employment_type") !== "regular") ||
+            (key === "is_admin" && valueFor(entry, "is_admin") === "1" && regularAdministratorCount() <= 1) ||
             (key === "can_input_own_report" && valueFor(entry, "affiliation_type") === "director"),
           hideKey: true,
         }),
@@ -3856,7 +4248,7 @@
     typeField.className = "inspector-field";
     const label = document.createElement("span");
     label.className = "inspector-field-label";
-    label.textContent = "対象方式";
+    label.textContent = "コメント対象";
     const select = document.createElement("select");
     select.dataset.commentTargetType = "true";
     const isDirector = valueFor(user, "affiliation_type") === "director";
@@ -3965,7 +4357,8 @@
         disabled:
           (column.key === "employee_id" && !entry.isNew) ||
           (column.key === "is_admin" &&
-            valueFor(entry, "employment_type") !== "regular"),
+            valueFor(entry, "employment_type") !== "regular") ||
+          (column.key === "is_admin" && valueFor(entry, "is_admin") === "1" && regularAdministratorCount() <= 1),
         hideKey: true,
       });
       field.dataset.userField = column.key;
@@ -4019,6 +4412,13 @@
     } else {
       const deleteButton = createDeleteButton("削除");
       deleteButton.classList.add("is-secondary");
+      const selectedUser = getDraft("user_master")?.entries.find((entry) => entry.id === getDraft("user_master")?.selectedId);
+      if (activeMaster === "user_master" && isProtectedAdministratorEntry(selectedUser)) {
+        deleteButton.disabled = true;
+        deleteButton.title = "最後の管理者またはログイン中の管理者は削除できません";
+        deleteButton.setAttribute("aria-label", "削除できません");
+        deleteButton.setAttribute("aria-disabled", "true");
+      }
       actions.append(deleteButton);
     }
     const saveButton = document.createElement("button");
@@ -4111,7 +4511,7 @@
         column.type === "employment_type"
           ? [["regular", "正社員"], ["temporary", "派遣社員"]]
           : column.type === "admin_flag"
-            ? [["1", "管理者"], ["0", "非管理者"]]
+            ? [["1", "管理者"], ["0", "一般"]]
             : [["1", "要"], ["0", "不要"]];
       const isInvalid = Boolean(options.required) && !String(value).trim();
       choices.forEach(([optionValue, text], index) => {
@@ -4298,12 +4698,30 @@
     return button;
   }
 
+  function createDeleteIconButton(label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "api-key-action delete team-editor-modal-delete";
+    button.dataset.deleteRow = "true";
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    const iconWrap = document.createElement("span");
+    const icon = createTeamSvgIcon(EMBEDDED_DELETE_ICON_PATH);
+    const iconPath = icon.querySelector("path");
+    iconPath.setAttribute("fill-rule", "evenodd");
+    iconPath.setAttribute("clip-rule", "evenodd");
+    iconPath.setAttribute("fill", "currentColor");
+    iconWrap.append(icon);
+    button.append(iconWrap);
+    return button;
+  }
+
   function createUserRowAction(action, entry, displayLabel) {
     const button = document.createElement("button");
     const isEdit = action === "edit";
     const iconPath = isEdit
       ? EMBEDDED_EDIT_ICON_PATH
-      : "M10.556 4a1 1 0 0 0-.97.751l-.292 1.14h5.421l-.293-1.14A1 1 0 0 0 13.453 4h-2.897Zm6.224 1.892-.421-1.639A3 3 0 0 0 13.453 2h-2.897A3 3 0 0 0 7.65 4.253l-.421 1.639H4a1 1 0 1 0 0 2h.1l1.215 11.425A3 3 0 0 0 8.3 22h7.4a3 3 0 0 0 2.984-2.683l1.214-11.425H20a1 1 0 1 0 0-2h-3.22Zm1.108 2H6.112l1.192 11.214A1 1 0 0 0 8.3 20h7.4a1 1 0 0 0 .995-.894l1.192-11.214ZM10 10a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1Zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1Z";
+      : EMBEDDED_DELETE_ICON_PATH;
     button.type = "button";
     button.className = "api-key-action " + action;
     button.dataset.userRowAction = action;
@@ -4313,6 +4731,12 @@
       displayLabel + (isEdit ? "を編集" : "を削除"),
     );
     button.title = isEdit ? "編集" : "削除";
+    if (!isEdit && isProtectedAdministratorEntry(entry)) {
+      button.disabled = true;
+      button.title = "最後の管理者またはログイン中の管理者は削除できません";
+      button.setAttribute("aria-label", `${displayLabel}を削除できません`);
+      button.setAttribute("aria-disabled", "true");
+    }
     const iconWrap = document.createElement("span");
     const icon = createTeamSvgIcon(iconPath);
     const iconPathElement = icon.querySelector("path");
@@ -4341,13 +4765,7 @@
     saveButton.type = "button";
     saveButton.className = "inspector-save-button";
     saveButton.dataset.saveEditor = "true";
-    if (modal) saveButton.textContent = "保存";
-    else {
-      saveButton.append(
-        createTeamSvgIcon("m5 12 4 4L19 6"),
-        document.createTextNode("変更を保存"),
-      );
-    }
+    saveButton.textContent = "保存";
     actions.append(saveButton);
     return actions;
   }
@@ -4400,5 +4818,9 @@
     hasUnsaved,
     save,
     syncChrome: syncAdminChrome,
+    setCurrentEmployeeId(employeeId) {
+      currentEmployeeId = String(employeeId || "");
+      if (isLoaded) render();
+    },
   };
 })();

@@ -247,6 +247,8 @@ def validate_common_master_save_request(
         )
         if master == "team_master":
             _validate_legacy_team_hierarchy(legacy_rows)
+        if master == "user_master":
+            _require_regular_administrator(legacy_rows)
         return master, legacy_rows, _validate_revision(source.get("revision", ""))
 
     columns = COMMON_MASTER_COLUMNS[master]
@@ -277,6 +279,8 @@ def validate_common_master_save_request(
     )
     if master == "team_master":
         _validate_team_hierarchy(rows)
+    if master == "user_master":
+        _require_regular_administrator(rows)
     revision = _bounded_string(source.get("revision", ""), "データの版", 128)
     if revision and revision != "missing" and not re.fullmatch(r"[0-9a-f]{64}", revision):
         raise RequestValidationError("データの版が不正です。")
@@ -317,6 +321,7 @@ def validate_administration_save_request(
             "revision": revisions_source.get("user_master", ""),
         }
     )
+    _require_regular_administrator(users)
     _, assignments, assignment_revision = validate_common_master_save_request(
         {
             "master": "comment_assignment",
@@ -413,6 +418,7 @@ def validate_user_administration_save_request(
             "revision": revisions_source.get("user_master", ""),
         }
     )
+    _require_regular_administrator(users)
     return (
         users,
         {"user_master": user_revision},
@@ -431,6 +437,7 @@ def _validate_legacy_administration_save_request(
     users = _validate_legacy_master_rows(
         source.get("users", []), "user_master", revisions_source.get("user_master", "")
     )
+    _require_regular_administrator(users)
     _validate_legacy_team_hierarchy(teams)
     _validate_legacy_user_team_references(users, teams)
     return teams, users, {
@@ -485,6 +492,14 @@ def _validate_legacy_master_rows(
     _reject_duplicate_values([row[key] for row in rows], "同じキーを持つ行が重複しています。")
     _validate_revision(revision)
     return rows
+
+
+def _require_regular_administrator(users: list[dict[str, str]]) -> None:
+    if not any(
+        row.get("employment_type") == "regular" and row.get("is_admin") == "1"
+        for row in users
+    ):
+        raise RequestValidationError("少なくとも1人の正社員の管理者が必要です。")
 
 
 def _validate_legacy_user_team_references(

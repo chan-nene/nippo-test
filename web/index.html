@@ -400,10 +400,21 @@
                     </div>
                   </div>
                   <div class="master-table-tools">
-                    <label id="adminSearchControl" class="master-search">
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.2" /><path d="m16 16 4.5 4.5" /></svg>
+                    <div id="adminSearchControl" class="master-search" role="search">
+                      <label class="visually-hidden" for="adminSearchInput">社員番号・氏名を検索</label>
                       <input id="adminSearchInput" type="search" autocomplete="off" placeholder="社員ID・ユーザー名を検索" aria-label="社員ID・ユーザー名を検索" />
-                    </label>
+                      <button
+                        id="adminSearchClearButton"
+                        class="master-search-clear"
+                        type="button"
+                        aria-label="検索条件をクリア"
+                        hidden
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="m7 7 10 10M17 7 7 17" />
+                        </svg>
+                      </button>
+                    </div>
                     <button id="adminAddRowButton" class="admin-add-button" type="button">
                       <span aria-hidden="true">＋</span>
                       ユーザーを追加
@@ -430,24 +441,18 @@
             <dialog
               id="userEditorDialog"
               class="user-editor-dialog"
-              aria-labelledby="userEditorDialogTitle"
+              aria-label="ユーザー編集"
             >
               <div class="user-editor-dialog-content">
-                <header class="user-editor-dialog-header">
-                  <h2 id="userEditorDialogTitle">ユーザーを編集</h2>
-                </header>
                 <div id="userEditorDialogForm" class="inspector-form user-editor-dialog-form"></div>
               </div>
             </dialog>
             <dialog
               id="teamEditorDialog"
               class="user-editor-dialog team-editor-dialog"
-              aria-labelledby="teamEditorDialogTitle"
+              aria-label="チーム編集"
             >
               <div class="user-editor-dialog-content">
-                <header class="user-editor-dialog-header">
-                  <h2 id="teamEditorDialogTitle">組織を編集</h2>
-                </header>
                 <div id="teamEditorDialogForm" class="inspector-form user-editor-dialog-form team-editor-dialog-form"></div>
               </div>
             </dialog>
@@ -659,39 +664,18 @@
       id="teamCreateDialog"
       class="team-create-dialog"
       aria-labelledby="teamCreateDialogTitle"
-      aria-describedby="teamCreateDialogDescription"
     >
       <form id="teamCreateForm" class="team-create-dialog-content">
-        <div>
-          <p class="team-create-eyebrow">新規組織</p>
-          <h2 id="teamCreateDialogTitle">課・係を追加</h2>
-          <p id="teamCreateDialogDescription" class="team-create-description">
-            係を作る場合は親となる課を選択してください。
-          </p>
-        </div>
+        <h2 id="teamCreateDialogTitle">課を追加</h2>
+        <input id="teamCreateLevel" data-team-create-level type="hidden" value="department" />
         <label class="inspector-field">
-          <span class="inspector-field-label"><span>階層</span></span>
-          <select id="teamCreateLevel" data-team-create-level required>
-            <option value="department">課</option>
-            <option value="section">係</option>
-          </select>
-        </label>
-        <label class="inspector-field">
-          <span class="inspector-field-label"><span>親課</span></span>
-          <select id="teamCreateParent" data-team-create-parent></select>
-        </label>
-        <div class="team-create-breadcrumb-wrap">
-          <span class="team-create-breadcrumb-label">作成場所</span>
-          <div id="teamCreateBreadcrumb" class="team-create-breadcrumb" aria-live="polite"></div>
-        </div>
-        <label class="inspector-field">
-          <span class="inspector-field-label"><span>組織名</span></span>
+          <span class="inspector-field-label"><span id="teamCreateNameLabel">課名</span></span>
           <input id="teamCreateName" data-team-create-name type="text" required autocomplete="off" />
         </label>
         <p id="teamCreateError" class="team-create-error" role="alert"></p>
-        <div class="confirmation-dialog-actions">
-          <button id="cancelTeamCreateButton" class="dialog-button" type="button">キャンセル</button>
-          <button id="confirmTeamCreateButton" class="dialog-button primary" type="submit">作成</button>
+        <div class="user-editor-actions team-create-actions">
+          <button id="cancelTeamCreateButton" class="inspector-cancel-button" type="button">キャンセル</button>
+          <button id="confirmTeamCreateButton" class="inspector-save-button" type="submit">保存</button>
         </div>
       </form>
     </dialog>

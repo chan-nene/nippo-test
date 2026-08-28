@@ -437,7 +437,7 @@ function restoreUiState(settings) {
     ? settings.ui_font_size
     : "large";
   state.columnWidths = parseStoredColumnWidths(settings.ui_column_widths);
-  syncPeriodPresets();
+  syncPeriodPresets({ immediate: true });
   applyFontSize();
 }
 
@@ -593,6 +593,7 @@ function requestConfirmationDialog({
   confirmLabel,
   cancelLabel,
   confirmTone = "primary",
+  confirmationVariant = "",
 }) {
   const dialog = $("actionConfirmDialog");
   if (!dialog) return Promise.resolve(false);
@@ -613,6 +614,11 @@ function requestConfirmationDialog({
   confirmButton.className = `dialog-button ${
     confirmTone === "danger" ? "danger" : "primary"
   }`;
+  if (confirmationVariant) {
+    dialog.dataset.confirmationVariant = confirmationVariant;
+  } else {
+    delete dialog.dataset.confirmationVariant;
+  }
 
   if (typeof dialog.showModal === "function") dialog.showModal();
   else dialog.setAttribute("open", "");
@@ -629,6 +635,7 @@ function resolveConfirmationDialog(confirmed) {
   const dialog = $("actionConfirmDialog");
   if (typeof dialog.close === "function" && dialog.open) dialog.close();
   else dialog.removeAttribute("open");
+  delete dialog.dataset.confirmationVariant;
   confirmation.resolve(Boolean(confirmed));
   if (confirmation.previousFocus?.isConnected) confirmation.previousFocus.focus();
 }
@@ -780,7 +787,18 @@ function setBusy(busy, action = "") {
   state.isBusy = busy;
   state.busyAction = busy ? action : "";
   document.querySelectorAll("button").forEach((button) => {
-    if (!button.hasAttribute("data-allow-when-busy")) button.disabled = busy;
+    if (button.hasAttribute("data-allow-when-busy")) return;
+    if (busy) {
+      // Preserve controls that are intrinsically disabled (for example, the
+      // protected administrator delete action). Only buttons enabled before
+      // this busy period are restored when the operation finishes.
+      if (!button.disabled) button.dataset.busyDisabled = "true";
+      button.disabled = true;
+      return;
+    }
+    if (!button.hasAttribute("data-busy-disabled")) return;
+    button.removeAttribute("data-busy-disabled");
+    button.disabled = false;
   });
   syncChrome();
   syncPeriodPresets();
@@ -805,6 +823,10 @@ function switchView(view) {
   if (isAdmin) {
     window.adminMasters?.ensureLoaded?.();
   } else if (!isSettings) {
+    // Restore the already-selected period before the report content is
+    // rendered. The control may have been measured while hidden, so this is
+    // an initial placement rather than an animated user change.
+    syncPeriodPresets({ immediate: true });
     renderTable();
   }
 }
@@ -882,6 +904,7 @@ window.addEventListener("pywebviewready", async () => {
   const initial = await window.pywebview.api.get_initial_state();
   state.employeeId = initial.employee_id || "";
   state.isAdmin = initial.is_admin === true;
+  window.adminMasters?.setCurrentEmployeeId?.(state.employeeId);
   state.accessDenied =
     initial.access_denied === true || initial.employee_registered === false;
   updateViewAvailability();

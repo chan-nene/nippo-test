@@ -43,6 +43,7 @@ const TABLE_FONT_SIZES = Object.freeze([
 ]);
 let tableColumnResizeState = null;
 let editingSnapshot = null;
+let periodPresetIndicatorWasVisible = false;
 
 function getTableColumnKind(columnId) {
   if (["user", "date", "name", "detail"].includes(columnId)) return columnId;
@@ -567,20 +568,57 @@ function getPeriodPresetOptions() {
   ];
 }
 
-function updatePeriodPresetIndicator() {
+function updatePeriodPresetIndicator(options = {}) {
   const group = document.querySelector(".period-presets");
   const indicator = group?.querySelector(".period-presets-indicator");
+  const immediate = options?.immediate === true;
+  if (!group || !indicator) return;
+
+  // The report panel is display:none while the user is in administration or
+  // settings. Measuring the controls in that state yields offsetLeft=0, which
+  // would make the indicator animate from the first button when the panel is
+  // shown again. Keep the last valid position until the controls are visible.
+  if (!group.getClientRects().length) {
+    periodPresetIndicatorWasVisible = false;
+    return;
+  }
+
+  const becameVisible = !periodPresetIndicatorWasVisible;
+  periodPresetIndicatorWasVisible = true;
   const selected = getPeriodPresetOptions().find(
     (option) => option.getAttribute("aria-checked") === "true",
   );
-  if (!indicator) return;
   if (!selected) {
-    indicator.style.opacity = "0";
+    if (immediate || becameVisible) {
+      const previousTransition = indicator.style.transition;
+      indicator.style.transition = "none";
+      indicator.style.opacity = "0";
+      void indicator.offsetWidth;
+      indicator.style.transition = previousTransition;
+    } else {
+      indicator.style.opacity = "0";
+    }
     return;
   }
-  indicator.style.removeProperty("opacity");
-  indicator.style.width = `${selected.offsetWidth}px`;
-  indicator.style.transform = `translate3d(${selected.offsetLeft}px, 0, 0)`;
+
+  const applyPosition = () => {
+    indicator.style.removeProperty("opacity");
+    indicator.style.width = `${selected.offsetWidth}px`;
+    indicator.style.transform = `translate3d(${selected.offsetLeft}px, 0, 0)`;
+  };
+  if (!immediate && !becameVisible) {
+    applyPosition();
+    return;
+  }
+
+  // Initial restoration and the first frame after returning from a hidden
+  // view are placement, not user interaction. Apply them without a motion
+  // transition, then restore the normal transition for subsequent changes.
+  const previousTransition = indicator.style.transition;
+  indicator.style.transition = "none";
+  applyPosition();
+  void indicator.offsetWidth;
+  indicator.style.transition = previousTransition;
 }
 
 function updatePeriodPresetRovingTabindex(focusedIndex) {
@@ -616,12 +654,14 @@ function initializePeriodPresetControl() {
       }
     });
   });
-  window.addEventListener("resize", updatePeriodPresetIndicator, { passive: true });
+  window.addEventListener("resize", () => updatePeriodPresetIndicator(), {
+    passive: true,
+  });
   if ("ResizeObserver" in window) {
-    new ResizeObserver(updatePeriodPresetIndicator).observe(group);
+    new ResizeObserver(() => updatePeriodPresetIndicator()).observe(group);
   }
-  syncPeriodPresets();
-  requestAnimationFrame(updatePeriodPresetIndicator);
+  syncPeriodPresets({ immediate: true });
+  requestAnimationFrame(() => updatePeriodPresetIndicator({ immediate: true }));
 }
 
 function movePeriodPresetFocus(index) {
@@ -640,7 +680,7 @@ function movePeriodPresetFocus(index) {
   }
 }
 
-function syncPeriodPresets() {
+function syncPeriodPresets(config = {}) {
   const presets = {
     month: $("presetMonthButton"),
     week: $("presetWeekButton"),
@@ -667,7 +707,7 @@ function syncPeriodPresets() {
   updatePeriodPresetRovingTabindex(
     activeIndex >= 0 ? activeIndex : fallbackIndex >= 0 ? fallbackIndex : options.length - 1,
   );
-  updatePeriodPresetIndicator();
+  updatePeriodPresetIndicator(config);
   const missingButton = $("showMissingCommentsButton");
   if (missingButton) {
     missingButton.disabled = state.isBusy;

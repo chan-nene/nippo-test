@@ -347,17 +347,6 @@ html body .team-create-breadcrumb {
   line-height: 1.35;
 }
 
-html body .team-create-error {
-  min-height: 0;
-  margin: -4px 0 0;
-  color: var(--error);
-  font-size: var(--font-12);
-}
-
-html body .team-create-error:empty {
-  display: none;
-}
-
 html body .team-create-dialog .team-create-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 120px));
@@ -974,6 +963,22 @@ html body .inspector-field {
 html body .inspector-field-hint {
   color: var(--text-muted);
   font-size: 9px;
+  line-height: 1.35;
+}
+
+html body #adminPanel .inspector-field-error,
+html body .team-create-dialog .inspector-field-error {
+  color: var(--error);
+  font-size: var(--font-12);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+html body #adminPanel .editor-inline-error {
+  margin: 18px 0 0;
+  color: var(--error);
+  font-size: var(--font-12);
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -2249,6 +2254,36 @@ html body #adminPanel .admin-workspace.is-user-master {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Keep management tabs and the data refresh action on one full-width row. */
+html body #adminPanel .admin-header {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+html body #adminPanel .master-nav {
+  width: max-content;
+  max-width: calc(100% - 58px);
+  min-width: 0;
+  flex: 0 1 auto;
+  margin-bottom: 0;
+}
+
+html body #adminPanel .admin-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+html body #adminPanel #adminReloadButton {
+  margin-left: 0;
+}
+
 html body #adminPanel .admin-workspace.is-calendar-master {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -2359,6 +2394,14 @@ html body #adminPanel :is(.master-search input, .team-browser-search, .inspector
   color: var(--control-disabled-fg);
   cursor: not-allowed;
   opacity: 1;
+}
+
+html body #adminPanel .inspector-field :is(input, select).is-invalid {
+  border-color: var(--error) !important;
+}
+
+html body #adminPanel .inspector-radio-option input[type="radio"].is-invalid {
+  border-color: var(--error) !important;
 }
 
 html body #adminPanel .admin-add-button,
@@ -3705,7 +3748,7 @@ html body #adminPanel .admin-table-empty {
   }
 
   html body #adminPanel .master-nav {
-    margin-bottom: 18px;
+    margin-bottom: 0;
   }
 
   html body #adminPanel .master-table-toolbar,

@@ -1,5 +1,18 @@
 // Settings screen behavior and validation.
+const SETTINGS_LOAD_ERROR_MESSAGE =
+  "設定を読み込めませんでした。「再読み込み」を押してください。";
+const SETTINGS_LOAD_FAILURE_TOAST =
+  "設定を読み込めませんでした。もう一度お試しください。";
+const SETTINGS_SAVE_FAILURE_MESSAGE =
+  "設定を保存できませんでした。もう一度保存してください。";
+let settingsLoaded = false;
+let savedSettings = null;
+let settingsLoadSequence = 0;
+let settingsLoading = false;
+
 function fillSettings(settings) {
+  savedSettings = { ...(settings || {}) };
+  settingsLoaded = true;
   $("usersDir").value = settings.users_dir || "";
   $("commentsDir").value = settings.comments_dir || "";
   $("commonDir").value = settings.common_dir || "";
@@ -29,6 +42,108 @@ function fillSettings(settings) {
   );
   state.commentSignature = settings.comment_signature || "";
   markSettingsClean();
+}
+
+function setSettingsSetupNotice(visible) {
+  $("settingsSetupNotice")?.classList.toggle("hidden", !visible);
+}
+
+function setSettingsSaveError(message = "") {
+  const error = $("settingsSaveError");
+  if (!error) return;
+  error.textContent = message;
+  error.classList.toggle("hidden", !message);
+}
+
+function setSettingsContentVisible(visible) {
+  $("settingsCard")?.classList.toggle("hidden", !visible);
+}
+
+function setSettingsLoadFailure({ manual, hasDisplay }) {
+  if (!hasDisplay) setSettingsContentVisible(false);
+  if (hasDisplay && manual) {
+    notify({
+      text: SETTINGS_LOAD_FAILURE_TOAST,
+      type: "error",
+      source: "load",
+    });
+  } else if (!hasDisplay) {
+    showScreenLoadError("settings", SETTINGS_LOAD_ERROR_MESSAGE, "error");
+  }
+}
+
+function discardSettingsChanges() {
+  if (!settingsLoaded || !savedSettings) return;
+  applyColorTheme(savedSettings.ui_color_theme);
+  fillSettings(savedSettings);
+  clearSettingsErrors();
+  setSettingsSaveError("");
+  markSettingsClean();
+}
+
+async function loadSettings({
+  manual = false,
+  transition = false,
+  confirm = true,
+  viewSequence,
+} = {}) {
+  if (confirm && !(await confirmDiscardForView("settings", "設定を再読み込み"))) {
+    return false;
+  }
+  if (confirm) discardSettingsChanges();
+  if (settingsLoading) return false;
+
+  const hadSettings = settingsLoaded;
+  const hasDisplay = hadSettings && !transition;
+  if (transition || !hadSettings) setSettingsContentVisible(false);
+  clearScreenLoadError("settings");
+  setSettingsSaveError("");
+  const api = window.pywebview?.api;
+  if (typeof api?.load_settings !== "function") {
+    setSettingsLoadFailure({ manual, hasDisplay });
+    return false;
+  }
+
+  const requestSequence = ++settingsLoadSequence;
+  settingsLoading = true;
+  setBusy(true, "settings-load");
+  let result;
+  try {
+    result = await api.load_settings();
+  } catch (error) {
+    if (requestSequence !== settingsLoadSequence) return false;
+    console.error("設定の読み込みに失敗しました。", error);
+    setSettingsLoadFailure({ manual, hasDisplay });
+    return false;
+  } finally {
+    if (requestSequence === settingsLoadSequence) {
+      settingsLoading = false;
+      setBusy(false);
+    }
+  }
+  if (requestSequence !== settingsLoadSequence) return false;
+  if (viewSequence !== undefined && viewSequence !== viewSwitchSequence) {
+    return false;
+  }
+  if (!result?.ok || !result.settings) {
+    setSettingsLoadFailure({ manual, hasDisplay });
+    return false;
+  }
+
+  fillSettings(result.settings);
+  restoreUiState(result.settings);
+  setSettingsContentVisible(true);
+  clearScreenLoadError("settings");
+  clearLoadToasts("settings");
+  setSettingsSetupNotice(!result.settings_complete);
+  if (manual) {
+    notify({ text: "設定を再読み込みしました。", type: "success" });
+  }
+  return true;
+}
+
+async function reloadSettings(options = {}) {
+  return loadSettings({ ...options, manual: true, transition: false, confirm: true });
 }
 
 function clampNumber(value, min, max) {
@@ -136,48 +251,69 @@ function markSettingsClean() {
   syncChrome();
 }
 
-function syncSettingsDirtyState() {
+function clearSettingsFieldErrorForControl(control) {
+  const target = Object.values(settingsErrorTargets).find(
+    ({ inputId }) => inputId === control?.id,
+  );
+  if (target) setFieldError(target.errorId, "", [target.inputId]);
+  setSettingsSaveError("");
+}
+
+function syncSettingsDirtyState(event) {
+  clearSettingsFieldErrorForControl(event?.target);
   syncChrome();
 }
 
 async function saveSettings() {
+  if (state.isBusy) {
+    syncChrome();
+    return false;
+  }
   clearSettingsErrors();
+  setSettingsSaveError("");
   const clientErrorCount = showSettingsErrors(validateSettingsInputs());
   if (clientErrorCount) {
-    notify({
-      text: `${clientErrorCount}項目を確認してください。`,
-      type: "error",
-    });
-    return;
+    return false;
   }
   const payload = getSettingsPayload();
-  setBusy(true, "settings");
-  const result = await window.pywebview.api.save_settings(payload);
-  setBusy(false);
-  const serverErrorCount = showSettingsErrors(result.field_errors);
-  notify({ text: result.message, type: result.ok ? "success" : "error" });
-  if (!result.ok && serverErrorCount) return;
-  if (result.ok) {
-    state.startDate = "";
-    state.endDate = "";
-    state.activePeriodPreset = "default";
-    state.showMissingCommentsOnly = false;
-    state.periodBeforeMissing = null;
-    state.legacyLoadPreset = "";
-    state.missingCommentStartDate =
-      result.settings?.missing_comment_start_date || "";
-    state.includeTodayInMissingComments = Boolean(
-      result.settings?.include_today_in_missing_comments ??
-        payload.include_today_in_missing_comments,
-    );
-    state.commentSignature = result.settings?.comment_signature || "";
-    state.memberFilterLevels = normalizeMemberFilterLevels(
-      result.settings?.ui_member_filter_levels ?? payload.ui_member_filter_levels,
-    );
-    applyColorTheme(result.settings?.ui_color_theme ?? payload.ui_color_theme);
-    markSettingsClean();
-    showSettings(false);
-    await loadData();
-    persistUiState();
+  const api = window.pywebview?.api;
+  if (typeof api?.save_settings !== "function") {
+    console.error("設定の保存APIが利用できません。");
+    setSettingsSaveError(SETTINGS_SAVE_FAILURE_MESSAGE);
+    return false;
   }
+
+  setBusy(true, "settings");
+  let result;
+  try {
+    result = await api.save_settings(payload);
+  } catch (error) {
+    console.error("設定の保存に失敗しました。", error);
+    setSettingsSaveError(SETTINGS_SAVE_FAILURE_MESSAGE);
+    return false;
+  } finally {
+    setBusy(false);
+  }
+
+  if (result?.ok !== true || !result.settings) {
+    const serverErrorCount = showSettingsErrors(result?.field_errors);
+    if (!serverErrorCount) setSettingsSaveError(SETTINGS_SAVE_FAILURE_MESSAGE);
+    return false;
+  }
+
+  applyColorTheme(result.settings.ui_color_theme);
+  fillSettings(result.settings);
+  state.memberFilterLevels = normalizeMemberFilterLevels(
+    result.settings.ui_member_filter_levels,
+  );
+  setSettingsSetupNotice(false);
+  setSettingsSaveError("");
+  markSettingsClean();
+  notify({ text: "設定を保存しました。", type: "success" });
+  return true;
 }
+
+window.loadSettings = loadSettings;
+window.reloadSettings = reloadSettings;
+window.discardSettingsChanges = discardSettingsChanges;
+window.setSettingsSetupNotice = setSettingsSetupNotice;

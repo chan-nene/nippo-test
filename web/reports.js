@@ -485,7 +485,8 @@ function syncMissingCommentCount() {
   if (!button) return;
   const summary = getMissingCommentSummary();
   const isLoading = state.busyAction === "load";
-  button.disabled = state.isBusy || summary.count === 0;
+  const controlsBusy = state.isBusy && state.busyAction !== "save";
+  button.disabled = controlsBusy || summary.count === 0;
   let label = button.querySelector(":scope > .missing-filter-label");
   let badge = button.querySelector(":scope > .missing-count-badge");
   if (!label) {
@@ -686,6 +687,7 @@ function movePeriodPresetFocus(index) {
 }
 
 function syncPeriodPresets(config = {}) {
+  const controlsBusy = state.isBusy && state.busyAction !== "save";
   const presets = {
     month: $("presetMonthButton"),
     week: $("presetWeekButton"),
@@ -696,7 +698,7 @@ function syncPeriodPresets(config = {}) {
     if (!button) return;
     const isActive =
       !state.showMissingCommentsOnly && state.activePeriodPreset === name;
-    button.disabled = state.isBusy;
+    button.disabled = controlsBusy;
     button.classList.toggle("is-active", isActive);
     button.dataset.state = isActive ? "on" : "off";
     button.setAttribute("aria-checked", String(isActive));
@@ -715,7 +717,7 @@ function syncPeriodPresets(config = {}) {
   updatePeriodPresetIndicator(config);
   const missingButton = $("showMissingCommentsButton");
   if (missingButton) {
-    missingButton.disabled = state.isBusy;
+    missingButton.disabled = controlsBusy;
     missingButton.classList.toggle(
       "is-active",
       state.showMissingCommentsOnly,
@@ -730,6 +732,7 @@ function syncPeriodPresets(config = {}) {
 }
 
 function syncPeriodShiftButtons() {
+  const controlsBusy = state.isBusy && state.busyAction !== "save";
   const stepLabel = $("periodShiftStepLabel");
   if (stepLabel) stepLabel.textContent = getPeriodShiftStepLabel();
   const navigation = document.querySelector("#reportPanel .period-navigation");
@@ -760,7 +763,8 @@ function syncPeriodShiftButtons() {
     const description = hasTarget
       ? `${label}、${formatNavigationDateRangeDescription(target.startDate, target.endDate)}`
       : `${label}へ移動`;
-    button.disabled = state.isBusy || state.showMissingCommentsOnly || !hasTarget;
+    button.disabled =
+      controlsBusy || state.showMissingCommentsOnly || !hasTarget;
     button.setAttribute("aria-label", description);
     button.removeAttribute("title");
   });
@@ -797,7 +801,7 @@ function getRefreshButtonModel() {
   }
 
   return {
-    disabled: state.isBusy,
+    disabled: state.isBusy && state.busyAction !== "save",
     icon: "refresh",
     label: "最新データを取得",
     ariaLabel: "最新データを取得",
@@ -808,8 +812,8 @@ function getSaveButtonModel(dirty) {
   if (state.busyAction === "save") {
     return {
       disabled: true,
-      label: "保存中...",
-      ariaLabel: "保存中",
+      label: "保存",
+      ariaLabel: dirty.total > 0 ? `保存 未保存${dirty.total}件` : "保存",
     };
   }
 
@@ -875,11 +879,25 @@ function renderToolbarIcon(icon) {
   return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true">${paths[icon] || paths.check}</svg>`;
 }
 
+const REPORT_LOAD_ERROR_MESSAGE =
+  "日報データを読み込めませんでした。「再読み込み」を押してください。";
+const REPORT_LOAD_FAILURE_TOAST =
+  "最新データを取得できませんでした。もう一度お試しください。";
+const REPORT_PARTIAL_LOAD_MESSAGE =
+  "一部のデータを読み込めませんでした。もう一度「最新データを取得」を押してください。";
+const REPORT_SAVE_SUCCESS_MESSAGE = "変更を保存しました。";
+const REPORT_SAVE_PARTIAL_MESSAGE =
+  "一部の変更を保存できませんでした。もう一度保存してください。";
+const REPORT_SAVE_FAILURE_MESSAGE =
+  "変更を保存できませんでした。もう一度保存してください。";
+const REPORT_SAVE_CACHE_WARNING =
+  "変更は保存されましたが、表示を更新できませんでした。「最新データを取得」を押してください。";
+
 async function refreshData() {
   finishEditing();
   if (!(await confirmDiscardUnsaved("最新データを取得"))) return;
   discardDirtyEdits();
-  await loadData({ preserveDirty: false, forceRefresh: true });
+  await loadData({ preserveDirty: false, forceRefresh: true, manual: true });
 }
 
 function discardDirtyEdits() {
@@ -888,14 +906,37 @@ function discardDirtyEdits() {
   syncChrome();
 }
 
+function clearReportViewForLoadFailure() {
+  state.rows = [];
+  state.viewableMembers = [];
+  state.currentTeam = [];
+  state.hasInitializedReportView = false;
+  state.missingCommentDates = null;
+  state.missingCommentRangeStart = "";
+  state.missingCommentRangeEnd = "";
+  state.missingCommentMemberCounts = {};
+  state.directorMissingDays = 0;
+  $("tableWrap")?.replaceChildren();
+  showMain(false);
+}
+
 async function loadData({
   silent = false,
   preserveDirty = true,
   preserveTableScroll = false,
   forceRefresh = false,
+  manual = false,
+  transition = false,
+  viewSequence,
 } = {}) {
   finishEditing();
   const requestSequence = ++state.loadRequestSequence;
+  const hadData = Boolean(state.hasInitializedReportView);
+  if (transition || !hadData) {
+    showMain(false);
+    $("tableWrap")?.replaceChildren();
+  }
+  clearScreenLoadError("reports");
   setBusy(true, "load");
   let result;
   try {
@@ -909,32 +950,89 @@ async function loadData({
     });
   } catch (error) {
     if (requestSequence !== state.loadRequestSequence) return;
-    notify({ text: error?.message || "日報の取得に失敗しました。", type: "error" });
-    return;
+    console.error("日報データの読み込みに失敗しました。", error);
+    const hasDisplay = hadData && !transition;
+    if (transition || !hadData) {
+      clearReportViewForLoadFailure();
+    }
+    if (hasDisplay) {
+      if (manual) {
+        notify({
+          text: REPORT_LOAD_FAILURE_TOAST,
+          type: "error",
+          source: "load",
+        });
+      }
+    } else {
+      showScreenLoadError(
+        "reports",
+        REPORT_LOAD_ERROR_MESSAGE,
+        "error",
+      );
+    }
+    return { ok: false };
   } finally {
     if (requestSequence === state.loadRequestSequence) setBusy(false);
   }
   if (requestSequence !== state.loadRequestSequence) return;
-  if (!result.ok) {
-    if (result.access_denied) {
-      showAccessDenied(result.message);
-      return;
-    }
-    showMain(false);
-    if (result.needs_settings) showSettings(true);
-    notify({ text: result.message, type: "error" }); // エラーは silent でも必ず表示
-    return;
+  if (
+    viewSequence !== undefined &&
+    viewSequence !== viewSwitchSequence
+  ) {
+    return { ok: false, stale: true };
   }
+  if (!result.ok) {
+    const accessDenied =
+      result.access_denied === true || result.employee_registered === false;
+    if (accessDenied) {
+      state.accessDenied = true;
+      clearReportViewForLoadFailure();
+      updateViewAvailability();
+      updateViewChrome();
+      showScreenLoadError(
+        "reports",
+        result.message || REPORT_LOAD_ERROR_MESSAGE,
+        "error",
+      );
+      return { ok: false, accessDenied: true };
+    }
+    const hasDisplay = hadData && !transition;
+    if (transition || !hadData) {
+      clearReportViewForLoadFailure();
+    }
+    if (hasDisplay) {
+      if (manual) {
+        notify({
+          text: REPORT_LOAD_FAILURE_TOAST,
+          type: "error",
+          source: "load",
+        });
+      }
+    } else {
+      showScreenLoadError(
+        "reports",
+        REPORT_LOAD_ERROR_MESSAGE,
+        "error",
+      );
+    }
+    return { ok: false };
+  }
+  if (result.data_load_status === "all_failed") {
+    state.accessDenied = false;
+    clearReportViewForLoadFailure();
+    updateViewAvailability();
+    updateViewChrome();
+    showScreenLoadError("reports", REPORT_LOAD_ERROR_MESSAGE, "error");
+    return { ok: false, allDataFailed: true };
+  }
+  state.accessDenied = false;
   state.displayName = result.data.display_name || result.data.employee_id || "";
   syncCurrentUserDisplay();
   state.canInputOwnReport = result.data.can_input_own_report !== false;
   state.restrictToSelf = result.data.restrict_to_self === true;
   state.isSuperior = Boolean(result.data.is_superior);
   state.isDirector = Boolean(result.data.is_director);
-  if (!state.hasInitializedReportView) {
-    state.activeView = "reports";
-    state.hasInitializedReportView = true;
-  }
+  state.hasInitializedReportView = true;
   state.viewableMembers = Array.isArray(result.data.viewable_members)
     ? result.data.viewable_members
     : [
@@ -1077,30 +1175,26 @@ async function loadData({
   syncChrome();
   renderTable({ preserveScroll: preserveTableScroll });
   showMain(true);
-  showSettings(false);
-  const warningCount = Number(result.data.load_warning_count || 0);
   const refreshResult = result.refresh_result || {};
+  const warningCount = Number(result.data.load_warning_count || 0);
   const refreshFailed = Number(refreshResult.failed || 0);
-  const refreshChanged =
-    Number(refreshResult.changed || 0) +
-    Number(refreshResult.added || 0) +
-    Number(refreshResult.deleted || 0);
-  if (forceRefresh && refreshFailed > 0) {
-    notify({
-      text: "一部ファイルを更新できず、直前のデータを表示しています。詳細はログを確認してください。",
-      type: "warning",
-    });
-  } else if (warningCount > 0 && result.cache_status === "built") {
-    notify({
-      text: `${warningCount}件のCSVを読み込めませんでした。読み込めたデータのみ表示しています。詳細はログを確認してください。`,
-      type: "warning",
-    });
-  } else if (forceRefresh && !silent) {
-    notify({
-      text: refreshChanged > 0 ? "最新データを取得しました。" : "データは最新です。",
-      type: "info",
-    });
+  const dataLoadPartial = result.data_load_status === "partial";
+  if (dataLoadPartial || refreshFailed > 0 || warningCount > 0) {
+    showScreenLoadError("reports", REPORT_PARTIAL_LOAD_MESSAGE, "warning");
+  } else {
+    clearScreenLoadError("reports");
+    clearLoadToasts("reports");
+    if (manual) {
+      notify({
+        text: "最新データを取得しました。",
+        type: "success",
+      });
+    }
   }
+  return {
+    ok: true,
+    partial: dataLoadPartial || refreshFailed > 0 || warningCount > 0,
+  };
 }
 
 function setMemberFilterButtonLabel(button, text) {
@@ -2079,7 +2173,6 @@ function resetColumnWidths() {
   state.columnWidths = {};
   applyColumnWidthsToRenderedTable();
   persistUiState();
-  notify({ text: "列幅を初期値に戻しました。", type: "info" });
 }
 
 function handleTableClick(event) {
@@ -2624,128 +2717,241 @@ function markCurrentEditingDirtyUi() {
   }
 }
 
-function buildSaveResultMessage(result, userCount, commentCount) {
-  if (result.ok) {
-    const savedLabels = [];
-    if (userCount) savedLabels.push(`日報${userCount}件`);
-    if (commentCount) savedLabels.push(`コメント${commentCount}件`);
-    return `${savedLabels.join(" / ")}を保存しました。`;
-  }
+function cloneReportChange(change) {
+  return {
+    date: change.date,
+    fields: { ...(change.fields || {}) },
+    replies: { ...(change.replies || {}) },
+  };
+}
 
-  if (result.no_targets) {
-    return "更新対象がありません。";
-  }
-
-  const targets = [
-    { label: `日報${userCount}件`, count: userCount, status: result.result?.user },
-    {
-      label: `コメント${commentCount}件`,
-      count: commentCount,
-      status: result.result?.comment,
-    },
-  ].filter((target) => target.count > 0);
-  const saved = targets.filter((target) => target.status?.saved);
-  const failed = targets.filter((target) => !target.status?.saved);
-  const messages = [];
-  if (saved.length) {
-    messages.push(`${saved.map((target) => target.label).join(" / ")}は保存しました。`);
-  }
-  messages.push(
-    failed.length
-      ? `${failed.map((target) => target.label).join(" / ")}の保存に失敗しました。`
-      : "保存に失敗しました。",
+function createReportSaveEntry(key, change) {
+  const snapshot = cloneReportChange(change);
+  const update = { date: snapshot.date, ...snapshot.fields };
+  const replies = Object.entries(snapshot.replies).map(
+    ([superiorEmployeeId, reply]) => ({
+      superior_employee_id: superiorEmployeeId,
+      reply,
+    }),
   );
-  const details = [
-    ...new Set(failed.map((target) => target.status?.error).filter(Boolean)),
-  ];
-  if (details.length) {
-    messages.push(`詳細: ${details.join(" / ")}`);
-  } else if (result.message) {
-    messages.push(result.message);
-  } else {
-    messages.push("ネットワーク接続を確認して、もう一度保存してください。");
+  if (replies.length) update.replies = replies;
+  return { key, snapshot, update };
+}
+
+function createCommentSaveEntry(key, change) {
+  const snapshot = {
+    subordinate_employee_id: change.subordinate_employee_id,
+    superior_employee_id: change.superior_employee_id,
+    date: change.date,
+    comment: change.comment,
+  };
+  return {
+    key,
+    snapshot,
+    update: {
+      subordinate_employee_id: snapshot.subordinate_employee_id,
+      date: snapshot.date,
+      comment: snapshot.comment,
+    },
+  };
+}
+
+function hasSameObjectEntries(left, right) {
+  const leftEntries = Object.entries(left || {});
+  const rightEntries = Object.entries(right || {});
+  return (
+    leftEntries.length === rightEntries.length &&
+    rightEntries.every(
+      ([key, value]) =>
+        Object.prototype.hasOwnProperty.call(left || {}, key) &&
+        left[key] === value,
+    )
+  );
+}
+
+function reportChangeMatchesSnapshot(change, snapshot) {
+  return Boolean(change) &&
+    change.date === snapshot.date &&
+    hasSameObjectEntries(change.fields, snapshot.fields) &&
+    hasSameObjectEntries(change.replies, snapshot.replies);
+}
+
+function commentChangeMatchesSnapshot(change, snapshot) {
+  return Boolean(change) &&
+    change.subordinate_employee_id === snapshot.subordinate_employee_id &&
+    change.superior_employee_id === snapshot.superior_employee_id &&
+    change.date === snapshot.date &&
+    change.comment === snapshot.comment;
+}
+
+function applySavedReportEntry(entry) {
+  const currentChange = state.reportChanges.get(entry.key);
+  if (currentChange && !reportChangeMatchesSnapshot(currentChange, entry.snapshot)) {
+    return;
   }
-  return messages.join(" ");
+  const row = state.rows.find(
+    (candidate) =>
+      candidate.employee_id === state.employeeId &&
+      candidate.date === entry.snapshot.date,
+  );
+  if (!row) return;
+  Object.entries(entry.snapshot.fields).forEach(([field, value]) => {
+    row[field] = value;
+  });
+  const comments = Array.isArray(row.comments) ? row.comments : [];
+  Object.entries(entry.snapshot.replies).forEach(([superiorId, reply]) => {
+    const cell = comments.find(
+      (candidate) => candidate.superior_employee_id === superiorId,
+    );
+    if (cell) cell.reply = reply;
+  });
+}
+
+function applySavedCommentEntry(entry) {
+  const currentChange = state.commentChanges.get(entry.key);
+  if (currentChange && !commentChangeMatchesSnapshot(currentChange, entry.snapshot)) {
+    return;
+  }
+  const row = state.rows.find(
+    (candidate) =>
+      candidate.employee_id === entry.snapshot.subordinate_employee_id &&
+      candidate.date === entry.snapshot.date,
+  );
+  if (!row) return;
+  const cell = (Array.isArray(row.comments) ? row.comments : []).find(
+    (candidate) =>
+      candidate.superior_employee_id === entry.snapshot.superior_employee_id,
+  );
+  if (cell) cell.comment = entry.snapshot.comment;
+}
+
+function commitSavedReportEntry(entry) {
+  const currentChange = state.reportChanges.get(entry.key);
+  if (reportChangeMatchesSnapshot(currentChange, entry.snapshot)) {
+    state.reportChanges.delete(entry.key);
+  }
+}
+
+function commitSavedCommentEntry(entry) {
+  const currentChange = state.commentChanges.get(entry.key);
+  if (commentChangeMatchesSnapshot(currentChange, entry.snapshot)) {
+    state.commentChanges.delete(entry.key);
+  }
 }
 
 async function saveUpdates() {
-  finishEditing();
-  if (state.isBusy || getDirtyCounts().total === 0) {
+  if (state.isBusy) {
     syncChrome();
-    return;
+    return false;
   }
-  const userUpdates = Array.from(state.reportChanges.values()).map((change) => {
-    const update = { date: change.date, ...change.fields };
-    const replies = Object.entries(change.replies).map(
-      ([superiorEmployeeId, reply]) => ({
-        superior_employee_id: superiorEmployeeId,
-        reply,
-      }),
-    );
-    if (replies.length) update.replies = replies;
-    return update;
-  });
-  const commentUpdates = Array.from(state.commentChanges.values()).map(
-    ({ subordinate_employee_id, date, comment }) => ({
-      subordinate_employee_id,
-      date,
-      comment,
-    }),
+
+  finishEditing();
+  const reportEntries = Array.from(state.reportChanges.entries()).map(
+    ([key, change]) => createReportSaveEntry(key, change),
   );
-  notify({
-    text: `保存中です... 日報${userUpdates.length}件 / コメント${commentUpdates.length}件`,
-    type: "info",
-  });
+  const commentEntries = Array.from(state.commentChanges.entries()).map(
+    ([key, change]) => createCommentSaveEntry(key, change),
+  );
+  if (!reportEntries.length && !commentEntries.length) {
+    syncChrome();
+    return false;
+  }
+
   setBusy(true, "save");
   let result;
   try {
     result = await window.pywebview.api.save_updates({
-      user_updates: userUpdates,
-      comment_updates: commentUpdates,
+      user_updates: reportEntries.map(({ update }) => update),
+      comment_updates: commentEntries.map(({ update }) => update),
     });
   } catch (error) {
-    notify({ text: error?.message || "保存に失敗しました。", type: "error" });
-    return;
+    console.error("日報の保存に失敗しました。", error);
+    notify({ text: REPORT_SAVE_FAILURE_MESSAGE, type: "error" });
+    return false;
   } finally {
     setBusy(false);
   }
-  const userSaved = Boolean(result.result?.user?.saved);
-  const commentSaved = Boolean(result.result?.comment?.saved);
-  if (userSaved) {
-    state.reportChanges.clear();
-  }
-  if (commentSaved) {
-    state.commentChanges.clear();
-  }
-  const shouldExitMissingFilter =
-    commentSaved &&
-    state.showMissingCommentsOnly &&
-    !state.isDirector &&
-    getMissingCommentSummary({ useCurrentRows: true }).count === 0;
-  if (shouldExitMissingFilter) {
-    exitMissingCommentsFilter();
-  }
-  if (userSaved || commentSaved) {
+
+  if (result?.no_targets === true) {
     syncChrome();
-    await loadData({ silent: true, preserveTableScroll: true });
-    if (
-      commentSaved &&
-      state.showMissingCommentsOnly &&
-      getMissingCommentSummary().count === 0
-    ) {
-      exitMissingCommentsFilter();
-      await loadData({ silent: true, preserveTableScroll: true });
-      persistUiState();
+    return false;
+  }
+
+  const userSaved =
+    reportEntries.length === 0 || result?.result?.user?.saved === true;
+  const commentSaved =
+    commentEntries.length === 0 || result?.result?.comment?.saved === true;
+  const anySaved =
+    (reportEntries.length > 0 && userSaved) ||
+    (commentEntries.length > 0 && commentSaved);
+  const allSaved = result?.ok === true && userSaved && commentSaved;
+  let displayUpdateFailed = result?.cache_sync_failed === true;
+
+  if (anySaved) {
+    try {
+      if (userSaved) {
+        reportEntries.forEach((entry) => applySavedReportEntry(entry));
+      }
+      if (commentSaved) {
+        commentEntries.forEach((entry) => applySavedCommentEntry(entry));
+      }
+    } catch (error) {
+      displayUpdateFailed = true;
+      console.error("日報の保存結果を画面に反映できませんでした。", error);
+    }
+    if (userSaved) {
+      reportEntries.forEach((entry) => commitSavedReportEntry(entry));
+    }
+    if (commentSaved) {
+      commentEntries.forEach((entry) => commitSavedCommentEntry(entry));
+    }
+    try {
+      let missingFilterExited = false;
+      if (
+        commentSaved &&
+        state.showMissingCommentsOnly &&
+        getMissingCommentSummary({ useCurrentRows: true }).count === 0
+      ) {
+        missingFilterExited = exitMissingCommentsFilter();
+      }
+      if (missingFilterExited) persistUiState();
+      syncChrome();
+      renderTable({ preserveScroll: true });
+    } catch (error) {
+      displayUpdateFailed = true;
+      console.error("日報の保存結果を画面に反映できませんでした。", error);
     }
   } else {
     syncChrome();
   }
-  notify({
-    text: buildSaveResultMessage(
-      result,
-      userUpdates.length,
-      commentUpdates.length,
-    ),
-    type: result.ok ? "success" : result.no_targets ? "info" : "error",
-  });
+
+  if (allSaved) {
+    if (displayUpdateFailed) {
+      notify({
+        text: REPORT_SAVE_CACHE_WARNING,
+        type: "warning",
+        autoHide: false,
+        source: "save",
+      });
+    } else {
+      notify({ text: REPORT_SAVE_SUCCESS_MESSAGE, type: "success" });
+    }
+    return true;
+  }
+
+  if (anySaved) {
+    notify({ text: REPORT_SAVE_PARTIAL_MESSAGE, type: "error" });
+    if (displayUpdateFailed) {
+      notify({
+        text: REPORT_SAVE_CACHE_WARNING,
+        type: "warning",
+        autoHide: false,
+        source: "save",
+      });
+    }
+    return false;
+  }
+
+  notify({ text: REPORT_SAVE_FAILURE_MESSAGE, type: "error" });
+  return false;
 }

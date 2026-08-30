@@ -116,6 +116,21 @@ class DailyReportApi:
             ),
         }
 
+    def load_settings(self) -> dict[str, Any]:
+        try:
+            self._settings = self._settings_manager.load()
+            return {
+                "ok": True,
+                "settings": self._settings.to_dict(),
+                "settings_complete": self._settings.is_complete,
+            }
+        except Exception:
+            logger.exception("Failed to load settings")
+            return {
+                "ok": False,
+                "message": "設定を読み込めませんでした。",
+            }
+
     def save_settings(self, payload: Any) -> dict[str, Any]:
         try:
             payload = validate_settings_request(payload)
@@ -247,8 +262,9 @@ class DailyReportApi:
             logger.exception("Failed to load daily report data")
             return {"ok": False, "message": "現在利用できません。"}
 
-    def load_common_masters(self) -> dict[str, Any]:
+    def load_common_masters(self, payload: Any = None) -> dict[str, Any]:
         try:
+            payload = validate_load_request(payload)
             if not self._is_admin():
                 return self._admin_access_denied()
             access_denied = self._registered_employee_access_denied()
@@ -263,10 +279,17 @@ class DailyReportApi:
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
             data_cache = self._get_data_cache()
-            if data_cache.is_loaded:
-                data, migration_required, revisions = data_cache.get_admin_common(
-                    self._settings, self._employee_id
+            cache_access = None
+            if payload["force_refresh"] or data_cache.is_loaded:
+                cache_access = (
+                    data_cache.refresh_changed(self._settings, self._employee_id)
+                    if payload["force_refresh"]
+                    else data_cache.ensure_loaded(self._settings, self._employee_id)
                 )
+                snapshot = cache_access.snapshot
+                data = snapshot.common
+                migration_required = dict(snapshot.migration_required)
+                revisions = dict(snapshot.common_revisions)
             else:
                 data = repo.load_common_masters()
                 revisions = repo.get_common_master_revisions()
@@ -293,6 +316,15 @@ class DailyReportApi:
                 "revisions": revisions,
                 "migration_required": migration_required,
                 "migration_preview": migration_preview,
+                **(
+                    {
+                        "cache_status": cache_access.status,
+                        "refresh_result": cache_access.refresh_result.to_dict(),
+                        "cache_warning_count": len(cache_access.snapshot.warnings),
+                    }
+                    if cache_access is not None
+                    else {}
+                ),
             }
         except Exception:
             logger.exception("Failed to load common masters")
@@ -418,20 +450,46 @@ class DailyReportApi:
             )
             report_cache = self._cache_partition_result(result.get("user"))
             comment_cache = self._cache_partition_result(result.get("comment"))
-            try:
-                data_cache.apply_saved_partitions(
-                    self._settings,
-                    self._employee_id,
-                    report_partition=report_cache,
-                    comment_partition=comment_cache,
-                )
-            except Exception:
-                logger.exception("Failed to synchronize saved CSVs into cache")
-                for partition in (report_cache, comment_cache):
-                    if partition is not None:
-                        data_cache.invalidate_partition(
-                            partition[0], "saved partition could not be applied"
+            cache_applied: dict[str, bool | None] = {
+                "user": None,
+                "comment": None,
+            }
+            cache_sync_failed = False
+            for name, partition in (
+                ("user", report_cache),
+                ("comment", comment_cache),
+            ):
+                if result.get(name, {}).get("saved") is not True:
+                    continue
+                if partition is None:
+                    cache_applied[name] = False
+                    cache_sync_failed = True
+                    continue
+                try:
+                    if name == "user":
+                        applied = data_cache.apply_saved_partitions(
+                            self._settings,
+                            self._employee_id,
+                            report_partition=partition,
                         )
+                    else:
+                        applied = data_cache.apply_saved_partitions(
+                            self._settings,
+                            self._employee_id,
+                            comment_partition=partition,
+                        )
+                    cache_applied[name] = bool(applied)
+                    if not applied:
+                        cache_sync_failed = True
+                except Exception:
+                    cache_applied[name] = False
+                    cache_sync_failed = True
+                    logger.exception(
+                        "Failed to synchronize saved %s CSV into cache", name
+                    )
+                    data_cache.invalidate_partition(
+                        partition[0], "saved partition could not be applied"
+                    )
             public_result = {
                 name: {
                     key: value
@@ -440,6 +498,11 @@ class DailyReportApi:
                 }
                 for name, status in result.items()
             }
+            for name, status in public_result.items():
+                if name not in cache_applied:
+                    continue
+                status["disk_saved"] = result[name].get("saved") is True
+                status["cache_applied"] = cache_applied[name]
             targets = [
                 value for value in public_result.values() if value.get("needed")
             ]
@@ -447,6 +510,7 @@ class DailyReportApi:
                 "ok": bool(targets) and all(value.get("saved") for value in targets),
                 "no_targets": not targets,
                 "result": public_result,
+                "cache_sync_failed": cache_sync_failed,
             }
         except RequestValidationError as exc:
             return {

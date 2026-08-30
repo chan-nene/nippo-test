@@ -1277,6 +1277,85 @@ html body #reportPanel #refreshButton > .toolbar-button-icon svg.is-loader-icon 
   stroke-width: 2;
 }
 
+/* Compact data-refresh action shared by reports, administration, and settings. */
+html body .data-refresh-button {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  display: inline-flex;
+  width: 42px;
+  height: var(--control-height);
+  min-height: var(--control-height);
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid var(--action-secondary-border);
+  border-radius: var(--radius-control);
+  background: var(--action-secondary-bg);
+  color: var(--action-secondary-fg);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform 100ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+html body .data-refresh-button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  color: var(--action-secondary-hover-fg);
+}
+
+html body .data-refresh-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+html body .data-refresh-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+html body .data-refresh-button:disabled {
+  border-color: var(--control-disabled-border);
+  background: var(--control-disabled-bg);
+  color: var(--control-disabled-fg);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+html body .data-refresh-button > .toolbar-button-icon {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 18px;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+html body .data-refresh-button > .toolbar-button-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+html body .data-refresh-button > .toolbar-button-icon svg.is-refresh-icon {
+  fill: currentColor;
+  stroke: none;
+}
+
+html body .data-refresh-button > .toolbar-button-icon svg.is-loader-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
 /* Add-member style primary save action. */
 html body #reportPanel #saveButton {
   position: relative;

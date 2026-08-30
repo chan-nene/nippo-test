@@ -5,8 +5,6 @@ const MEMBER_FILTER_LABELS = Object.freeze({
   section: "係",
   member: "個人",
 });
-const ACCESS_DENIED_MESSAGE = "このアプリは使用できません。管理者に連絡してください。";
-
 function normalizeMemberFilterLevels(value, fallback = MEMBER_FILTER_LEVELS) {
   const parseLevels = (raw) => {
     const values = Array.isArray(raw)
@@ -80,10 +78,23 @@ let currentEditingElement = null;
 let uiStateSaveQueue = Promise.resolve();
 let lastNativeUnsavedState = null;
 let pendingConfirmation = null;
+const TOAST_SCOPES = Object.freeze(["reports", "admin", "settings"]);
+const TOAST_TYPES = Object.freeze(["success", "info", "warning", "error"]);
+const TOAST_VISIBLE_LIMIT = 3;
+const TOAST_RIGHT_INSET = 8;
+const TOAST_FADE_DURATION = 300;
+const TOAST_DURATIONS = Object.freeze({
+  success: 4000,
+  info: 4000,
+  warning: 7000,
+  error: 7000,
+});
 const toastState = {
-  hideTimer: null,
-  fadeTimer: null,
+  screens: new Map(),
+  nextId: 1,
+  modalOpen: false,
 };
+let viewSwitchSequence = 0;
 const actionButtonSignatures = new Map();
 const PERIOD_MODES = ["month", "week", "day", "default"];
 const LEGACY_PERIOD_MODE_MAP = Object.freeze({
@@ -267,9 +278,20 @@ function bindEvents() {
   $("resetColumnWidthsDialog").addEventListener("click", (event) => {
     if (event.target === event.currentTarget) closeResetColumnWidthsDialog();
   });
-  $("dismissToastButton").addEventListener("click", dismissToast);
-  $("openSettingsButton").addEventListener("click", () => switchView("settings"));
-  $("adminViewButton").addEventListener("click", () => switchView("admin"));
+  $("openSettingsButton").addEventListener("click", () => void switchView("settings"));
+  $("adminViewButton").addEventListener("click", () => void switchView("admin"));
+  $("settingsReloadButton")?.addEventListener("click", () => {
+    void reloadCurrentView();
+  });
+  $("reportLoadRetryButton")?.addEventListener("click", () => {
+    void reloadCurrentView();
+  });
+  $("settingsLoadRetryButton")?.addEventListener("click", () => {
+    void reloadCurrentView();
+  });
+  $("adminLoadRetryButton")?.addEventListener("click", () => {
+    void reloadCurrentView();
+  });
   $("fontSizeButton").addEventListener("click", toggleFontSizeMenu);
   $("fontSizeMenu").addEventListener("click", (event) => {
     const button = event.target.closest("[data-font-size]");
@@ -315,10 +337,54 @@ function bindEvents() {
   $("tableWrap").addEventListener("pointerup", finishColumnResize);
   $("tableWrap").addEventListener("pointercancel", finishColumnResize);
   document.addEventListener("keydown", handleGlobalShortcut);
-  $("dailyViewButton").addEventListener("click", () => switchView("reports"));
+  $("dailyViewButton").addEventListener("click", () => void switchView("reports"));
   window.adminMasters?.initialize();
   window.addEventListener("beforeunload", handleBeforeUnload);
   window.addEventListener("resize", positionToast);
+
+  const messageList = $("messageList");
+  messageList?.addEventListener("click", (event) => {
+    if (event.target.closest(".message-close-button")) dismissToast(event);
+  });
+  messageList?.addEventListener("pointerover", (event) => {
+    const message = event.target.closest(".message");
+    if (!message || (event.relatedTarget && message.contains(event.relatedTarget))) {
+      return;
+    }
+    pauseToast(message.dataset.toastId, "hover");
+  });
+  messageList?.addEventListener("pointerout", (event) => {
+    const message = event.target.closest(".message");
+    if (!message || (event.relatedTarget && message.contains(event.relatedTarget))) {
+      return;
+    }
+    resumeToast(message.dataset.toastId, "hover");
+  });
+  messageList?.addEventListener("focusin", (event) => {
+    const closeButton = event.target.closest(".message-close-button");
+    if (!closeButton) return;
+    pauseToast(closeButton.closest(".message")?.dataset.toastId, "focus");
+  });
+  messageList?.addEventListener("focusout", (event) => {
+    const message = event.target.closest(".message");
+    if (!message) return;
+    requestAnimationFrame(() => {
+      if (!message.contains(document.activeElement)) {
+        resumeToast(message.dataset.toastId, "focus");
+      }
+    });
+  });
+  if (typeof MutationObserver === "function") {
+    new MutationObserver(syncToastModalState).observe(document.body, {
+      attributes: true,
+      attributeFilter: ["open"],
+      subtree: true,
+    });
+  }
+  document.querySelectorAll("dialog").forEach((dialog) => {
+    dialog.addEventListener("close", syncToastModalState);
+  });
+  syncToastModalState();
 
   document.addEventListener("mousedown", (e) => {
     if (!e.target.closest("#fontSizeControl")) closeFontSizeMenu();
@@ -478,9 +544,22 @@ function persistUiState() {
     ui_color_theme: state.colorTheme,
   };
   uiStateSaveQueue = uiStateSaveQueue
-    .catch(() => {})
+    .catch((error) => {
+      console.error("表示状態の保存に失敗しました。", error);
+    })
     .then(() => api.save_ui_state(payload))
-    .catch(() => {});
+    .then((result) => {
+      if (result?.ok === false) {
+        console.error(
+          "表示状態の保存に失敗しました。",
+          result.message || result,
+        );
+      }
+      return result;
+    })
+    .catch((error) => {
+      console.error("表示状態の保存に失敗しました。", error);
+    });
 }
 
 function getRestorablePeriodRange(periodMode, startDate, endDate) {
@@ -572,30 +651,50 @@ function applyFontSize() {
       const isActive = button.dataset.fontSize === state.fontSize;
       button.classList.toggle("is-active", isActive);
       button.setAttribute("aria-pressed", String(isActive));
-    });
+  });
   applyColumnWidthsToRenderedTable();
+  positionToast();
 }
 
 function showSettings(visible) {
-  switchView(visible ? "settings" : "reports");
-}
-
-function showAccessDenied(message = ACCESS_DENIED_MESSAGE) {
-  state.accessDenied = true;
-  state.isBusy = false;
-  state.busyAction = "";
-  $("accessDeniedMessage").textContent = message || ACCESS_DENIED_MESSAGE;
-  $("accessDeniedPanel").classList.remove("hidden");
-  $("mainPanel").classList.add("hidden");
-  $("dailyViewButton").classList.add("hidden");
-  $("adminViewButton").classList.add("hidden");
-  $("openSettingsButton").classList.add("hidden");
-  document.body.classList.add("is-access-denied");
+  return switchView(visible ? "settings" : "reports");
 }
 
 function showMain(visible) {
   // ツールバーは常時表示。テーブルだけ出し入れする
   $("tableWrap").classList.toggle("hidden", !visible);
+}
+
+const SCREEN_LOAD_ERROR_IDS = Object.freeze({
+  reports: ["reportLoadError", "reportLoadErrorMessage"],
+  admin: ["adminLoadError", "adminLoadErrorMessage"],
+  settings: ["settingsLoadError", "settingsLoadErrorMessage"],
+});
+
+function showScreenLoadError(view, message, type = "error") {
+  const ids = SCREEN_LOAD_ERROR_IDS[view];
+  if (!ids) return;
+  const [containerId, messageId] = ids;
+  const container = $(containerId);
+  const messageElement = $(messageId);
+  if (!container || !messageElement) return;
+  const tone = type === "warning" ? "warning" : "error";
+  container.classList.remove("hidden", "warning", "error");
+  container.classList.add(tone);
+  container.setAttribute("role", tone === "warning" ? "status" : "alert");
+  container.setAttribute("aria-live", tone === "warning" ? "polite" : "assertive");
+  messageElement.textContent = String(message || "");
+}
+
+function clearScreenLoadError(view) {
+  const ids = SCREEN_LOAD_ERROR_IDS[view];
+  if (!ids) return;
+  const [containerId, messageId] = ids;
+  const container = $(containerId);
+  const messageElement = $(messageId);
+  container?.classList.add("hidden");
+  container?.classList.remove("warning", "error");
+  if (messageElement) messageElement.textContent = "";
 }
 
 function hasUnsavedChanges() {
@@ -604,6 +703,27 @@ function hasUnsavedChanges() {
     Boolean(window.isSettingsDirty?.()) ||
     Boolean(window.adminMasters?.hasUnsaved?.())
   );
+}
+
+function hasUnsavedChangesForView(view) {
+  if (view === "reports") return getDirtyCounts().total > 0;
+  if (view === "settings") return Boolean(window.isSettingsDirty?.());
+  if (view === "admin") return Boolean(window.adminMasters?.hasUnsaved?.());
+  return false;
+}
+
+function discardUnsavedChangesForView(view) {
+  if (view === "reports") {
+    discardDirtyEdits();
+    return;
+  }
+  if (view === "settings") {
+    window.discardSettingsChanges?.();
+    return;
+  }
+  if (view === "admin") {
+    window.adminMasters?.discardUnsaved?.();
+  }
 }
 
 function requestConfirmationDialog({
@@ -641,6 +761,7 @@ function requestConfirmationDialog({
 
   if (typeof dialog.showModal === "function") dialog.showModal();
   else dialog.setAttribute("open", "");
+  syncToastModalState();
   requestAnimationFrame(() => {
     if (pendingConfirmation === confirmation) $("cancelActionConfirmButton").focus();
   });
@@ -654,13 +775,14 @@ function resolveConfirmationDialog(confirmed) {
   const dialog = $("actionConfirmDialog");
   if (typeof dialog.close === "function" && dialog.open) dialog.close();
   else dialog.removeAttribute("open");
+  syncToastModalState();
   delete dialog.dataset.confirmationVariant;
   confirmation.resolve(Boolean(confirmed));
   if (confirmation.previousFocus?.isConnected) confirmation.previousFocus.focus();
 }
 
-async function confirmDiscardUnsaved(action) {
-  if (!hasUnsavedChanges()) return true;
+async function confirmDiscardForView(view, action) {
+  if (!hasUnsavedChangesForView(view)) return true;
   return requestConfirmationDialog({
     title: "未保存の変更があります",
     description: `${action}すると、保存していない変更は失われます。`,
@@ -668,6 +790,10 @@ async function confirmDiscardUnsaved(action) {
     cancelLabel: "このまま編集を続ける",
     confirmTone: "danger",
   });
+}
+
+async function confirmDiscardUnsaved(action) {
+  return confirmDiscardForView(state.activeView, action);
 }
 
 function handleBeforeUnload(event) {
@@ -712,99 +838,358 @@ function handleGlobalShortcut(event) {
   saveUpdates();
 }
 
-function notify({ text, type = "info", autoHide = shouldAutoHideToast(type) }) {
-  const message = $("message");
-  if (!message) return;
-  clearToastTimers();
-  $("messageText").textContent = text;
-  message.classList.remove(
-    "hidden",
-    "is-fading",
-    "success",
-    "error",
-    "warning",
-    "info",
-  );
-  message.classList.add(type);
-  positionToast();
-  showToast(message);
+function notify({
+  text,
+  type = "info",
+  autoHide,
+  scope = state.activeView,
+  source = "",
+  anchorId = "",
+}) {
+  const messageList = $("messageList");
+  if (!messageList) return;
 
-  if (autoHide) {
-    scheduleToastHide(type);
+  const normalizedType = normalizeToastType(type);
+  const messageText = String(text ?? "");
+  const toastScope = normalizeToastScope(scope);
+  const shouldAutoHide = autoHide === undefined
+    ? shouldAutoHideToast(normalizedType)
+    : Boolean(autoHide);
+  syncToastModalState();
+
+  let toast = findToast(toastScope, normalizedType, messageText);
+  if (toast) {
+    clearToastTimeouts(toast);
+    toast.autoHide = shouldAutoHide;
+    toast.source = source || toast.source;
+    toast.anchorId = anchorId || toast.anchorId;
+    toast.phase = "visible";
+    toast.remainingMs = shouldAutoHide ? getToastDuration(normalizedType) : 0;
+    toast.fadeRemainingMs = TOAST_FADE_DURATION;
+  } else {
+    toast = {
+      id: String(toastState.nextId++),
+      type: normalizedType,
+      text: messageText,
+      scope: toastScope,
+      source,
+      anchorId,
+      autoHide: shouldAutoHide,
+      phase: "visible",
+      remainingMs: shouldAutoHide ? getToastDuration(normalizedType) : 0,
+      fadeRemainingMs: TOAST_FADE_DURATION,
+      timerId: null,
+      fadeTimer: null,
+      timerStartedAt: 0,
+      fadeStartedAt: 0,
+      pauseReasons: new Set(),
+    };
+    getScreenToasts(toastScope).push(toast);
+  }
+
+  renderToasts();
+}
+
+function positionToast(anchorId = "") {
+  const region = $("statusRegion");
+  if (!region) return;
+
+  const anchorSelectors = {
+    reports: "#reportPanel .report-toolbar",
+    admin: "#adminReloadButton",
+    settings: "#settingsReloadButton",
+  };
+  const anchor = document.querySelector(
+    anchorId ? `#${anchorId}` : anchorSelectors[state.activeView],
+  );
+  if (!anchor) return;
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const top = Math.max(0, Math.round(anchorRect.bottom + 8));
+  region.style.setProperty("--toast-top", `${top}px`);
+  region.style.setProperty("--toast-right", `${TOAST_RIGHT_INSET}px`);
+}
+
+function shouldAutoHideToast(type) {
+  return type === undefined || TOAST_TYPES.includes(type);
+}
+
+function normalizeToastType(type) {
+  return TOAST_TYPES.includes(type) ? type : "info";
+}
+
+function normalizeToastScope(scope) {
+  return TOAST_SCOPES.includes(scope) ? scope : state.activeView;
+}
+
+function getToastDuration(type) {
+  return TOAST_DURATIONS[type];
+}
+
+function getScreenToasts(scope) {
+  let toasts = toastState.screens.get(scope);
+  if (!toasts) {
+    toasts = [];
+    toastState.screens.set(scope, toasts);
+  }
+  return toasts;
+}
+
+function findToast(scope, type, text) {
+  return (
+    toastState.screens
+      .get(scope)
+      ?.find((item) => item.type === type && item.text === text) || null
+  );
+}
+
+function clearLoadToasts(scope) {
+  const toasts = toastState.screens.get(scope);
+  if (!toasts) return;
+  const remaining = toasts.filter((toast) => {
+    const shouldRemove =
+      toast.source === "load" && ["warning", "error"].includes(toast.type);
+    if (shouldRemove) {
+      toast.removed = true;
+      clearToastTimeouts(toast);
+    }
+    return !shouldRemove;
+  });
+  if (remaining.length) toastState.screens.set(scope, remaining);
+  else toastState.screens.delete(scope);
+  renderToasts();
+}
+
+function findRenderedToast(toastId) {
+  const messageList = $("messageList");
+  if (!messageList) return null;
+  return [...messageList.children].find(
+    (message) => message.dataset.toastId === toastId,
+  ) || null;
+}
+
+function createToastElement(toast) {
+  const message = document.createElement("div");
+  const messageText = document.createElement("span");
+  const closeButton = document.createElement("button");
+
+  message.dataset.toastId = toast.id;
+  message.dataset.toastScope = toast.scope;
+  messageText.className = "message-text";
+  messageText.textContent = toast.text;
+  closeButton.className = "message-close-button";
+  closeButton.type = "button";
+  closeButton.setAttribute("aria-label", "通知を閉じる");
+  closeButton.setAttribute("data-allow-when-busy", "");
+  closeButton.textContent = "×";
+  message.append(messageText, closeButton);
+  return message;
+}
+
+function updateToastElement(message, toast) {
+  message.className = `message ${toast.type}`;
+  if (toast.phase === "fading") message.classList.add("is-fading");
+  message.setAttribute(
+    "role",
+    toast.type === "warning" || toast.type === "error" ? "alert" : "status",
+  );
+  message.setAttribute(
+    "aria-live",
+    toast.type === "warning" || toast.type === "error" ? "assertive" : "polite",
+  );
+  message.dataset.toastId = toast.id;
+  message.dataset.toastScope = toast.scope;
+  message.querySelector(".message-text").textContent = toast.text;
+}
+
+function renderToasts() {
+  const region = $("statusRegion");
+  const messageList = $("messageList");
+  if (!region || !messageList) return;
+
+  const activeToasts = toastState.screens.get(state.activeView) || [];
+  const visibleToasts = activeToasts.slice(0, TOAST_VISIBLE_LIMIT);
+  const visibleIds = new Set(visibleToasts.map((toast) => toast.id));
+  [...messageList.children].forEach((message) => {
+    if (!visibleIds.has(message.dataset.toastId)) message.remove();
+  });
+  visibleToasts.forEach((toast) => {
+    const message = findRenderedToast(toast.id) || createToastElement(toast);
+    updateToastElement(message, toast);
+    messageList.append(message);
+  });
+
+  region.classList.toggle("modal-hidden", toastState.modalOpen);
+  region.setAttribute("aria-hidden", String(toastState.modalOpen));
+  positionToast(visibleToasts[0]?.anchorId || "");
+  syncToastTimers();
+}
+
+function clearToastTimeouts(toast) {
+  if (toast.timerId !== null) clearTimeout(toast.timerId);
+  if (toast.fadeTimer !== null) clearTimeout(toast.fadeTimer);
+  toast.timerId = null;
+  toast.fadeTimer = null;
+  toast.timerStartedAt = 0;
+  toast.fadeStartedAt = 0;
+}
+
+function pauseToastTimer(toast) {
+  if (toast.timerId !== null) {
+    toast.remainingMs = Math.max(
+      0,
+      toast.remainingMs - (Date.now() - toast.timerStartedAt),
+    );
+    clearTimeout(toast.timerId);
+    toast.timerId = null;
+    toast.timerStartedAt = 0;
+  }
+  if (toast.fadeTimer !== null) {
+    toast.fadeRemainingMs = Math.max(
+      0,
+      toast.fadeRemainingMs - (Date.now() - toast.fadeStartedAt),
+    );
+    clearTimeout(toast.fadeTimer);
+    toast.fadeTimer = null;
+    toast.fadeStartedAt = 0;
+    findRenderedToast(toast.id)?.classList.remove("is-fading");
   }
 }
 
-function positionToast() {
+function isToastDisplayed(toast) {
+  const screenToasts = toastState.screens.get(toast.scope);
+  return state.activeView === toast.scope &&
+    Boolean(screenToasts?.slice(0, TOAST_VISIBLE_LIMIT).includes(toast));
+}
+
+function canRunToastTimer(toast) {
+  return toast.autoHide &&
+    isToastDisplayed(toast) &&
+    !toastState.modalOpen &&
+    toast.pauseReasons.size === 0;
+}
+
+function syncToastTimer(toast) {
+  if (!toast.autoHide || toast.removed) {
+    pauseToastTimer(toast);
+    return;
+  }
+  if (!canRunToastTimer(toast)) {
+    pauseToastTimer(toast);
+    return;
+  }
+  if (toast.phase === "fading") {
+    if (toast.fadeRemainingMs <= 0) {
+      removeToast(toast);
+      return;
+    }
+    findRenderedToast(toast.id)?.classList.add("is-fading");
+    if (toast.fadeTimer === null) {
+      toast.fadeStartedAt = Date.now();
+      toast.fadeTimer = setTimeout(() => {
+        toast.fadeTimer = null;
+        toast.fadeRemainingMs = 0;
+        removeToast(toast);
+      }, toast.fadeRemainingMs);
+    }
+    return;
+  }
+  if (toast.timerId !== null) return;
+  if (toast.remainingMs <= 0) {
+    beginToastFade(toast);
+    return;
+  }
+  toast.timerStartedAt = Date.now();
+  toast.timerId = setTimeout(() => {
+    toast.timerId = null;
+    toast.timerStartedAt = 0;
+    toast.remainingMs = 0;
+    beginToastFade(toast);
+  }, toast.remainingMs);
+}
+
+function syncToastTimers() {
+  for (const toasts of toastState.screens.values()) {
+    toasts.forEach(syncToastTimer);
+  }
+}
+
+function beginToastFade(toast) {
+  if (toast.removed || toast.phase === "fading") return;
+  toast.phase = "fading";
+  toast.fadeRemainingMs = TOAST_FADE_DURATION;
+  findRenderedToast(toast.id)?.classList.add("is-fading");
+  syncToastTimer(toast);
+}
+
+function removeToast(toast) {
+  if (!toast || toast.removed) return;
+  toast.removed = true;
+  clearToastTimeouts(toast);
+  const screenToasts = toastState.screens.get(toast.scope);
+  const index = screenToasts?.indexOf(toast) ?? -1;
+  if (index >= 0) screenToasts.splice(index, 1);
+  if (screenToasts?.length === 0) toastState.screens.delete(toast.scope);
+  renderToasts();
+}
+
+function pauseToast(toastId, reason) {
+  const toast = findToastById(toastId);
+  if (!toast || !toast.autoHide) return;
+  toast.pauseReasons.add(reason);
+  pauseToastTimer(toast);
+}
+
+function resumeToast(toastId, reason) {
+  const toast = findToastById(toastId);
+  if (!toast || !toast.autoHide) return;
+  toast.pauseReasons.delete(reason);
+  syncToastTimer(toast);
+}
+
+function findToastById(toastId) {
+  if (!toastId) return null;
+  for (const toasts of toastState.screens.values()) {
+    const toast = toasts.find((item) => item.id === toastId);
+    if (toast) return toast;
+  }
+  return null;
+}
+
+function clearToastInteractionPauses() {
+  for (const toasts of toastState.screens.values()) {
+    toasts.forEach((toast) => toast.pauseReasons.clear());
+  }
+}
+
+function dismissToast(event) {
+  const toastId = event?.target?.closest?.(".message")?.dataset.toastId;
+  const toast = toastId
+    ? findToastById(toastId)
+    : (toastState.screens.get(state.activeView) || [])[0];
+  if (toast) removeToast(toast);
+}
+
+function syncToastModalState() {
+  const modalOpen = Boolean(document.querySelector("dialog[open]"));
+  toastState.modalOpen = modalOpen;
   const region = $("statusRegion");
-  if (!region) return;
-  const preferredSaveButton =
-    state.activeView === "admin"
-      ? $("adminSaveButton") || document.querySelector("[data-save-editor]")
-      : state.activeView === "settings"
-        ? $("saveSettingsButton")
-        : $("saveButton");
-  const hasVisibleSaveButton = Boolean(
-    preferredSaveButton && preferredSaveButton.offsetParent !== null,
-  );
-  const mainPanel = $("mainPanel");
-  if (!hasVisibleSaveButton && !mainPanel) return;
-  const anchor = hasVisibleSaveButton
-    ? preferredSaveButton.getBoundingClientRect()
-    : mainPanel.getBoundingClientRect();
-  const top = hasVisibleSaveButton ? anchor.bottom + 8 : anchor.top + 12;
-  const right = hasVisibleSaveButton
-    ? Math.max(12, window.innerWidth - anchor.right)
-    : 12;
-  region.style.setProperty("--toast-top", `${Math.round(top)}px`);
-  region.style.setProperty("--toast-right", `${Math.round(right)}px`);
-}
-
-function shouldAutoHideToast() {
-  return true;
-}
-
-function clearToastTimers() {
-  if (toastState.hideTimer) clearTimeout(toastState.hideTimer);
-  if (toastState.fadeTimer) clearTimeout(toastState.fadeTimer);
-  toastState.hideTimer = null;
-  toastState.fadeTimer = null;
-}
-
-function scheduleToastHide(type = "info") {
-  const message = $("message");
-  if (!message) return;
-
-  // エラーと警告は読み取る時間を長めにし、いずれも自動で閉じる。
-  const visibleDuration = type === "error" || type === "warning" ? 7000 : 4000;
-  toastState.hideTimer = setTimeout(() => {
-    message.classList.add("is-fading");
-    toastState.fadeTimer = setTimeout(() => {
-      hideToast(message);
-      message.classList.remove("is-fading");
-      clearToastTimers();
-    }, 300);
-  }, visibleDuration);
-}
-
-function dismissToast() {
-  const message = $("message");
-  if (!message) return;
-  clearToastTimers();
-  message.classList.remove("is-fading");
-  hideToast(message);
-}
-
-function showToast(message) {
-  message.classList.remove("hidden");
-}
-
-function hideToast(message) {
-  message.classList.add("hidden");
+  region?.classList.toggle("modal-hidden", modalOpen);
+  region?.setAttribute("aria-hidden", String(modalOpen));
+  syncToastTimers();
 }
 
 function setBusy(busy, action = "") {
+  const previousAction = state.busyAction;
+  const saveBusy =
+    (busy && action === "save") || (!busy && previousAction === "save");
   state.isBusy = busy;
   state.busyAction = busy ? action : "";
+  if (saveBusy) {
+    syncChrome();
+    syncPeriodPresets();
+    return;
+  }
   document.querySelectorAll("button").forEach((button) => {
     if (button.hasAttribute("data-allow-when-busy")) return;
     if (busy) {
@@ -823,14 +1208,64 @@ function setBusy(busy, action = "") {
   syncPeriodPresets();
 }
 
-function switchView(view) {
-  if (state.accessDenied) return;
-  finishEditing();
-  if (view === "admin" && !state.isAdmin) {
-    notify({ text: "管理者機能を利用する権限がありません。", type: "error" });
-    return;
+async function reloadCurrentView() {
+  if (state.activeView === "reports") return refreshData();
+  if (state.activeView === "admin") {
+    if (typeof window.adminMasters?.reload !== "function") {
+      showScreenLoadError("admin", "管理の再読み込み機能を利用できません。", "error");
+      return false;
+    }
+    return window.adminMasters.reload({ manual: true });
   }
-  if (state.activeView === view) return;
+  if (state.activeView === "settings") {
+    if (typeof window.reloadSettings !== "function") {
+      showScreenLoadError("settings", "設定の再読み込み機能を利用できません。", "error");
+      return false;
+    }
+    return window.reloadSettings({ manual: true });
+  }
+  return false;
+}
+
+async function loadViewForSwitch(view, viewSequence) {
+  if (view === "reports") {
+    if (typeof loadData !== "function") {
+      showScreenLoadError("reports", "日報の読み込み機能を利用できません。", "error");
+      return false;
+    }
+    return loadData({
+      preserveDirty: false,
+      forceRefresh: true,
+      transition: true,
+      viewSequence,
+    });
+  }
+  if (view === "admin") {
+    if (typeof window.adminMasters?.activate !== "function") {
+      showScreenLoadError("admin", "管理の読み込み機能を利用できません。", "error");
+      return false;
+    }
+    return window.adminMasters.activate({ viewSequence });
+  }
+  if (view === "settings") {
+    if (typeof window.loadSettings !== "function") {
+      showScreenLoadError("settings", "設定の読み込み機能を利用できません。", "error");
+      return false;
+    }
+    return window.loadSettings({
+      manual: false,
+      transition: true,
+      confirm: false,
+      viewSequence,
+    });
+  }
+  return false;
+}
+
+function completeViewSwitch(view, previousView) {
+  discardUnsavedChangesForView(previousView);
+  const sequence = ++viewSwitchSequence;
+  clearToastInteractionPauses();
   state.activeView = view;
   const isSettings = view === "settings";
   const isAdmin = view === "admin";
@@ -839,15 +1274,28 @@ function switchView(view) {
   $("reportPanel").classList.toggle("hidden", isSettings || isAdmin);
   updateViewChrome();
   syncChrome();
-  if (isAdmin) {
-    window.adminMasters?.ensureLoaded?.();
-  } else if (!isSettings) {
-    // Restore the already-selected period before the report content is
-    // rendered. The control may have been measured while hidden, so this is
-    // an initial placement rather than an animated user change.
-    syncPeriodPresets({ immediate: true });
-    renderTable();
+  renderToasts();
+  if (!isSettings && !isAdmin) syncPeriodPresets({ immediate: true });
+  const result = loadViewForSwitch(view, sequence);
+  if (result && typeof result.then === "function") {
+    return result.then((loaded) =>
+      sequence === viewSwitchSequence ? loaded : false,
+    );
   }
+  return sequence === viewSwitchSequence ? result : false;
+}
+
+function switchView(view) {
+  if (!TOAST_SCOPES.includes(view)) return false;
+  if (state.activeView === view) return true;
+  finishEditing();
+  const previousView = state.activeView;
+  if (hasUnsavedChangesForView(previousView)) {
+    return confirmDiscardForView(previousView, "画面を移動").then((confirmed) =>
+      confirmed ? completeViewSwitch(view, previousView) : false,
+    );
+  }
+  return completeViewSwitch(view, previousView);
 }
 
 function updateViewAvailability() {
@@ -856,10 +1304,8 @@ function updateViewAvailability() {
   if (adminButton) {
     adminButton.classList.toggle("hidden", state.accessDenied || !state.isAdmin);
   }
-  $("dailyViewButton")?.classList.toggle("hidden", state.accessDenied);
-  $("openSettingsButton")?.classList.toggle("hidden", state.accessDenied);
-  if (state.accessDenied) return;
-  if (!state.isAdmin && state.activeView === "admin") switchView("reports");
+  $("dailyViewButton")?.classList.remove("hidden");
+  $("openSettingsButton")?.classList.remove("hidden");
 }
 
 function updateViewChrome() {
@@ -889,11 +1335,6 @@ function updateViewChrome() {
       !isReportView || !state.isSuperior || isSettingsView || isAdminView,
     );
   }
-  if (state.accessDenied) {
-    $("dailyViewButton")?.classList.add("hidden");
-    $("adminViewButton")?.classList.add("hidden");
-    $("openSettingsButton")?.classList.add("hidden");
-  }
 }
 
 function syncCurrentUserDisplay() {
@@ -920,7 +1361,18 @@ window.addEventListener("pywebviewready", async () => {
   bindEvents();
   syncChrome();
   updateViewChrome();
-  const initial = await window.pywebview.api.get_initial_state();
+  let initial;
+  try {
+    initial = await window.pywebview.api.get_initial_state();
+  } catch (error) {
+    console.error("初期状態の取得に失敗しました。", error);
+    showScreenLoadError(
+      "reports",
+      REPORT_LOAD_ERROR_MESSAGE,
+      "error",
+    );
+    return;
+  }
   state.employeeId = initial.employee_id || "";
   state.isAdmin = initial.is_admin === true;
   window.adminMasters?.setMinimumFiscalYear?.(
@@ -934,13 +1386,18 @@ window.addEventListener("pywebviewready", async () => {
   fillSettings(initial.settings || {});
   restoreUiState(initial.settings || {});
   if (state.accessDenied) {
-    showAccessDenied(initial.access_denied_message);
+    clearReportViewForLoadFailure();
+    showScreenLoadError(
+      "reports",
+      initial.access_denied_message || REPORT_LOAD_ERROR_MESSAGE,
+      "error",
+    );
     return;
   }
   if (!initial.settings_complete) {
-    showSettings(true);
-    notify({ text: "初回設定を行ってください。", type: "info" });
+    setSettingsSetupNotice?.(true);
+    await switchView("settings");
     return;
   }
-  await loadData();
+  await loadData({ forceRefresh: true });
 });

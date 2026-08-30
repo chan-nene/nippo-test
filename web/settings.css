@@ -15,7 +15,7 @@ html body #settingsPanel {
 }
 
 html body .settings-card {
-  max-width: 880px;
+  max-width: none;
   background: var(--surface);
 }
 
@@ -46,6 +46,15 @@ html body .settings-section-body {
   gap: 18px;
 }
 
+html body .settings-section:not(#settingsGeneralPanel),
+html body #settingsPanel .settings-card > .actions {
+  max-width: 880px;
+}
+
+html body #settingsGeneralPanel .settings-field:not(.settings-primary-field) {
+  max-width: 720px;
+}
+
 html body .settings-field {
   display: grid;
   min-width: 0;
@@ -61,6 +70,32 @@ html body .settings-field > :is(span:first-child, .settings-field-label) {
   margin: 0;
   color: var(--text);
   font-weight: 600;
+}
+
+html body .settings-primary-field > label {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+html body .settings-primary-control {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 510px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+html body .settings-primary-actions {
+  display: flex;
+  grid-column: 3;
+  align-items: center;
+  gap: 8px;
+}
+
+html body #settingsPanel .settings-primary-field > .field-error {
+  grid-column: 2;
 }
 
 html body .settings-card input[type="text"],
@@ -93,6 +128,14 @@ html body .settings-card input:focus-visible {
 }
 
 html body #settingsPanel .field-error {
+  color: var(--error);
+  font-size: var(--font-12);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+html body #settingsPanel .settings-save-error {
+  margin: 0 0 8px;
   color: var(--error);
   font-size: var(--font-12);
   font-weight: 600;

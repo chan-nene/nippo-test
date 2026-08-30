@@ -40,13 +40,13 @@
           label: "所属区分",
           type: "affiliation_type",
           required: true,
-          defaultValue: "organization",
+          defaultValue: "unassigned",
         },
         {
           key: "organization_id",
           label: "所属組織",
           type: "organization",
-          required: true,
+          required: false,
         },
         {
           key: "can_input_own_report",
@@ -234,16 +234,17 @@
   let isLoaded = false;
   let isLoading = false;
   let isInitialized = false;
-  const MIN_FISCAL_YEAR = 2026;
+  let minimumFiscalYear = 0;
   let activeMaster = "user_master";
   let activeFiscalYear = Math.max(
-    MIN_FISCAL_YEAR,
+    minimumFiscalYear,
     fiscalYearForDate(new Date()),
   );
   let calendarFocusDate = "";
   let isChangingFiscalYear = false;
   let searchText = "";
   let nextRowId = 1;
+  let userTable = null;
   const drafts = new Map();
   const collapsedTeamIds = new Set();
   const expandedOrganizationIds = new Set();
@@ -366,7 +367,9 @@
           can_input_own_report: String(user.can_input_own_report ?? "1"),
           employment_type: String(user.employment_type || "regular"),
           is_admin: String(user.is_admin || "0"),
-          affiliation_type: "organization",
+          affiliation_type: convertibleIds.has(organizationId)
+            ? "organization"
+            : "unassigned",
           organization_id: convertibleIds.has(organizationId) ? organizationId : "",
           member_order: String(user.display_order || ""),
         };
@@ -924,7 +927,7 @@
       const calendarDraft = drafts.get("calendar");
       if (calendarDraft?.entries.length === 0) {
         activeFiscalYear = Math.max(
-          MIN_FISCAL_YEAR,
+          minimumFiscalYear,
           fiscalYearForDate(new Date()),
         );
         ensureFiscalYearEntries(activeFiscalYear);
@@ -1347,7 +1350,7 @@
     if (![-1, 1].includes(Number(direction))) return;
     if (isChangingFiscalYear) return;
     const targetFiscalYear = activeFiscalYear + Number(direction);
-    if (targetFiscalYear < MIN_FISCAL_YEAR) return;
+    if (targetFiscalYear < minimumFiscalYear) return;
     const draft = drafts.get("calendar");
     if (!draft) return;
     if (!hasCalendarEntriesForFiscalYear(targetFiscalYear)) {
@@ -1386,7 +1389,7 @@
       !draft ||
       !definition ||
       !date ||
-      fiscalYearForDate(date) < MIN_FISCAL_YEAR
+      fiscalYearForDate(date) < minimumFiscalYear
     ) return;
     const index = draft.entries.findIndex(
       (entry) => valueFor(entry, "date") === dateText,
@@ -1988,12 +1991,12 @@
       definition.key === "team_master"
         ? "チームを検索"
         : definition.key === "user_master"
-          ? "社員番号・氏名を検索"
+          ? "全列を検索"
           : "日付を検索";
     searchInput.setAttribute(
       "aria-label",
       definition.key === "user_master"
-        ? "社員番号・氏名を検索"
+        ? "全列を検索"
         : definition.key === "team_master"
           ? "チームを検索"
           : "日付を検索",
@@ -2007,13 +2010,48 @@
   function filteredEntries() {
     const draft = getDraft();
     if (!searchText) return draft.entries;
-    const searchableKeys =
-      activeMaster === "user_master" ? ["employee_id", "display_name"] : null;
+    if (activeMaster === "user_master") {
+      return draft.entries.filter((entry) =>
+        Object.entries(createUserTableRow(entry)).some(
+          ([key, value]) =>
+            !["id", "entry"].includes(key) &&
+            String(value ?? "").toLocaleLowerCase("ja").includes(searchText),
+        ),
+      );
+    }
     return draft.entries.filter((entry) =>
-      (searchableKeys || Object.keys(entry.values)).some((key) =>
+      Object.keys(entry.values).some((key) =>
         String(entry.values[key] ?? "").toLocaleLowerCase("ja").includes(searchText),
       ),
     );
+  }
+
+  // ユーザー表の表示値を一か所で組み立て、描画と全列検索で同じ文言を使う。
+  function createUserTableRow(entry) {
+    return {
+      id: entry.id,
+      employee_id: valueFor(entry, "employee_id") || "—",
+      display_name:
+        valueFor(entry, "display_name") || valueFor(entry, "employee_id") || "—",
+      employment_type: employmentTypeLabel(valueFor(entry, "employment_type")),
+      administrator: valueFor(entry, "is_admin") === "1" ? "管理者" : "",
+      own_report: valueFor(entry, "can_input_own_report") === "0" ? "" : "要",
+      affiliation: affiliationLabel(entry),
+      comment_target: commentAssignmentSummary(valueFor(entry, "employee_id")),
+      entry,
+    };
+  }
+
+  // 表示だけをタグ化し、Tabulatorの値・並び替え・検索用文字列はそのまま保持する。
+  function userStatusTagFormatter(modifier, shouldTag = () => true) {
+    return (cell) => {
+      const value = String(cell.getValue() ?? "");
+      if (!value || !shouldTag(value)) return value;
+      const tag = document.createElement("span");
+      tag.className = `user-status-tag ${modifier}`;
+      tag.textContent = value;
+      return tag;
+    };
   }
 
   // 現在のマスターとモーダル状態に応じた一覧レンダラーを選び、必要なSortableを管理する。
@@ -2021,6 +2059,7 @@
   function renderTable() {
     if (activeMaster === "user_master" && userEditorModalState) return;
     if (activeMaster === "team_master" && teamEditorModalState) return;
+    if (activeMaster !== "user_master") destroyUserTable();
     if (activeMaster !== "team_master") destroyOrganizationSortables();
     const draft = getDraft();
     if (activeMaster === "team_master") {
@@ -2034,6 +2073,13 @@
     }
     renderUserList(draft);
     renderOrganizationMigrationNotice();
+  }
+
+  // Tabulatorが一覧コンテナへ付与したクラスと内部DOMを、他マスターへ移る前に戻す。
+  function destroyUserTable() {
+    if (!userTable) return;
+    userTable.destroy();
+    userTable = null;
   }
 
   // 旧形式の組織移行で解決が必要な件数と旧担当設定を一覧上部に通知する。
@@ -2073,6 +2119,7 @@
   function renderUserList(draft) {
     const entries = filteredEntries().slice().sort(compareUserListEntries);
     const wrap = byId("adminTableWrap");
+    destroyUserTable();
     wrap.replaceChildren();
     if (!entries.length) {
       const empty = document.createElement("div");
@@ -2083,69 +2130,73 @@
       wrap.append(empty);
       return;
     }
-
-    const table = document.createElement("table");
-    table.className = "organization-user-table";
-    const head = document.createElement("thead");
-    const headerRow = document.createElement("tr");
-    [
-      "社員番号",
-      "氏名",
-      "雇用区分",
-      "権限",
-      "日報入力",
-      "所属組織",
-      "コメント対象",
-    ].forEach((label) => {
-      const th = document.createElement("th");
-      th.scope = "col";
-      th.textContent = label;
-      headerRow.append(th);
+    if (typeof window.Tabulator !== "function") return;
+    const rows = entries.map(createUserTableRow);
+    userTable = new window.Tabulator(wrap, {
+      data: rows,
+      index: "id",
+      layout: "fitColumns",
+      height: "auto",
+      selectableRows: 1,
+      rowFormatter: (row) => {
+        row.getElement().dataset.rowId = row.getData().id;
+        row.getElement().tabIndex = 0;
+      },
+      placeholder: searchText
+        ? "検索条件に一致するユーザーがいません。"
+        : "ユーザーがいません。",
+      columns: [
+        { title: "社員番号", field: "employee_id", minWidth: 105 },
+        { title: "氏名", field: "display_name", minWidth: 120 },
+        {
+          title: "雇用区分",
+          field: "employment_type",
+          minWidth: 92,
+          formatter: userStatusTagFormatter("is-employment"),
+        },
+        {
+          title: "権限",
+          field: "administrator",
+          minWidth: 78,
+          formatter: userStatusTagFormatter(
+            "is-administrator",
+            (value) => value === "管理者",
+          ),
+        },
+        {
+          title: "日報入力",
+          field: "own_report",
+          minWidth: 82,
+          formatter: userStatusTagFormatter(
+            "is-report-required",
+            (value) => value === "要",
+          ),
+        },
+        { title: "所属組織", field: "affiliation", minWidth: 180, widthGrow: 2 },
+        { title: "コメント対象", field: "comment_target", minWidth: 130, widthGrow: 1 },
+        {
+          title: "",
+          field: "actions",
+          width: 92,
+          hozAlign: "center",
+          headerSort: false,
+          resizable: false,
+          formatter: (cell) => {
+            const entry = cell.getRow().getData().entry;
+            const label = valueFor(entry, "display_name") || valueFor(entry, "employee_id") || "ユーザー";
+            const actions = document.createElement("div");
+            actions.className = "api-key-actions";
+            actions.setAttribute("role", "toolbar");
+            actions.setAttribute("aria-label", `${label}の操作`);
+            actions.append(
+              createUserRowAction("edit", entry, label),
+              createUserRowAction("delete", entry, label),
+            );
+            return actions.outerHTML;
+          },
+        },
+      ],
     });
-    const actionHeading = document.createElement("th");
-    actionHeading.className = "organization-user-actions-heading";
-    actionHeading.scope = "col";
-    actionHeading.setAttribute("aria-label", "操作");
-    headerRow.append(actionHeading);
-    head.append(headerRow);
-    const body = document.createElement("tbody");
-    entries.forEach((entry) => {
-      const row = document.createElement("tr");
-      row.tabIndex = 0;
-      row.dataset.rowId = entry.id;
-      const employeeId = document.createElement("td");
-      employeeId.textContent = valueFor(entry, "employee_id") || "—";
-      const name = document.createElement("td");
-      name.textContent = valueFor(entry, "display_name") || valueFor(entry, "employee_id") || "—";
-      const employment = document.createElement("td");
-      employment.textContent = employmentTypeLabel(valueFor(entry, "employment_type"));
-      const administrator = document.createElement("td");
-      administrator.textContent = valueFor(entry, "is_admin") === "1" ? "管理者" : "一般";
-      const team = document.createElement("td");
-      team.textContent = affiliationLabel(entry);
-      const managed = document.createElement("td");
-      managed.textContent = commentAssignmentSummary(
-        valueFor(entry, "employee_id"),
-      );
-      const ownReport = document.createElement("td");
-      ownReport.textContent = valueFor(entry, "can_input_own_report") === "0" ? "不要" : "要";
-      const actions = document.createElement("td");
-      actions.className = "organization-user-actions";
-      const actionGroup = document.createElement("div");
-      actionGroup.className = "api-key-actions";
-      actionGroup.setAttribute("role", "toolbar");
-      const displayLabel = valueFor(entry, "display_name") || valueFor(entry, "employee_id") || "ユーザー";
-      actionGroup.setAttribute("aria-label", displayLabel + "の操作");
-      actionGroup.append(
-        createUserRowAction("edit", entry, displayLabel),
-        createUserRowAction("delete", entry, displayLabel),
-      );
-      actions.append(actionGroup);
-      row.append(employeeId, name, employment, administrator, ownReport, team, managed, actions);
-      body.append(row);
-    });
-    table.append(head, body);
-    wrap.append(table);
   }
 
   // 対象年度の休日行を月別カレンダーへ描画し、年度移動・休日件数・編集操作を組み立てる。
@@ -2229,7 +2280,7 @@
     button.className = "fiscal-year-button";
     button.dataset.calendarYearAction = String(direction);
     button.setAttribute("aria-label", label);
-    button.disabled = direction < 0 && activeFiscalYear <= MIN_FISCAL_YEAR;
+    button.disabled = direction < 0 && activeFiscalYear <= minimumFiscalYear;
     button.append(
       createTeamSvgIcon(
         direction < 0 ? "m15 18-6-6 6-6" : "m9 18 6-6-6-6",
@@ -3846,28 +3897,30 @@
     assignment.values.target_employee_ids = "";
   }
 
-  // ユーザーの所属を部長またはorganization:IDの選択値へ変換する。
+  // ユーザーの所属を、所属登録なし・部長・organization:IDの選択値へ変換する。
   function affiliationValue(entry) {
-    return valueFor(entry, "affiliation_type") === "director"
-      ? "director"
-      : `organization:${valueFor(entry, "organization_id")}`;
-  }
-
-  // ユーザーの所属を部長または組織パスの表示名へ変換し、未設定時は明示的なラベルを返す。
-  function affiliationLabel(entry) {
-    if (valueFor(entry, "affiliation_type") === "director") return "部長";
+    const affiliationType = valueFor(entry, "affiliation_type");
     const organizationId = valueFor(entry, "organization_id");
-    return teamPathLabel(teamEntryFor(organizationId)) || "所属未設定";
+    if (affiliationType === "director") return "director";
+    if (affiliationType !== "organization" || !organizationId) return "unassigned";
+    return `organization:${organizationId}`;
   }
 
-  // 部長または指定組織に直接所属するユーザーだけを抽出し、ユーザー一覧と同じ順序で並べる。
+  // ユーザーの所属を部長・組織パス・所属登録なしの表示名へ変換する。
+  function affiliationLabel(entry) {
+    const affiliationType = valueFor(entry, "affiliation_type");
+    if (affiliationType === "director") return "部長";
+    if (affiliationType === "unassigned") return "所属登録なし";
+    const organizationId = valueFor(entry, "organization_id");
+    return teamPathLabel(teamEntryFor(organizationId)) || "所属登録なし";
+  }
+
+  // 同じ所属区分・組織IDのユーザーだけを抽出し、ユーザー一覧と同じ順序で並べる。
   function directMembersFor(affiliationType, organizationId) {
     return (drafts.get("user_master")?.entries || [])
       .filter((entry) =>
-        affiliationType === "director"
-          ? valueFor(entry, "affiliation_type") === "director"
-          : valueFor(entry, "affiliation_type") === "organization" &&
-            valueFor(entry, "organization_id") === organizationId,
+        valueFor(entry, "affiliation_type") === affiliationType &&
+          valueFor(entry, "organization_id") === organizationId,
       )
       .sort(compareUserListEntries);
   }
@@ -3892,13 +3945,13 @@
     return "個別設定（" + count + "人）";
   }
 
-  // 部長、課、係を階層順の所属選択肢へ展開する。ユーザーの移動先と編集フォームで同じ選択肢を使う。
+  // 所属登録なし、部長、課、係を階層順の所属選択肢へ展開する。ユーザーの移動先と編集フォームで同じ選択肢を使う。
   function organizationAffiliationChoices() {
     const teams = drafts.get("team_master")?.entries || [];
     const departments = teams
       .filter((entry) => valueFor(entry, "team_type") === "department")
       .sort(compareTeamEntries);
-    const choices = [["director", "部長"]];
+    const choices = [["unassigned", "所属登録なし"], ["director", "部長"]];
     departments.forEach((department) => {
       const departmentId = valueFor(department, "team_id");
       choices.push([`organization:${departmentId}`, teamPathLabel(department)]);
@@ -3958,7 +4011,10 @@
         return;
       }
     }
-    if (nextValue === "director") {
+    if (nextValue === "unassigned") {
+      user.values.affiliation_type = "unassigned";
+      user.values.organization_id = "";
+    } else if (nextValue === "director") {
       user.values.affiliation_type = "director";
       user.values.organization_id = "";
       user.values.can_input_own_report = "0";
@@ -4127,18 +4183,14 @@
     const affiliationSelect = document.createElement("select");
     affiliationSelect.dataset.userAffiliation = "true";
     const currentAffiliation = affiliationValue(entry);
-    const emptyOption = document.createElement("option");
-    emptyOption.value = "";
-    emptyOption.textContent = "所属を選択";
-    affiliationSelect.append(emptyOption);
     organizationAffiliationChoices().forEach(([value, label]) => {
       const option = document.createElement("option");
       option.value = value;
       option.textContent = label;
       affiliationSelect.append(option);
     });
-    affiliationSelect.value = currentAffiliation === "organization:" ? "" : currentAffiliation;
-    affiliationSelect.required = true;
+    affiliationSelect.value = currentAffiliation;
+    affiliationSelect.required = false;
     affiliationField.append(affiliationLabelElement, affiliationSelect);
 
     ["employment_type", "is_admin", "can_input_own_report"].forEach((key) => {
@@ -4179,12 +4231,15 @@
     const select = document.createElement("select");
     select.dataset.commentTargetType = "true";
     const isDirector = valueFor(user, "affiliation_type") === "director";
+    const hasOrganization =
+      valueFor(user, "affiliation_type") === "organization" &&
+      Boolean(valueFor(user, "organization_id"));
     const isTemporary = valueFor(user, "employment_type") === "temporary";
     const organizationChoices = allowedOrganizationTargets(user).map((entry) => {
       const organizationId = valueFor(entry, "team_id");
       return ["organization:" + organizationId, teamPathLabel(entry)];
     });
-    const choices = isTemporary
+    const choices = isTemporary || (!isDirector && !hasOrganization)
       ? [["none", "なし"]]
       : isDirector
       ? [["none", "なし"], ["departments", "複数課"]]
@@ -4409,7 +4464,11 @@
       } else if (column.type === "team_type") {
         choices = [["department", "課"], ["section", "係"]];
       } else if (column.type === "affiliation_type") {
-        choices = [["organization", "課・係"], ["director", "部長"]];
+        choices = [
+          ["unassigned", "所属登録なし"],
+          ["organization", "課・係"],
+          ["director", "部長"],
+        ];
       } else if (column.type === "commenter_scope") {
         choices = [["large", "課"], ["medium", "係"], ["custom", "カスタム"]];
       } else if (column.type === "small_team") {
@@ -4643,6 +4702,14 @@
     hasUnsaved,
     save,
     syncChrome: syncAdminChrome,
+    // バックエンドの年度ポリシーを反映し、画面側に年度の固定値を重複させない。
+    setMinimumFiscalYear(value) {
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed) || parsed < 1) return;
+      minimumFiscalYear = parsed;
+      activeFiscalYear = Math.max(activeFiscalYear, minimumFiscalYear);
+      if (isLoaded) render();
+    },
     // ログイン中の社員番号を記録し、管理者保護の判定に使う。読込済みなら保護対象表示を直ちに再描画する。
     setCurrentEmployeeId(employeeId) {
       currentEmployeeId = String(employeeId || "");

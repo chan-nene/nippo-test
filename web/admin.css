@@ -5074,3 +5074,93 @@ html body #adminPanel .organization-browser-v2 .organization-department-list > .
   min-width: 0;
   max-width: none;
 }
+/* Tabulator-backed user master. Keep the existing admin palette and density. */
+html body #adminPanel .tabulator {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--font-12);
+}
+
+html body #adminPanel .tabulator .tabulator-header,
+html body #adminPanel .tabulator .tabulator-header .tabulator-col {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text-strong);
+}
+
+html body #adminPanel .tabulator .tabulator-row {
+  min-height: 42px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+html body #adminPanel .tabulator .tabulator-row:hover,
+html body #adminPanel .tabulator .tabulator-row.tabulator-selected {
+  background: var(--surface-hover);
+}
+
+html body #adminPanel .tabulator .tabulator-cell {
+  border-color: var(--border);
+  padding: 10px 11px;
+}
+
+html body #adminPanel .tabulator .tabulator-footer {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+/* The shared table wrapper fills the workspace for other master screens.
+   User Tabulator tables should instead end immediately after the rendered rows. */
+html body #adminPanel .admin-workspace.is-user-master
+  .admin-table-wrap.tabulator {
+  height: auto !important;
+  min-height: 0;
+  flex: 0 1 auto;
+  align-self: stretch;
+  overflow: hidden;
+}
+
+html body #adminPanel .admin-workspace.is-user-master
+  .tabulator-tableholder {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+html body #adminPanel .user-status-tag {
+  display: inline-flex;
+  width: max-content;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px 1px;
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: max(1px, calc(var(--ui-font-size) - 2px));
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+html body #adminPanel .user-status-tag.is-employment {
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+html body #adminPanel .user-status-tag.is-administrator {
+  background: oklab(0.683029 -0.16619 0.102668 / 0.15);
+  color: #008635;
+}
+
+html[data-theme="dark"] body #adminPanel
+  .user-status-tag.is-administrator {
+  color: #04b84c;
+}
+
+html body #adminPanel .user-status-tag.is-report-required {
+  background: var(--dirty);
+  color: var(--warning);
+}

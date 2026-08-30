@@ -251,11 +251,6 @@ html body .period-control input[type="date"] {
   pointer-events: none;
 }
 
-html body .period-separator {
-  color: var(--text-muted);
-  font-weight: 700;
-}
-
 html body .missing-filter-label {
   white-space: nowrap;
 }

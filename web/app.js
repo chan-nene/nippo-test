@@ -276,42 +276,7 @@ function bindEvents() {
     if (button) setFontSize(button.dataset.fontSize);
   });
   initializeColorThemeControl();
-  ["startDate", "endDate", "missingCommentStartDate"].forEach((inputId) => {
-    const input = $(inputId);
-    if (!input) return;
-    const field = input.closest(".period-field-group");
-    const isNativeOverlayField = field?.classList.contains("native-date-picker-field");
-    if (inputId === "startDate" || inputId === "endDate") {
-      input.addEventListener("change", handleDateChange);
-    }
-    if (isNativeOverlayField) {
-      input.addEventListener("input", () => syncDateInputDisplay(inputId));
-      input.addEventListener("change", () => syncDateInputDisplay(inputId));
-      field?.addEventListener("click", (event) => {
-        event.preventDefault();
-        openDatePickerFromField(input);
-      });
-      return;
-    }
-    field?.addEventListener("pointerdown", () => {
-      clearDateInputSelection(input);
-      field?.classList.add("is-pointer-focused");
-    });
-    field?.addEventListener("selectstart", (event) => {
-      event.preventDefault();
-      clearDateInputSelection(input);
-    });
-    input.addEventListener("keydown", () => {
-      field?.classList.remove("is-pointer-focused");
-    });
-    input.addEventListener("blur", () => {
-      field?.classList.remove("is-pointer-focused");
-    });
-    field?.addEventListener("click", () => {
-      clearDateInputSelection(input);
-      openDatePickerFromField(input);
-    });
-  });
+  initializeFlatpickrDateInputs();
 
   initializePeriodPresetControl();
 
@@ -366,6 +331,61 @@ function bindEvents() {
   );
 }
 
+function initializeFlatpickrDateInputs() {
+  if (typeof window.flatpickr !== "function") return;
+  const locale = window.flatpickr.l10ns?.ja || {};
+  const common = {
+    locale,
+    dateFormat: "Y-m-d",
+    altInput: true,
+    altFormat: "Y/m/d",
+    altInputClass: "period-field-flatpickr-input",
+    allowInput: false,
+    disableMobile: true,
+    onReady: (_, __, instance) => {
+      instance.altInput?.setAttribute(
+        "aria-label",
+        instance.input.getAttribute("aria-label") || "日付",
+      );
+      instance.input.closest(".period-field-group")?.addEventListener("click", (event) => {
+        if (event.target === instance.altInput) return;
+        instance.open();
+      });
+    },
+  };
+  const rangeInput = $("periodDateRange");
+  const settingsStart = $("missingCommentStartDate");
+  if (rangeInput) {
+    window.flatpickr(rangeInput, {
+      ...common,
+      mode: "range",
+      locale: { ...locale, rangeSeparator: " 〜 " },
+      onReady: (_, __, instance) => {
+        instance.altInput?.setAttribute("aria-label", "日報の期間");
+        instance.input.closest(".period-field-group")?.addEventListener("click", (event) => {
+          if (event.target === instance.altInput) return;
+          instance.open();
+        });
+        syncReportDatePicker();
+      },
+      onChange: (selectedDates, __, instance) => {
+        const format = (date) => instance.formatDate(date, "Y-m-d");
+        $("startDate").value = selectedDates[0] ? format(selectedDates[0]) : "";
+        $("endDate").value = selectedDates[1] ? format(selectedDates[1]) : "";
+        if (selectedDates.length === 2) void handleDateChange();
+      },
+    });
+  }
+  if (settingsStart) window.flatpickr(settingsStart, { ...common });
+}
+
+function syncReportDatePicker() {
+  const picker = $("periodDateRange")?._flatpickr;
+  if (!picker) return;
+  const dates = [$("startDate")?.value, $("endDate")?.value].filter(Boolean);
+  picker.setDate(dates, false);
+}
+
 function openResetColumnWidthsDialog() {
   const dialog = $("resetColumnWidthsDialog");
   if (typeof dialog.showModal === "function") dialog.showModal();
@@ -379,31 +399,9 @@ function closeResetColumnWidthsDialog() {
   else dialog.removeAttribute("open");
 }
 
-function openDatePickerFromField(input) {
-  if (typeof input?.showPicker !== "function") return;
-  try {
-    input.showPicker();
-  } catch {
-    // The browser may already have opened the native picker from its icon.
-  }
-}
-
-function syncDateInputDisplay(inputId) {
+function syncFlatpickrDateInput(inputId) {
   const input = $(inputId);
-  const display = $(`${inputId}Display`);
-  if (!input || !display) return;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value);
-  display.textContent = match ? `${match[1]}/${match[2]}/${match[3]}` : "";
-}
-
-function clearDateInputSelection(input) {
-  const selection = window.getSelection?.();
-  selection?.removeAllRanges();
-  try {
-    input?.setSelectionRange?.(0, 0);
-  } catch {
-    // Chromium does not expose a text range for date inputs.
-  }
+  input?._flatpickr?.setDate(input.value || null, false);
 }
 
 function restoreUiState(settings) {
@@ -925,6 +923,9 @@ window.addEventListener("pywebviewready", async () => {
   const initial = await window.pywebview.api.get_initial_state();
   state.employeeId = initial.employee_id || "";
   state.isAdmin = initial.is_admin === true;
+  window.adminMasters?.setMinimumFiscalYear?.(
+    initial.calendar_min_fiscal_year,
+  );
   window.adminMasters?.setCurrentEmployeeId?.(state.employeeId);
   state.accessDenied =
     initial.access_denied === true || initial.employee_registered === false;

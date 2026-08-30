@@ -564,8 +564,7 @@ function exitMissingCommentsFilter() {
 }
 
 function syncReportDateDisplays() {
-  syncDateInputDisplay("startDate");
-  syncDateInputDisplay("endDate");
+  syncReportDatePicker();
 }
 
 function getPeriodPresetOptions() {
@@ -1155,30 +1154,13 @@ function reapplyDirtyEditsToRows() {
 
 async function handleDateChange() {
   finishEditing();
-  setFieldError("periodError", "", ["startDate", "endDate"]);
   const startDate = $("startDate").value;
   const endDate = $("endDate").value;
-  if (!startDate || !endDate) {
-    setFieldError(
-      "periodError",
-      "開始日と終了日を入力してください。",
-      ["startDate", "endDate"],
-    );
-    return;
-  }
-  if (startDate > endDate) {
-    setFieldError(
-      "periodError",
-      "開始日は終了日以前にしてください。",
-      ["startDate", "endDate"],
-    );
-    return;
-  }
+  if (!startDate || !endDate || startDate > endDate) return;
   if (!(await confirmDiscardUnsaved("日付範囲を変更"))) {
     $("startDate").value = state.startDate;
     $("endDate").value = state.endDate;
     syncReportDateDisplays();
-    setFieldError("periodError", "", ["startDate", "endDate"]);
     return;
   }
   discardDirtyEdits();
@@ -1194,7 +1176,6 @@ async function handleDateChange() {
 
 async function shiftDateRange(direction) {
   finishEditing();
-  setFieldError("periodError", "", ["startDate", "endDate"]);
   const startInput = $("startDate");
   const endInput = $("endDate");
   const currentStartDate = startInput.value || state.startDate;
@@ -1256,7 +1237,6 @@ function formatDisplayDateHTML(value) {
 async function applyPreset(presetName) {
   if (presetName !== "missing" && !PERIOD_MODES.includes(presetName)) return;
   finishEditing();
-  setFieldError("periodError", "", ["startDate", "endDate"]);
   const action = presetName === "missing" ? "表示を切り替え" : "日付範囲を変更";
   if (!(await confirmDiscardUnsaved(action))) return;
   discardDirtyEdits();

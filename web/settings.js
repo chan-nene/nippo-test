@@ -10,7 +10,7 @@ function fillSettings(settings) {
   );
   $("defaultEndOffsetDays").value = String(clampNumber(endOffset, 0, 5));
   $("missingCommentStartDate").value = settings.missing_comment_start_date || "";
-  syncDateInputDisplay("missingCommentStartDate");
+  syncFlatpickrDateInput("missingCommentStartDate");
   $("includeTodayInMissingComments").checked = Boolean(
     settings.include_today_in_missing_comments,
   );
@@ -94,13 +94,23 @@ function validateSettingsInputs() {
 }
 
 function getSettingsPayload() {
+  const missingCommentStartInput = $("missingCommentStartDate");
+  const missingCommentStartPicker = missingCommentStartInput?._flatpickr;
+  const missingCommentStartDate = missingCommentStartPicker
+    ? missingCommentStartPicker.selectedDates[0]
+      ? missingCommentStartPicker.formatDate(
+          missingCommentStartPicker.selectedDates[0],
+          "Y-m-d",
+        )
+      : ""
+    : missingCommentStartInput?.value || "";
   return {
     users_dir: $("usersDir").value,
     comments_dir: $("commentsDir").value,
     common_dir: $("commonDir").value,
     default_start_offset_days: -Number($("defaultStartOffsetDays").value),
     default_end_offset_days: Number($("defaultEndOffsetDays").value),
-    missing_comment_start_date: $("missingCommentStartDate").value,
+    missing_comment_start_date: missingCommentStartDate,
     include_today_in_missing_comments: $("includeTodayInMissingComments").checked,
     comment_signature: $("commentSignature").value,
     // Theme selection lives in the title bar. Keep its value in the settings

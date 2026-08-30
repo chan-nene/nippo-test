@@ -158,7 +158,6 @@
   --cell-padding-y: 9px;
   --date-cell-padding-x: 10px;
   --date-column-width: 140px;
-  --period-date-padding-inline: 0.85em;
   --period-date-content-gap: 0.55em;
   --period-date-icon-size: 1em;
   --badge-height: 17px;
@@ -406,77 +405,186 @@ html body .hidden {
   display: none !important;
 }
 
-/* Shared native date picker surface. The transparent input keeps the native
-   picker and keyboard semantics while the visible value is rendered below it
-   so Chromium's focused date segment is not painted over the text. */
-html body :is(#settingsPanel, #reportPanel) .period-field-group.native-date-picker-field {
+/* The fixed-width wrapper reserves room for the Flatpickr alternate input and
+   calendar icon while following the application's font-size setting. */
+html body :is(#settingsPanel, #reportPanel) .period-field-group.flatpickr-date-field {
+  --single-date-icon-right: var(--field-padding-x);
+  --single-date-icon-gap: var(--period-date-content-gap);
+  --single-date-input-padding-right: calc(
+    var(--single-date-icon-right) + var(--period-date-icon-size) +
+      var(--single-date-icon-gap)
+  );
   position: relative;
-  display: inline-flex;
+  display: inline-block;
   width: max-content;
   min-width: 0;
   min-height: var(--control-height);
   height: var(--control-height);
-  align-items: center;
-  gap: var(--period-date-content-gap);
-  padding-inline: var(--period-date-padding-inline);
-  overflow: hidden;
-}
-
-html body :is(#settingsPanel, #reportPanel)
-  .period-field-group.native-date-picker-field > input[type="date"] {
-  position: absolute;
-  z-index: 2;
-  inset: 0;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  margin: 0;
-  border: 0;
-  background: transparent;
-  padding: 0 var(--field-padding-x);
-  opacity: 0;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-html body :is(#settingsPanel, #reportPanel)
-  .period-field-group.native-date-picker-field > .period-field-display {
-  display: inline-flex;
-  min-width: 0;
-  flex: 0 0 auto;
-  align-items: center;
-  width: auto;
-  color: var(--field-fg);
   padding: 0;
-  font-size: var(--ui-font-size);
-  line-height: 1.2;
-  text-align: left;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-  user-select: none;
-  pointer-events: none;
+  font-size: var(--ui-font-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 html body :is(#settingsPanel, #reportPanel)
-  .period-field-group.native-date-picker-field > .period-field-display:empty::before {
+  .period-field-group.flatpickr-date-field::before {
   content: "0000/00/00";
+  display: block;
   visibility: hidden;
+  padding: 0 var(--single-date-input-padding-right) 0 var(--field-padding-x);
+  font: inherit;
+  line-height: var(--control-height);
+  white-space: nowrap;
 }
 
 html body :is(#settingsPanel, #reportPanel)
-  .period-field-group.native-date-picker-field > .period-field-display-icon {
-  position: static;
-  z-index: 1;
+  .period-field-group.flatpickr-date-field > .period-field-display-icon {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  right: var(--single-date-icon-right);
+  transform: translateY(-50%);
   width: var(--period-date-icon-size);
   height: var(--period-date-icon-size);
-  flex: 0 0 var(--period-date-icon-size);
   fill: none;
   stroke: var(--field-fg);
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
   pointer-events: none;
+}
+
+/* Flatpickr keeps the original ISO input hidden and exposes this alternate
+   input for the existing YYYY/MM/DD presentation. */
+html body :is(#settingsPanel, #reportPanel)
+  .period-field-group.flatpickr-date-field > .period-field-flatpickr-input {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--field-fg);
+  padding: 0 var(--single-date-input-padding-right) 0 var(--field-padding-x);
+  font-size: var(--ui-font-size);
+  font-weight: inherit;
+  line-height: 1.2;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  outline: 0;
+  cursor: pointer;
+}
+
+html body #reportPanel .period-field-group.flatpickr-range-field {
+  --range-date-icon-right: var(--field-padding-x);
+  --range-date-icon-gap: var(--period-date-content-gap);
+  --range-date-input-padding-right: calc(
+    var(--range-date-icon-right) + var(--period-date-icon-size) +
+      var(--range-date-icon-gap)
+  );
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 0;
+  min-height: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  overflow: hidden;
+  font-size: var(--ui-font-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The range format always has the same number of tabular digits. This hidden
+   reference determines the field width without relying on the wider `ch` unit,
+   so changing dates keeps the control fixed while UI font scaling still works. */
+html body #reportPanel .period-field-group.flatpickr-range-field::before {
+  content: "0000/00/00 〜 0000/00/00";
+  display: block;
+  visibility: hidden;
+  padding: 0 var(--range-date-input-padding-right) 0 var(--field-padding-x);
+  font: inherit;
+  line-height: var(--control-height);
+  white-space: nowrap;
+}
+
+html body #reportPanel .period-field-group.flatpickr-range-field
+  > input.period-field-flatpickr-input {
+  display: block;
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--field-fg);
+  padding: 0 var(--range-date-input-padding-right) 0 var(--field-padding-x);
+  font-size: var(--ui-font-size);
+  font-weight: inherit;
+  line-height: 1.2;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  outline: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+html body #reportPanel .period-field-group.flatpickr-range-field
+  > input.flatpickr-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html body #reportPanel .period-field-group.flatpickr-range-field
+  > .period-field-display-icon {
+  position: absolute;
+  top: 50%;
+  right: var(--range-date-icon-right);
+  transform: translateY(-50%);
+  width: var(--period-date-icon-size);
+  height: var(--period-date-icon-size);
+  fill: none;
+  stroke: var(--field-fg);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  pointer-events: none;
+}
+
+html[data-theme="dark"] .flatpickr-calendar {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+}
+
+html[data-theme="dark"] .flatpickr-calendar .flatpickr-months,
+html[data-theme="dark"] .flatpickr-calendar .flatpickr-weekdays,
+html[data-theme="dark"] .flatpickr-calendar .flatpickr-weekday {
+  background: var(--surface);
+  color: var(--text);
+  fill: var(--text);
+}
+
+html[data-theme="dark"] .flatpickr-calendar .flatpickr-day {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .flatpickr-calendar .flatpickr-day:hover,
+html[data-theme="dark"] .flatpickr-calendar .flatpickr-day.prevMonthDay,
+html[data-theme="dark"] .flatpickr-calendar .flatpickr-day.nextMonthDay {
+  color: var(--text-muted);
 }
 
 /* Top bar */

@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
 
+from app.calendar_policy import CALENDAR_MIN_FISCAL_YEAR
 from app.config import (
     SettingsManager,
     normalize_member_filter_levels,
@@ -103,6 +104,7 @@ class DailyReportApi:
         return {
             "employee_id": self._employee_id,
             "is_admin": is_admin,
+            "calendar_min_fiscal_year": CALENDAR_MIN_FISCAL_YEAR,
             "settings": self._settings.to_dict(),
             "settings_complete": self._settings.is_complete,
             "employee_registered": employee_registered,

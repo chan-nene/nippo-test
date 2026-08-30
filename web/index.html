@@ -13,10 +13,12 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap"
     />
-    <link rel="stylesheet" href="./styles.css" />
-    <link rel="stylesheet" href="./reports.css" />
-    <link rel="stylesheet" href="./settings.css" />
-    <link rel="stylesheet" href="./admin.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260830-17" />
+    <link rel="stylesheet" href="./reports.css?v=20260830-17" />
+    <link rel="stylesheet" href="./settings.css?v=20260830-17" />
+    <link rel="stylesheet" href="./admin.css?v=20260830-17" />
+    <link rel="stylesheet" href="./vendor/flatpickr.min.css?v=20260830-17" />
+    <link rel="stylesheet" href="./vendor/tabulator.min.css?v=20260830-17" />
   </head>
   <body>
     <header class="title-bar">
@@ -205,25 +207,16 @@
                 <div class="toolbar-left toolbar-left-wide">
                   <div class="period-control-container">
                       <div class="period-control">
-                        <div class="period-field-group native-date-picker-field">
-                          <input id="startDate" type="date" aria-label="開始日" aria-describedby="periodError" />
-                          <span id="startDateDisplay" class="period-field-display" aria-hidden="true"></span>
-                          <svg class="period-field-display-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <rect x="4" y="5" width="16" height="15" rx="2" />
-                            <path d="M8 3v4M16 3v4M4 10h16" />
-                          </svg>
-                        </div>
-                        <span class="period-separator">〜</span>
-                        <div class="period-field-group native-date-picker-field">
-                          <input id="endDate" type="date" aria-label="終了日" aria-describedby="periodError" />
-                          <span id="endDateDisplay" class="period-field-display" aria-hidden="true"></span>
+                        <div class="period-field-group flatpickr-range-field">
+                          <input id="periodDateRange" type="text" aria-label="日報の期間" autocomplete="off" />
+                          <input id="startDate" type="hidden" />
+                          <input id="endDate" type="hidden" />
                           <svg class="period-field-display-icon" viewBox="0 0 24 24" aria-hidden="true">
                             <rect x="4" y="5" width="16" height="15" rx="2" />
                             <path d="M8 3v4M16 3v4M4 10h16" />
                           </svg>
                         </div>
                       </div>
-                      <div id="periodError" class="field-error period-error hidden" role="alert"></div>
                   </div>
                 </div>
                 <div class="period-main-controls">
@@ -411,8 +404,8 @@
                   </div>
                   <div class="master-table-tools">
                     <div id="adminSearchControl" class="master-search" role="search">
-                      <label class="visually-hidden" for="adminSearchInput">社員番号・氏名を検索</label>
-                      <input id="adminSearchInput" type="search" autocomplete="off" placeholder="社員ID・ユーザー名を検索" aria-label="社員ID・ユーザー名を検索" />
+                      <label class="visually-hidden" for="adminSearchInput">全列を検索</label>
+                      <input id="adminSearchInput" type="search" autocomplete="off" placeholder="全列を検索" aria-label="全列を検索" />
                       <button
                         id="adminSearchClearButton"
                         class="master-search-clear"
@@ -458,62 +451,61 @@
             <div class="settings-card">
               <section id="settingsGeneralPanel" class="settings-section" aria-labelledby="settingsGeneralTitle">
                 <h2 id="settingsGeneralTitle">一般</h2>
-                <label class="settings-field">
-                  <span>ユーザー日報フォルダ</span>
-                  <input id="usersDir" type="text" autocomplete="off" aria-describedby="usersDirError" />
-                  <span id="usersDirError" class="field-error hidden" role="alert"></span>
-                </label>
-                <label class="settings-field">
-                  <span>上司コメントフォルダ</span>
-                  <input id="commentsDir" type="text" autocomplete="off" aria-describedby="commentsDirError" />
-                  <span id="commentsDirError" class="field-error hidden" role="alert"></span>
-                </label>
-                <label class="settings-field">
-                  <span>管理フォルダ</span>
-                  <input id="commonDir" type="text" autocomplete="off" aria-describedby="commonDirError" />
-                  <span id="commonDirError" class="field-error hidden" role="alert"></span>
-                </label>
-                <label class="settings-field">
-                  <span>サインの文字</span>
-                  <input
-                    id="commentSignature"
-                    type="text"
-                    maxlength="100"
-                    autocomplete="off"
-                    placeholder="未設定の場合は上司名を使用"
-                  />
-                </label>
+                <div class="settings-section-body">
+                  <label class="settings-field">
+                    <span>ユーザー日報フォルダ</span>
+                    <input id="usersDir" type="text" autocomplete="off" aria-describedby="usersDirError" />
+                    <span id="usersDirError" class="field-error hidden" role="alert"></span>
+                  </label>
+                  <label class="settings-field">
+                    <span>上司コメントフォルダ</span>
+                    <input id="commentsDir" type="text" autocomplete="off" aria-describedby="commentsDirError" />
+                    <span id="commentsDirError" class="field-error hidden" role="alert"></span>
+                  </label>
+                  <label class="settings-field">
+                    <span>管理フォルダ</span>
+                    <input id="commonDir" type="text" autocomplete="off" aria-describedby="commonDirError" />
+                    <span id="commonDirError" class="field-error hidden" role="alert"></span>
+                  </label>
+                  <label class="settings-field">
+                    <span>サインの文字</span>
+                    <input
+                      id="commentSignature"
+                      type="text"
+                      maxlength="100"
+                      autocomplete="off"
+                      placeholder="未設定の場合は上司名を使用"
+                    />
+                  </label>
+                </div>
               </section>
               <section id="settingsDisplayPanel" class="settings-section" aria-labelledby="settingsDisplayTitle">
                 <h2 id="settingsDisplayTitle">表示</h2>
-                <section class="member-filter-setting" aria-labelledby="memberFilterSettingTitle">
-                  <div class="settings-section-heading">
-                    <h3 id="memberFilterSettingTitle">日報に設置するフィルターボタン</h3>
+                <div class="settings-section-body">
+                  <div class="settings-field settings-control-field">
+                    <div id="memberFilterSettingTitle" class="settings-field-label">日報フィルター</div>
+                    <div
+                      id="memberFilterOptions"
+                      class="member-filter-options"
+                      role="group"
+                      aria-labelledby="memberFilterSettingTitle"
+                    >
+                      <label class="member-filter-option">
+                        <input id="memberFilterDepartment" type="checkbox" value="department" data-member-filter-level checked />
+                        <span>課</span>
+                      </label>
+                      <label class="member-filter-option">
+                        <input id="memberFilterSection" type="checkbox" value="section" data-member-filter-level checked />
+                        <span>係</span>
+                      </label>
+                      <label class="member-filter-option">
+                        <input id="memberFilterMember" type="checkbox" value="member" data-member-filter-level checked />
+                        <span>個人</span>
+                      </label>
+                    </div>
                   </div>
-                  <div
-                    id="memberFilterOptions"
-                    class="member-filter-options"
-                    role="group"
-                    aria-label="日報フィルター"
-                  >
-                    <label class="member-filter-option">
-                      <input id="memberFilterDepartment" type="checkbox" value="department" data-member-filter-level checked />
-                      <span>課</span>
-                    </label>
-                    <label class="member-filter-option">
-                      <input id="memberFilterSection" type="checkbox" value="section" data-member-filter-level checked />
-                      <span>係</span>
-                    </label>
-                    <label class="member-filter-option">
-                      <input id="memberFilterMember" type="checkbox" value="member" data-member-filter-level checked />
-                      <span>個人</span>
-                    </label>
-                  </div>
-                </section>
-                <section class="default-range-setting" aria-labelledby="defaultRangeTitle">
-                  <div class="default-range-heading">
-                    <h3 id="defaultRangeTitle">標準の表示範囲</h3>
-                  </div>
+                  <div class="settings-field settings-control-field">
+                    <div class="settings-field-label">標準の表示範囲</div>
                   <div class="default-range-selects">
                     <span>本日を起点に</span>
                     <label>
@@ -539,32 +531,29 @@
                     </label>
                     <span>の範囲を表示</span>
                   </div>
-                </section>
-              </section>
-              <section id="settingsNotificationPanel" class="settings-section" aria-labelledby="settingsNotificationTitle">
-                <h2 id="settingsNotificationTitle">通知</h2>
-                <section class="missing-comment-setting" aria-labelledby="missingCommentSettingTitle">
-                  <div class="settings-section-heading">
-                    <h3 id="missingCommentSettingTitle">未確認の集計</h3>
                   </div>
+                </div>
+              </section>
+              <section id="settingsNotificationPanel" class="settings-section" aria-labelledby="missingCommentSettingTitle">
+                <h2 id="missingCommentSettingTitle">未確認の集計</h2>
+                <div class="settings-section-body">
                   <div class="settings-field settings-date-field">
                     <label class="settings-field-label" for="missingCommentStartDate">集計を開始する日</label>
-                    <div class="period-field-group native-date-picker-field">
-                      <input id="missingCommentStartDate" type="date" aria-label="集計を開始する日" />
-                      <span id="missingCommentStartDateDisplay" class="period-field-display" aria-hidden="true"></span>
-                      <svg class="period-field-display-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="4" y="5" width="16" height="15" rx="2" />
-                        <path d="M8 3v4M16 3v4M4 10h16" />
-                      </svg>
+                    <div class="settings-missing-controls">
+                      <div class="period-field-group flatpickr-date-field">
+                        <input id="missingCommentStartDate" type="date" aria-label="集計を開始する日" />
+                        <svg class="period-field-display-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="4" y="5" width="16" height="15" rx="2" />
+                          <path d="M8 3v4M16 3v4M4 10h16" />
+                        </svg>
+                      </div>
+                      <label class="settings-check-option">
+                        <input id="includeTodayInMissingComments" type="checkbox" />
+                        <span class="settings-check-copy">当日分を未確認日数に含める</span>
+                      </label>
                     </div>
                   </div>
-                  <label class="settings-check-option">
-                    <input id="includeTodayInMissingComments" type="checkbox" />
-                    <span class="settings-check-copy">
-                      <strong>当日分を未確認日数に含める</strong>
-                    </span>
-                  </label>
-                </section>
+                </div>
               </section>
               <div class="actions">
                 <button
@@ -646,10 +635,13 @@
       </form>
     </dialog>
 
-    <script src="reports.js"></script>
-    <script src="settings.js"></script>
-    <script src="Sortable.min.js"></script>
-    <script src="admin.js"></script>
-    <script src="app.js"></script>
+    <script src="vendor/flatpickr.min.js?v=20260830-17"></script>
+    <script src="vendor/l10n/ja.js?v=20260830-17"></script>
+    <script src="vendor/tabulator.min.js?v=20260830-17"></script>
+    <script src="reports.js?v=20260830-17"></script>
+    <script src="settings.js?v=20260830-17"></script>
+    <script src="Sortable.min.js?v=20260830-17"></script>
+    <script src="admin.js?v=20260830-17"></script>
+    <script src="app.js?v=20260830-17"></script>
   </body>
 </html>

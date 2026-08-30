@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 import polars as pl
 
+from app.calendar_policy import DEFAULT_MISSING_COMMENT_START_DATE
 from app.config import AppSettings, validate_settings_paths
 from app.security import (
     COMMON_MASTER_COLUMNS,
@@ -212,6 +213,11 @@ class DailyReportRepository:
             for column, default in USER_MASTER_DEFAULTS.items():
                 if not str(row.get(column, "")).strip():
                     row[column] = default
+            if (
+                row.get("affiliation_type") == "organization"
+                and not str(row.get("organization_id", "")).strip()
+            ):
+                row["affiliation_type"] = "unassigned"
             if row.get("employment_type") == "temporary":
                 row["is_admin"] = "0"
         return rows
@@ -1500,9 +1506,7 @@ class DailyReportRepository:
         )
         range_start = self._to_date(self.settings.missing_comment_start_date)
         if range_start is None:
-            range_start = today + timedelta(
-                days=min(0, self.settings.default_start_offset_days)
-            )
+            range_start = DEFAULT_MISSING_COMMENT_START_DATE
 
         summary = {
             "start_date": range_start.isoformat(),
@@ -1566,9 +1570,7 @@ class DailyReportRepository:
         today = self.today_jst()
         configured_start = self._to_date(self.settings.missing_comment_start_date)
         if configured_start is None:
-            configured_start = today + timedelta(
-                days=min(0, self.settings.default_start_offset_days)
-            )
+            configured_start = DEFAULT_MISSING_COMMENT_START_DATE
         holiday_dates = {
             calendar_date
             for row in common.get("calendar", [])

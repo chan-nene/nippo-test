@@ -7,6 +7,8 @@ from datetime import date
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
+from app.calendar_policy import CALENDAR_MIN_DATE
+
 MAX_DATE_RANGE_DAYS = 366
 MAX_UPDATES_PER_TYPE = 1_000
 MAX_REPLIES_PER_REPORT = 100
@@ -81,7 +83,7 @@ USER_MASTER_DEFAULTS = {
 USER_EMPLOYMENT_TYPES = frozenset({"regular", "temporary"})
 
 TEAM_TYPES = frozenset({"department", "section"})
-AFFILIATION_TYPES = frozenset({"director", "organization"})
+AFFILIATION_TYPES = frozenset({"director", "organization", "unassigned"})
 COMMENT_TARGET_TYPES = frozenset({"none", "organization", "custom", "departments"})
 
 # Accepted only by the read/validation compatibility path.
@@ -380,6 +382,12 @@ def _validate_new_administration_references(
                     f"{index + 1}人目の部長は日報入力不可にしてください。"
                 )
             continue
+        if affiliation_type == "unassigned":
+            if organization_id:
+                raise RequestValidationError(
+                    f"{index + 1}人目の所属登録なしユーザーには所属組織を指定できません。"
+                )
+            continue
         if affiliation_type != "organization":
             raise RequestValidationError(
                 f"{index + 1}人目の所属区分が不正です。"
@@ -568,6 +576,11 @@ def _validate_common_master_row(
                 raise RequestValidationError(f"{label}の部長には所属組織を指定できません。")
             if row["can_input_own_report"] != "0":
                 raise RequestValidationError(f"{label}の部長は日報入力不可にしてください。")
+        elif row["affiliation_type"] == "unassigned":
+            if row["organization_id"]:
+                raise RequestValidationError(
+                    f"{label}の所属登録なしユーザーには所属組織を指定できません。"
+                )
         elif not row["organization_id"]:
             raise RequestValidationError(f"{label}の所属組織を指定してください。")
         _validate_optional_order(row["member_order"], f"{label}の表示順")
@@ -588,7 +601,13 @@ def _validate_common_master_row(
         _parse_id_list(row["target_organization_ids"], f"{label}の対象組織ID")
         _parse_id_list(row["target_employee_ids"], f"{label}の対象社員ID", employee_ids=True)
     if master == "calendar":
-        _required_iso_date(row["date"], f"{label}の日付")
+        calendar_date = date.fromisoformat(
+            _required_iso_date(row["date"], f"{label}の日付")
+        )
+        if calendar_date < CALENDAR_MIN_DATE:
+            raise RequestValidationError(
+                f"{label}の日付は{CALENDAR_MIN_DATE.isoformat()}以降にしてください。"
+            )
 
 
 def _split_legacy_ids(value: str) -> list[str]:
@@ -724,7 +743,9 @@ def _validate_comment_assignment_references(
         if len(organization_ids) != 1 or employee_ids:
             raise RequestValidationError(f"{label}の課・係指定は1組織だけ指定してください。")
         if commenter.get("affiliation_type") != "organization":
-            raise RequestValidationError(f"{label}の部長は課・係指定を使用できません。")
+            raise RequestValidationError(
+                f"{label}の課・係指定は組織所属ユーザーだけが使用できます。"
+            )
         allowed = _allowed_comment_organizations(commenter, teams)
         if organization_ids[0] not in allowed:
             raise RequestValidationError(f"{label}の対象組織が所属範囲外です。")
@@ -738,7 +759,9 @@ def _validate_comment_assignment_references(
     if target_type != "custom" or organization_ids or not employee_ids:
         raise RequestValidationError(f"{label}の個別指定が不正です。")
     if commenter.get("affiliation_type") != "organization":
-        raise RequestValidationError(f"{label}の部長は個別指定を使用できません。")
+        raise RequestValidationError(
+            f"{label}の個別指定は組織所属ユーザーだけが使用できます。"
+        )
     allowed_users = _allowed_custom_target_ids(commenter, users, teams)
     for target_id in employee_ids:
         target = users.get(target_id)

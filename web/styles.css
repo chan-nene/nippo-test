@@ -30,6 +30,66 @@
   --control-filter-selected-bg: var(--primary);
   --control-filter-selected-border: var(--primary);
   --control-filter-selected-text: var(--primary-on);
+  /* Semantic action, field, and state tokens shared by every screen. */
+  --action-primary-bg: var(--primary);
+  --action-primary-hover-bg: var(--primary-hover);
+  --action-primary-fg: var(--primary-on);
+  --action-primary-border: var(--primary);
+  --action-primary-hover-border: var(--primary-hover);
+  --action-secondary-bg: var(--surface);
+  --action-secondary-hover-bg: var(--surface-hover);
+  --action-secondary-fg: var(--text);
+  --action-secondary-hover-fg: var(--text-strong);
+  --action-secondary-border: var(--border);
+  --action-secondary-hover-border: var(--border-strong);
+  --control-disabled-bg: var(--surface-soft);
+  --control-disabled-fg: var(--text-muted);
+  --control-disabled-border: var(--border);
+  --field-bg: var(--surface);
+  --field-fg: var(--text-strong);
+  --field-border: var(--border-strong);
+  --field-hover-border: var(--text-strong);
+  --field-focus-border: var(--text-strong);
+  --focus-ring: #0169cc;
+  --filter-idle-bg: oklab(0.159065 0 0 / 0.08);
+  --filter-idle-hover-bg: oklab(0.159065 0 0 / 0.12);
+  --filter-idle-fg: #3f3f46;
+  --filter-idle-hover-fg: #3f3f46;
+  --filter-active-bg: var(--primary);
+  --filter-active-hover-bg: var(--primary-hover);
+  --filter-active-fg: var(--primary-on);
+  --filter-active-border: var(--primary);
+  --filter-disabled-bg: transparent;
+  --filter-disabled-fg: var(--text-muted);
+  --form-option-bg: transparent;
+  --form-option-hover-bg: var(--surface-hover);
+  --form-option-fg: var(--text-strong);
+  --form-option-border: var(--border);
+  --form-option-hover-border: var(--border-strong);
+  --form-option-selected-border: var(--text-strong);
+  --choice-card-bg: transparent;
+  --choice-card-hover-bg: var(--surface-hover);
+  --choice-card-fg: var(--text-strong);
+  --choice-card-border: var(--border);
+  --choice-card-hover-border: var(--border-strong);
+  --choice-card-selected-border: var(--text-strong);
+  --nav-card-bg: var(--surface);
+  --nav-card-hover-bg: var(--surface-hover);
+  --nav-card-selected-bg: var(--surface-active);
+  --nav-card-fg: var(--text);
+  --nav-card-selected-fg: var(--text-strong);
+  --nav-card-border: var(--border);
+  --nav-card-hover-border: var(--border-strong);
+  --nav-card-selected-border: var(--border-strong);
+  --editable-cell-hover: color-mix(in srgb, var(--text) 5%, var(--surface));
+  --table-row-hover: var(--surface-hover);
+  --danger-icon: #9e3838;
+  --danger-icon-hover-bg: rgb(158 56 56 / 16%);
+  --danger-primary-bg: #E02E2A;
+  --danger-primary-hover-bg: #BA2623;
+  --danger-primary-fg: #FFFFFF;
+  --danger-primary-border: #E02E2A;
+  --danger-primary-hover-border: #BA2623;
   --panel-bg: var(--surface);
   --input-bg: var(--surface);
   --table-cell-bg: #ffffff;
@@ -78,6 +138,7 @@
   --radius-xs: 3px;
   --radius-sm: 5px;
   --radius-md: 8px;
+  --radius-control: 8px;
   --title-height: 54px;
   --sidebar-closed: 80px;
   --toolbar-height: 48px;
@@ -85,6 +146,8 @@
   --table-header-height: 36px;
   --control-height: 32px;
   --compact-control-height: 28px;
+  /* Role-based alias retained alongside the legacy profile token. */
+  --control-height-compact: var(--compact-control-height);
   --control-padding-x: 12px;
   --control-wide-padding-x: 14px;
   --control-icon-gap: 8px;
@@ -95,9 +158,10 @@
   --cell-padding-y: 9px;
   --date-cell-padding-x: 10px;
   --date-column-width: 140px;
-  --period-date-input-width: 148px;
+  --period-date-padding-inline: 0.85em;
+  --period-date-content-gap: 0.55em;
+  --period-date-icon-size: 1em;
   --badge-height: 17px;
-  --range-today-height: 58px;
   --settings-padding: 18px;
   --shadow-popover: 0 10px 28px var(--shadow-color);
 }
@@ -135,6 +199,20 @@ html[data-theme="dark"] {
   --primary-soft: #303030;
   --primary-border: rgb(255 255 255 / 25%);
   --primary-on: #161616;
+  --focus-ring: #0285ff;
+  --filter-idle-bg: #2b2b2b;
+  --filter-idle-hover-bg: #353535;
+  --filter-idle-fg: #b8b8b8;
+  --filter-idle-hover-fg: #d1d1d1;
+  --filter-active-bg: #4a4a4a;
+  --filter-active-hover-bg: #565656;
+  --filter-active-fg: #e6e6e6;
+  --filter-active-border: #6a6a6a;
+  --filter-disabled-bg: transparent;
+  --filter-disabled-fg: var(--text-muted);
+  --editable-cell-hover: color-mix(in srgb, var(--text-strong) 5%, var(--surface));
+  --danger-icon: #ff8a8a;
+  --danger-icon-hover-bg: rgb(255 138 138 / 16%);
   --dirty: rgb(251 191 36 / 15%);
   --success: #68d391;
   --success-bg: #173526;
@@ -173,6 +251,7 @@ html body[data-font-size="compact"] {
   --table-row-height: 38px;
   --table-header-height: 34px;
   --compact-control-height: 26px;
+  --control-height-compact: 26px;
   --control-padding-x: 10px;
   --control-wide-padding-x: 12px;
   --control-icon-gap: 6px;
@@ -183,9 +262,7 @@ html body[data-font-size="compact"] {
   --cell-padding-y: 7px;
   --date-cell-padding-x: 8px;
   --date-column-width: 136px;
-  --period-date-input-width: 140px;
   --badge-height: 16px;
-  --range-today-height: 54px;
   --settings-padding: 16px;
 }
 
@@ -202,6 +279,7 @@ html body[data-font-size="medium"] {
   --table-row-height: 46px;
   --table-header-height: 40px;
   --compact-control-height: 31px;
+  --control-height-compact: 31px;
   --control-padding-x: 13px;
   --control-wide-padding-x: 15px;
   --control-icon-gap: 8px;
@@ -212,9 +290,7 @@ html body[data-font-size="medium"] {
   --cell-padding-y: 10px;
   --date-cell-padding-x: 11px;
   --date-column-width: 144px;
-  --period-date-input-width: 156px;
   --badge-height: 19px;
-  --range-today-height: 62px;
   --settings-padding: 19px;
 }
 
@@ -231,6 +307,7 @@ html body[data-font-size="large"] {
   --table-row-height: 50px;
   --table-header-height: 43px;
   --compact-control-height: 34px;
+  --control-height-compact: 34px;
   --control-padding-x: 14px;
   --control-wide-padding-x: 16px;
   --control-icon-gap: 8px;
@@ -241,9 +318,7 @@ html body[data-font-size="large"] {
   --cell-padding-y: 11px;
   --date-cell-padding-x: 13px;
   --date-column-width: 148px;
-  --period-date-input-width: 168px;
   --badge-height: 20px;
-  --range-today-height: 64px;
   --settings-padding: 20px;
 }
 
@@ -260,6 +335,7 @@ html body[data-font-size="xlarge"] {
   --table-row-height: 56px;
   --table-header-height: 48px;
   --compact-control-height: 38px;
+  --control-height-compact: 38px;
   --control-padding-x: 16px;
   --control-wide-padding-x: 18px;
   --control-icon-gap: 10px;
@@ -270,9 +346,7 @@ html body[data-font-size="xlarge"] {
   --cell-padding-y: 12px;
   --date-cell-padding-x: 16px;
   --date-column-width: 156px;
-  --period-date-input-width: 180px;
   --badge-height: 23px;
-  --range-today-height: 70px;
   --settings-padding: 22px;
 }
 
@@ -319,7 +393,7 @@ html body button:disabled {
 }
 
 html body :is(button, input, textarea, select, [role="button"], [tabindex]):focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -330,6 +404,79 @@ html body ::selection {
 
 html body .hidden {
   display: none !important;
+}
+
+/* Shared native date picker surface. The transparent input keeps the native
+   picker and keyboard semantics while the visible value is rendered below it
+   so Chromium's focused date segment is not painted over the text. */
+html body :is(#settingsPanel, #reportPanel) .period-field-group.native-date-picker-field {
+  position: relative;
+  display: inline-flex;
+  width: max-content;
+  min-width: 0;
+  min-height: var(--control-height);
+  height: var(--control-height);
+  align-items: center;
+  gap: var(--period-date-content-gap);
+  padding-inline: var(--period-date-padding-inline);
+  overflow: hidden;
+}
+
+html body :is(#settingsPanel, #reportPanel)
+  .period-field-group.native-date-picker-field > input[type="date"] {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0 var(--field-padding-x);
+  opacity: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+html body :is(#settingsPanel, #reportPanel)
+  .period-field-group.native-date-picker-field > .period-field-display {
+  display: inline-flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  width: auto;
+  color: var(--field-fg);
+  padding: 0;
+  font-size: var(--ui-font-size);
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+  pointer-events: none;
+}
+
+html body :is(#settingsPanel, #reportPanel)
+  .period-field-group.native-date-picker-field > .period-field-display:empty::before {
+  content: "0000/00/00";
+  visibility: hidden;
+}
+
+html body :is(#settingsPanel, #reportPanel)
+  .period-field-group.native-date-picker-field > .period-field-display-icon {
+  position: static;
+  z-index: 1;
+  width: var(--period-date-icon-size);
+  height: var(--period-date-icon-size);
+  flex: 0 0 var(--period-date-icon-size);
+  fill: none;
+  stroke: var(--field-fg);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  pointer-events: none;
 }
 
 /* Top bar */
@@ -646,10 +793,10 @@ html body .confirmation-dialog-actions {
 
 html body .dialog-button {
   min-height: calc(var(--control-height) + 4px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid var(--action-secondary-border);
+  border-radius: var(--radius-control);
+  background: var(--action-secondary-bg);
+  color: var(--action-secondary-fg);
   padding: 0 var(--control-wide-padding-x);
   font-size: var(--font-13);
   font-weight: 600;
@@ -657,33 +804,33 @@ html body .dialog-button {
 }
 
 html body .dialog-button:hover {
-  border-color: var(--primary-border);
-  background: var(--surface-hover);
-  color: var(--primary-ink);
+  border-color: var(--action-secondary-hover-border);
+  background: var(--action-secondary-hover-bg);
+  color: var(--action-secondary-hover-fg);
 }
 
 html body .dialog-button.primary {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-on);
+  border-color: var(--action-primary-border);
+  background: var(--action-primary-bg);
+  color: var(--action-primary-fg);
 }
 
 html body .dialog-button.primary:hover {
-  border-color: var(--primary-hover);
-  background: var(--primary-hover);
-  color: var(--primary-on);
+  border-color: var(--action-primary-hover-border);
+  background: var(--action-primary-hover-bg);
+  color: var(--action-primary-fg);
 }
 
 html body .dialog-button.danger {
-  border-color: var(--error);
-  background: var(--error);
-  color: var(--primary-on);
+  border-color: var(--danger-primary-border);
+  background: var(--danger-primary-bg);
+  color: var(--danger-primary-fg);
 }
 
 html body .dialog-button.danger:hover {
-  border-color: color-mix(in srgb, var(--error) 82%, var(--text-strong));
-  background: color-mix(in srgb, var(--error) 82%, var(--text-strong));
-  color: var(--primary-on);
+  border-color: var(--danger-primary-hover-border);
+  background: var(--danger-primary-hover-bg);
+  color: var(--danger-primary-fg);
 }
 
 html body .confirmation-dialog[data-confirmation-variant="delete"]
@@ -695,9 +842,9 @@ html body .confirmation-dialog[data-confirmation-variant="delete"]
 }
 
 html body .dialog-button:disabled {
-  border-color: var(--border);
-  background: var(--surface-soft);
-  color: var(--text-muted);
+  border-color: var(--control-disabled-border);
+  background: var(--control-disabled-bg);
+  color: var(--control-disabled-fg);
 }
 
 html body .font-size-button {

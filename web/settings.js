@@ -6,20 +6,15 @@ function fillSettings(settings) {
   const startOffset = Number(settings.default_start_offset_days ?? -1);
   const endOffset = Number(settings.default_end_offset_days ?? 0);
   $("defaultStartOffsetDays").value = String(
-    clampNumber(Math.abs(Math.min(0, startOffset)), 0, 14),
+    clampNumber(Math.abs(Math.min(0, startOffset)), 0, 5),
   );
-  $("defaultEndOffsetDays").value = String(clampNumber(endOffset, 0, 7));
+  $("defaultEndOffsetDays").value = String(clampNumber(endOffset, 0, 5));
   $("missingCommentStartDate").value = settings.missing_comment_start_date || "";
+  syncDateInputDisplay("missingCommentStartDate");
   $("includeTodayInMissingComments").checked = Boolean(
     settings.include_today_in_missing_comments,
   );
   $("commentSignature").value = settings.comment_signature || "";
-  const colorTheme = normalizeColorTheme(settings.ui_color_theme);
-  document
-    .querySelectorAll('input[name="uiColorTheme"]')
-    .forEach((input) => {
-      input.checked = input.value === colorTheme;
-    });
   const memberFilterLevels = normalizeMemberFilterLevels(
     settings.ui_member_filter_levels,
   );
@@ -33,42 +28,12 @@ function fillSettings(settings) {
     settings.include_today_in_missing_comments,
   );
   state.commentSignature = settings.comment_signature || "";
-  updateDefaultRangePreview();
   markSettingsClean();
 }
 
 function clampNumber(value, min, max) {
   const numericValue = Number.isFinite(value) ? value : min;
   return Math.min(max, Math.max(min, numericValue));
-}
-
-function updateDefaultRangePreview() {
-  const pastDays = clampNumber(
-    Number.parseInt($("defaultStartOffsetDays").value, 10),
-    0,
-    14,
-  );
-  const futureDays = clampNumber(
-    Number.parseInt($("defaultEndOffsetDays").value, 10),
-    0,
-    7,
-  );
-  const today = getTodayJST();
-  const startDate = offsetDateStr(today, -pastDays);
-  const endDate = offsetDateStr(today, futureDays);
-  $("pastDaysValue").textContent =
-    pastDays === 0 ? "今日から" : `今日より${pastDays}日前`;
-  $("futureDaysValue").textContent =
-    futureDays === 0 ? "今日まで" : `今日より${futureDays}日後`;
-  $("rangeTodayDate").textContent = formatPreviewDate(today);
-  $("defaultRangePreview").textContent =
-    `表示期間：${formatPreviewDate(startDate)}〜${formatPreviewDate(endDate)}` +
-    `（今日を含む${pastDays + futureDays + 1}日間）`;
-}
-
-function formatPreviewDate(dateStr) {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return `${year}/${month}/${day}`;
 }
 
 function setFieldError(errorId, message, inputIds = []) {
@@ -138,9 +103,9 @@ function getSettingsPayload() {
     missing_comment_start_date: $("missingCommentStartDate").value,
     include_today_in_missing_comments: $("includeTodayInMissingComments").checked,
     comment_signature: $("commentSignature").value,
-    ui_color_theme:
-      document.querySelector('input[name="uiColorTheme"]:checked')?.value ||
-      "light",
+    // Theme selection lives in the title bar. Keep its value in the settings
+    // payload so saving another setting never resets the persisted theme.
+    ui_color_theme: state.colorTheme,
     ui_member_filter_levels: [
       ...document.querySelectorAll("[data-member-filter-level]:checked"),
     ].map((input) => input.value),

@@ -1,6 +1,15 @@
-// Common-data workbench. Organization membership and comment assignments are
-// edited together and saved as one three-file transaction.
+// 共通データを管理する作業台。組織所属とコメント担当設定を
+// 3ファイルの一括トランザクションとして同時に編集・保存する。
+// 外側のIIFEで管理画面の状態と処理を閉じ込め、ブラウザー環境でのみDOM/APIへ接続する。
 (function () {
+  // このファイルの配置順には意図がある。
+  // 定義 → 純粋なドメイン補助 → 実行時状態 → 下書き管理・DOM境界 →
+  // ライフサイクル・イベント配線 → API・永続化 → ナビゲーション・エディター →
+  // カレンダー → 組織・並び順 → レンダリング → インスペクター → 共通DOMビルダー → 公開API。
+
+  // ---------------------------------------------------------------------------
+  // 定義・マスターのスキーマ
+  // ---------------------------------------------------------------------------
   const MASTER_DEFINITIONS = [
     {
       key: "user_master",
@@ -109,8 +118,122 @@
   const EMBEDDED_DELETE_ICON_PATH =
     "M10.556 4a1 1 0 0 0-.97.751l-.292 1.14h5.421l-.293-1.14A1 1 0 0 0 13.453 4h-2.897Zm6.224 1.892-.421-1.639A3 3 0 0 0 13.453 2h-2.897A3 3 0 0 0 7.65 4.253l-.421 1.639H4a1 1 0 1 0 0 2h.1l1.215 11.425A3 3 0 0 0 8.3 22h7.4a3 3 0 0 0 2.984-2.683l1.214-11.425H20a1 1 0 1 0 0-2h-3.22Zm1.108 2H6.112l1.192 11.214A1 1 0 0 0 8.3 20h7.4a1 1 0 0 0 .995-.894l1.192-11.214ZM10 10a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1Zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1Z";
 
+  // ---------------------------------------------------------------------------
+  // 純粋なドメイン補助
+  // ---------------------------------------------------------------------------
+  // これらの補助関数はDOMに触れないため、Nodeから読み込み、
+  // ブラウザーのカレンダーと同じ実装をテストできる。
+  // カレンダーとID分解のDOM非依存処理をまとめ、CommonJSテストにも同じ実装を公開する。
+  const adminPure = (() => {
+    // 日付を4月始まりの年度へ変換する。1〜3月は前年として扱い、カレンダーの年度境界を統一する。
+    function fiscalYearForDate(value) {
+      const target = value instanceof Date ? value : new Date(value);
+      return target.getMonth() >= 3
+        ? target.getFullYear()
+        : target.getFullYear() - 1;
+    }
+
+    // 年月日をUTC基準のYYYY-MM-DD文字列へ整形し、画面と保存データの日付表現を揃える。
+    function calendarIsoDate(year, monthIndex, day) {
+      return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+
+    // ISO日付文字列を年月日の数値部品へ分解する。形式に合わない値は後続処理で扱えるようnullを返す。
+    function calendarDateParts(dateText) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateText || ""));
+      if (!match) return null;
+      return {
+        year: Number(match[1]),
+        monthIndex: Number(match[2]) - 1,
+        day: Number(match[3]),
+      };
+    }
+
+    // ISO日付をタイムゾーンの影響を受けないUTCのDateへ変換する。不正な文字列はnullとして扱う。
+    function calendarDate(dateText) {
+      const parts = calendarDateParts(dateText);
+      return parts
+        ? new Date(Date.UTC(parts.year, parts.monthIndex, parts.day))
+        : null;
+    }
+
+    // カレンダーの日付を曜日付きの日本語ラベルへ変換する。日付が不正な場合は未設定表示へフォールバックする。
+    function calendarDateLabel(dateText, includeYear = true) {
+      const target = calendarDate(dateText);
+      if (!target) return dateText || "日付未設定";
+      const weekday = ["日", "月", "火", "水", "木", "金", "土"][target.getUTCDay()];
+      const prefix = includeYear ? `${target.getUTCFullYear()}年` : "";
+      return `${prefix}${target.getUTCMonth() + 1}月${target.getUTCDate()}日（${weekday}）`;
+    }
+
+    // UTC日付を日単位で移動し、月跨ぎ・年跨ぎを正しく処理する。不正な日付は空文字を返す。
+    function offsetCalendarDate(dateText, dayOffset) {
+      const target = calendarDate(dateText);
+      if (!target) return "";
+      target.setUTCDate(target.getUTCDate() + dayOffset);
+      return calendarIsoDate(
+        target.getUTCFullYear(),
+        target.getUTCMonth(),
+        target.getUTCDate(),
+      );
+    }
+
+    // 日付を月単位で移動し、移動先に同日がない場合は月末へ丸める。不正な日付は空文字を返す。
+    function offsetCalendarMonth(dateText, monthOffset) {
+      const parts = calendarDateParts(dateText);
+      if (!parts) return "";
+      const first = new Date(Date.UTC(parts.year, parts.monthIndex + monthOffset, 1));
+      const lastDay = new Date(
+        Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0),
+      ).getUTCDate();
+      return calendarIsoDate(
+        first.getUTCFullYear(),
+        first.getUTCMonth(),
+        Math.min(parts.day, lastDay),
+      );
+    }
+
+    // セミコロン区切りのIDをtrim・空要素除去・重複排除して配列化し、設定値の正規化に使う。
+    function splitIds(value) {
+      return [...new Set(String(value || "").split(";").map((item) => item.trim()).filter(Boolean))];
+    }
+
+    return Object.freeze({
+      fiscalYearForDate,
+      calendarIsoDate,
+      calendarDateParts,
+      calendarDate,
+      calendarDateLabel,
+      offsetCalendarDate,
+      offsetCalendarMonth,
+      splitIds,
+    });
+  })();
+
+  // CommonJS分岐は意図的に条件付きとし、ブラウザーでは実装詳細を
+  // このIIFEの内側に閉じ込める。
+  if (typeof module === "object" && module !== null && module.exports) {
+    module.exports = adminPure;
+  }
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+
+  const {
+    fiscalYearForDate,
+    calendarIsoDate,
+    calendarDateParts,
+    calendarDate,
+    calendarDateLabel,
+    offsetCalendarDate,
+    offsetCalendarMonth,
+    splitIds,
+  } = adminPure;
+
+  // ---------------------------------------------------------------------------
+  // 可変な実行時状態
+  // ---------------------------------------------------------------------------
   let isLoaded = false;
   let isLoading = false;
+  let isInitialized = false;
   const MIN_FISCAL_YEAR = 2026;
   let activeMaster = "user_master";
   let activeFiscalYear = Math.max(
@@ -135,18 +258,29 @@
   let teamEditorMemberSortableInstances = [];
   let selectedOrganizationDepartmentId = "";
 
+  // ---------------------------------------------------------------------------
+  // 下書き管理・DOM境界
+  // ---------------------------------------------------------------------------
+  // 管理画面のDOM要素をIDで取得する。要素参照を一箇所に寄せてDOM境界を明確にする。
   const byId = (id) => document.getElementById(id);
+  // 指定したマスターのスキーマ定義を返す。引数省略時は現在選択中のマスターを対象にする。
   const getDefinition = (key = activeMaster) =>
     MASTER_DEFINITIONS.find((definition) => definition.key === key);
+  // 指定したマスターの編集中下書きを取得する。引数省略時は現在のマスターを参照する。
   const getDraft = (key = activeMaster) => drafts.get(key);
+  // 下書きの内部メタデータを除き、保存対象となる行の値だけを取り出す。
   const valuesOnly = (draft) => draft.entries.map((entry) => entry.values);
+  // 行データをJSON化して比較用スナップショットを作る。編集前後の差分判定に使う。
   const snapshot = (rows) => JSON.stringify(rows);
+  // 下書きの値差分または移行要否を判定する。見た目の未保存バッジと保存可否の基準を一つにする。
   const isDraftDirty = (draft) =>
     Boolean(draft) &&
     (Boolean(draft.migrationRequired) ||
       snapshot(valuesOnly(draft)) !== draft.originalSnapshot);
+  // 下書きの行データだけを編集前スナップショットと比較する。移行フラグによる汚れは含めない。
   const hasDraftRowChanges = (draft) =>
     Boolean(draft) && snapshot(valuesOnly(draft)) !== draft.originalSnapshot;
+  // 選択中エディターに関係する下書きの行変更を判定する。組織編集ではユーザー・組織・コメント担当を一体として扱う。
   const hasEditorChanges = (key = activeMaster) => {
     if (key === "team_master") {
       return ["user_master", "team_master", "comment_assignment"].some(
@@ -160,18 +294,22 @@
     }
     return hasDraftRowChanges(drafts.get(key));
   };
+  // ユーザー管理に属するユーザーとコメント担当設定の未保存状態をまとめて判定する。
   const isUserAdministrationDirty = () =>
     isDraftDirty(drafts.get("user_master")) ||
     isDraftDirty(drafts.get("comment_assignment"));
+  // 3マスターの管理データを一括保存すべき状態か判定する。所属変更と担当設定の差分も組織管理の一部として扱う。
   const isOrganizationAdministrationDirty = () =>
     isUserAdministrationDirty() ||
     isDraftDirty(drafts.get("team_master")) ||
     isDraftDirty(drafts.get("comment_assignment"));
+  // マスターごとの未保存状態を返す。ユーザー管理だけは関連するコメント担当設定も同時に確認する。
   const isDefinitionDirty = (key) =>
     key === "user_master"
       ? isUserAdministrationDirty()
       : isDraftDirty(drafts.get(key));
 
+  // スキーマの列定義と初期値から編集用の行を生成し、内部IDと文字列化済みの値を付与する。
   function createEntry(values, definition, isNew = false) {
     const entry = {
       id: `master-row-${nextRowId++}`,
@@ -186,6 +324,7 @@
     return entry;
   }
 
+  // 旧組織形式から移行候補の課・係・ユーザー・コメント設定を組み立てる。曖昧なチームや未解決所属は別情報として残す。
   function buildLegacyOrganizationCandidates(data, preview) {
     const legacyTeams = Array.isArray(data.team_master) ? data.team_master : [];
     const convertibleIds = new Set();
@@ -266,6 +405,7 @@
     };
   }
 
+  // 全ユーザーに対応するコメント担当行を補完し、存在しないユーザーの行を除去する。保存する3マスター間の対応関係を保つ。
   function ensureAssignmentRows() {
     const draft = drafts.get("comment_assignment");
     const definition = getDefinition("comment_assignment");
@@ -297,6 +437,7 @@
     });
   }
 
+  // 所属先または部長グループごとにユーザー表示順を再採番する。保存前に同じ順序規則へ正規化する。
   function normalizeAllMemberOrders() {
     const groups = new Map();
     (drafts.get("user_master")?.entries || []).forEach((entry) => {
@@ -316,40 +457,7 @@
     });
   }
 
-  function fiscalYearForDate(value) {
-    const target = value instanceof Date ? value : new Date(value);
-    return target.getMonth() >= 3 ? target.getFullYear() : target.getFullYear() - 1;
-  }
-
-  function calendarIsoDate(year, monthIndex, day) {
-    return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }
-
-  function calendarDateParts(dateText) {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateText || ""));
-    if (!match) return null;
-    return {
-      year: Number(match[1]),
-      monthIndex: Number(match[2]) - 1,
-      day: Number(match[3]),
-    };
-  }
-
-  function calendarDate(dateText) {
-    const parts = calendarDateParts(dateText);
-    return parts
-      ? new Date(Date.UTC(parts.year, parts.monthIndex, parts.day))
-      : null;
-  }
-
-  function calendarDateLabel(dateText, includeYear = true) {
-    const target = calendarDate(dateText);
-    if (!target) return dateText || "日付未設定";
-    const weekday = ["日", "月", "火", "水", "木", "金", "土"][target.getUTCDay()];
-    const prefix = includeYear ? `${target.getUTCFullYear()}年` : "";
-    return `${prefix}${target.getUTCMonth() + 1}月${target.getUTCDate()}日（${weekday}）`;
-  }
-
+  // 指定年度の4月から翌年3月までの土日を休日行として補完する。既存日付は上書きせず、最後に日付順へ並べる。
   function ensureFiscalYearEntries(fiscalYear = activeFiscalYear) {
     const definition = getDefinition("calendar");
     const draft = drafts.get("calendar");
@@ -383,6 +491,7 @@
     );
   }
 
+  // 指定年度のカレンダー行が存在するかを判定し、年度移動時の新規作成確認を抑制する。
   function hasCalendarEntriesForFiscalYear(fiscalYear) {
     const draft = drafts.get("calendar");
     return Boolean(
@@ -393,6 +502,7 @@
     );
   }
 
+  // 既存の正の組織IDと衝突しない最小の新規IDを採番する。
   function createTeamId() {
     const usedIds = new Set(
       (drafts.get("team_master")?.entries || [])
@@ -404,7 +514,11 @@
     return String(nextId);
   }
 
-  function initialize() {
+  // ---------------------------------------------------------------------------
+  // ライフサイクルとイベント配線
+  // ---------------------------------------------------------------------------
+  // 委譲された一覧ハンドラより先に、再読み込み・追加・検索・マスター切替を固定クロームへ登録する。
+  function bindAdminChromeEvents() {
     byId("adminReloadButton").addEventListener("click", reload);
     byId("adminAddRowButton").addEventListener("click", addRow);
     byId("adminSearchInput").addEventListener("input", (event) => {
@@ -424,6 +538,10 @@
       const button = event.target.closest("[data-master]");
       if (button) selectMaster(button.dataset.master);
     });
+  }
+
+  // 表・カレンダー・組織のクリック・入力・キーボード操作を一覧領域へ委譲する。
+  function bindAdminTableEvents() {
     byId("adminTableWrap").addEventListener("click", (event) => {
       if (event.target.closest("[data-save-editor]")) {
         void save();
@@ -552,13 +670,21 @@
       calendarFocusDate = calendarDay.dataset.calendarDate;
       syncCalendarRovingTabindex(calendarFocusDate);
     });
-    ["adminInspectorForm", "userEditorDialogForm", "teamEditorDialogForm"].forEach((formId) => {
+  }
+
+  // ユーザー・チームの編集モーダルを共通ハンドラへ接続する。
+  function bindAdminEditorEvents() {
+    ["userEditorDialogForm", "teamEditorDialogForm"].forEach((formId) => {
       const form = byId(formId);
       if (!form) return;
       form.addEventListener("input", handleInspectorInput);
       form.addEventListener("change", handleInspectorChange);
       form.addEventListener("click", handleInspectorClick);
     });
+  }
+
+  // チーム作成の送信・取消・背景クリックと、編集ダイアログの取消保護を最後に登録する。
+  function bindAdminDialogEvents() {
     byId("teamCreateForm").addEventListener("submit", submitTeamCreateDialog);
     byId("teamCreateName").addEventListener("input", updateTeamCreateDialogState);
     byId("cancelTeamCreateButton").addEventListener("click", closeTeamCreateDialog);
@@ -577,10 +703,22 @@
     });
   }
 
+  // 管理画面のイベント配線を一度だけ初期化する。二重登録による同一操作の重複実行を防ぐ。
+  function initialize() {
+    if (isInitialized) return;
+    isInitialized = true;
+    bindAdminChromeEvents();
+    bindAdminTableEvents();
+    bindAdminEditorEvents();
+    bindAdminDialogEvents();
+  }
+
+  // インスペクターの入力イベントを選択行の更新処理へ渡す。
   function handleInspectorInput(event) {
     updateSelectedRow(event);
   }
 
+  // 所属・コメント対象・割り当てなどの変更を振り分け、必要な下書き更新と再描画を行う。
   function handleInspectorChange(event) {
     const affiliation = event.target.closest("[data-user-affiliation]");
     if (affiliation) {
@@ -647,6 +785,7 @@
     updateSelectedRow(event);
   }
 
+  // 保存・削除・モーダル取消・所属移動・並び替えなど、インスペクター内の操作をデータ属性で振り分ける。
   function handleInspectorClick(event) {
     const isUserEditorModal = event.currentTarget?.id === "userEditorDialogForm";
     const isTeamEditorModal = event.currentTarget?.id === "teamEditorDialogForm";
@@ -721,11 +860,16 @@
     if (moveButton) moveSelectedTeam(moveButton.dataset.moveTeam);
   }
 
+  // ---------------------------------------------------------------------------
+  // pywebview APIアダプターと永続化ライフサイクル
+  // ---------------------------------------------------------------------------
+  // 管理データが未読込のときだけロードを開始する。ロード中の二重要求はフラグで抑止する。
   async function ensureLoaded() {
     if (isLoaded || isLoading) return;
     await load();
   }
 
+  // pywebview APIから共通マスターを読み込み、下書き・移行状態・初期カレンダーを構築して画面を表示する。失敗時もbusy表示を必ず解除する。
   async function load() {
     const api = window.pywebview?.api;
     if (typeof api?.load_common_masters !== "function") {
@@ -797,6 +941,7 @@
     }
   }
 
+  // 未保存変更がある場合は破棄確認を挟んで管理データを再読込する。キャンセル時は現在の編集状態を保持する。
   async function reload() {
     if (hasUnsaved()) {
       const confirmed = await requestConfirmationDialog({
@@ -813,6 +958,7 @@
     await load();
   }
 
+  // ユーザー・組織・コメント担当の3マスターを一括保存し、カレンダーは単独保存する。dirty判定・管理者保護・revision更新を通して保存後の基準を確定する。
   async function save(targetMaster = activeMaster) {
     const saveAdministration = ["user_master", "team_master", "comment_assignment"].includes(targetMaster);
     const saveCalendar = targetMaster === "calendar";
@@ -936,6 +1082,10 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // ナビゲーションとエディターのライフサイクル
+  // ---------------------------------------------------------------------------
+  // 管理対象マスターを切り替える。未保存の編集がある場合は移動を止めて内容の消失を防ぐ。
   function selectMaster(key) {
     if (!drafts.has(key) || key === activeMaster) return;
     if (hasEditorChanges(activeMaster)) {
@@ -953,6 +1103,7 @@
     render();
   }
 
+  // 一覧で編集対象の行を選択し、関連するインスペクターを更新する。
   function selectRow(rowId) {
     const draft = getDraft();
     if (!draft?.entries.some((entry) => entry.id === rowId)) return;
@@ -971,6 +1122,7 @@
     syncAdminChrome();
   }
 
+  // 組織ツリーで選択中の課を切り替え、配下メンバーの表示対象を更新する。
   function selectOrganizationDepartment(teamId) {
     if (activeMaster !== "team_master") return;
     const entry = teamEntryFor(teamId);
@@ -981,6 +1133,7 @@
     syncAdminChrome();
   }
 
+  // 組織一覧の外側を選択したとき、課の選択状態を解除する。
   function clearSelectedOrganizationDepartment() {
     if (activeMaster !== "team_master" || !selectedOrganizationDepartmentId) return;
     selectedOrganizationDepartmentId = "";
@@ -988,21 +1141,25 @@
     syncAdminChrome();
   }
 
+  // 正社員の管理者数を数え、最後の管理者を誤って削除・降格しないための基準を返す。
   function regularAdministratorCount() {
     return (drafts.get("user_master")?.entries || []).filter(
       (entry) => valueFor(entry, "employment_type") === "regular" && valueFor(entry, "is_admin") === "1",
     ).length;
   }
 
+  // 現在の利用者または最後の管理者に該当する行かを判定し、保護対象を識別する。
   function isProtectedAdministratorEntry(entry) {
     if (!entry || valueFor(entry, "is_admin") !== "1") return false;
     return valueFor(entry, "employee_id") === currentEmployeeId || regularAdministratorCount() <= 1;
   }
 
+  // 管理者を1人以上残す必要がある操作について、共通のエラー通知を表示する。
   function notifyAdministratorGuard(action = "変更") {
     notify({ text: `正社員の管理者を1人以上残す必要があるため、${action}できません。`, type: "error" });
   }
 
+  // ユーザー編集を取り消せるよう、関連3マスターの行・選択状態をスナップショット化する。
   function captureUserEditorSnapshot() {
     return ["user_master", "team_master", "comment_assignment"].map((key) => {
       const draft = drafts.get(key);
@@ -1018,6 +1175,7 @@
     });
   }
 
+  // 保存せずに編集を閉じる場合、スナップショットから関連下書きを編集前へ戻す。
   function restoreUserEditorSnapshot(snapshotState) {
     snapshotState.forEach(({ key, selectedId, entries }) => {
       const draft = drafts.get(key);
@@ -1031,6 +1189,7 @@
     });
   }
 
+  // 指定ユーザーをモーダル編集対象に設定し、編集フォームへ初期フォーカスを移す。
   function openUserEditor(rowId, previousSnapshot = null) {
     if (userEditorModalState) return;
     const draft = drafts.get("user_master");
@@ -1053,6 +1212,7 @@
     });
   }
 
+  // ユーザー編集モーダルを閉じる。discard指定時は開く前の下書きへ戻す。
   function closeUserEditorModal(discard = true) {
     const state = userEditorModalState;
     if (!state) return;
@@ -1069,12 +1229,14 @@
     render();
   }
 
+  // ユーザー編集モーダルの変更を保存し、成功した場合だけモーダルを閉じる。
   async function saveUserEditor() {
     if (!userEditorModalState || isLoading) return;
     const saved = await save("user_master");
     if (saved) closeUserEditorModal(false);
   }
 
+  // 指定した課・係をチーム編集モーダルで開き、編集前スナップショットを保持する。
   function openTeamEditor(rowId) {
     if (teamEditorModalState || userEditorModalState) return;
     const draft = drafts.get("team_master");
@@ -1098,6 +1260,7 @@
     });
   }
 
+  // 部長グループのメンバー編集モーダルを開き、通常のチーム編集と同じ取消復元を可能にする。
   function openDirectorEditor() {
     if (teamEditorModalState || userEditorModalState) return;
     if (!drafts.get("team_master")) return;
@@ -1120,6 +1283,7 @@
     });
   }
 
+  // チーム編集モーダルの種別に応じて、見出し・メンバー一覧・入力フォームを組み立てる。
   function renderTeamEditorDialog() {
     const state = teamEditorModalState;
     const form = byId("teamEditorDialogForm");
@@ -1138,7 +1302,7 @@
       content?.insertBefore(header, form);
       form.append(
         renderTeamEditorMembers("", "director"),
-        createEditorActionBar({ modal: true }),
+        createEditorActionBar({ modal: true, saveLabel: "更新" }),
       );
       return;
     }
@@ -1149,6 +1313,7 @@
     renderTeamEditorModal(form, entry);
   }
 
+  // チーム編集モーダルを閉じ、必要に応じて開く前の所属・担当設定へ戻す。
   function closeTeamEditorModal(discard = true) {
     const state = teamEditorModalState;
     if (!state) return;
@@ -1167,12 +1332,17 @@
     render();
   }
 
+  // チーム編集モーダルの変更を保存し、成功時にモーダルを閉じる。
   async function saveTeamEditor() {
     if (!teamEditorModalState || isLoading) return;
     const saved = await save("team_master");
     if (saved) closeTeamEditorModal(false);
   }
 
+  // ---------------------------------------------------------------------------
+  // カレンダー機能
+  // ---------------------------------------------------------------------------
+  // 前後の年度へ移動し、対象年度のカレンダーがなければ土日行の作成を確認してから補完する。
   async function changeFiscalYear(direction) {
     if (![-1, 1].includes(Number(direction))) return;
     if (isChangingFiscalYear) return;
@@ -1207,6 +1377,7 @@
     render();
   }
 
+  // 指定日の休日行を追加・削除し、現在のカレンダー表示とフォーカスを保つ。
   function toggleCalendarDay(dateText) {
     const draft = drafts.get("calendar");
     const definition = getDefinition("calendar");
@@ -1235,6 +1406,7 @@
     requestAnimationFrame(() => focusCalendarDate(dateText));
   }
 
+  // カレンダーの日付ボタンで矢印・Home/End・PageUp/PageDownのキーボード移動を処理する。
   function handleCalendarGridKeydown(event) {
     const current = event.target.closest(".fiscal-calendar-day[data-calendar-date]");
     if (!current || event.altKey || event.metaKey) return false;
@@ -1268,36 +1440,13 @@
     return true;
   }
 
-  function offsetCalendarDate(dateText, dayOffset) {
-    const target = calendarDate(dateText);
-    if (!target) return "";
-    target.setUTCDate(target.getUTCDate() + dayOffset);
-    return calendarIsoDate(
-      target.getUTCFullYear(),
-      target.getUTCMonth(),
-      target.getUTCDate(),
-    );
-  }
-
-  function offsetCalendarMonth(dateText, monthOffset) {
-    const parts = calendarDateParts(dateText);
-    if (!parts) return "";
-    const first = new Date(Date.UTC(parts.year, parts.monthIndex + monthOffset, 1));
-    const lastDay = new Date(
-      Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0),
-    ).getUTCDate();
-    return calendarIsoDate(
-      first.getUTCFullYear(),
-      first.getUTCMonth(),
-      Math.min(parts.day, lastDay),
-    );
-  }
-
+  // 指定日を持つカレンダーのボタン要素を検索し、見つからなければnullを返す。
   function findCalendarDayButton(dateText) {
     return [...document.querySelectorAll(".fiscal-calendar-day[data-calendar-date]")]
       .find((button) => button.dataset.calendarDate === dateText) || null;
   }
 
+  // カレンダーの日付ボタンを roving tabindex にそろえ、キーボード操作の現在位置を示す。
   function syncCalendarRovingTabindex(dateText) {
     document
       .querySelectorAll(".fiscal-calendar-day[data-calendar-date]")
@@ -1306,6 +1455,7 @@
       });
   }
 
+  // 指定日へフォーカスを移し、同時にキーボード移動の現在位置を更新する。
   function focusCalendarDate(dateText) {
     const target = findCalendarDayButton(dateText);
     if (!target) return;
@@ -1313,12 +1463,17 @@
     target.focus({ preventScroll: true });
   }
 
+  // ---------------------------------------------------------------------------
+  // 組織機能と並び順
+  // ---------------------------------------------------------------------------
+  // チームの折りたたみ状態を切り替え、階層一覧を再描画する。
   function toggleTeam(teamId) {
     if (collapsedTeamIds.has(teamId)) collapsedTeamIds.delete(teamId);
     else collapsedTeamIds.add(teamId);
     renderTable();
   }
 
+  // すべてのチームを一括して展開または折りたたみ、階層表示を更新する。
   function setAllTeamsCollapsed(collapsed) {
     collapsedTeamIds.clear();
     if (collapsed) {
@@ -1332,6 +1487,7 @@
     renderTable();
   }
 
+  // 課カード内の係一覧を展開・折りたたみし、組織表示を再描画する。
   function toggleOrganizationSections(teamId) {
     if (!teamId) return;
     if (expandedOrganizationIds.has(teamId)) expandedOrganizationIds.delete(teamId);
@@ -1339,6 +1495,7 @@
     renderTable();
   }
 
+  // 現在のマスターに新しい行を追加し、ユーザーやチームなら専用エディターを開く。
   function addRow() {
     if (hasEditorChanges(activeMaster)) {
       notify({ text: "現在の編集内容を保存してから追加してください。", type: "warning" });
@@ -1361,13 +1518,9 @@
       return;
     }
     render();
-    requestAnimationFrame(() => {
-      byId("adminInspectorForm")
-        .querySelector("input:not(:disabled), select")
-        ?.focus();
-    });
   }
 
+  // 親階層を検証して課・係を新規作成し、作成したチームの編集画面を開く。
   function addTeam(level, parentTeamId = "", teamName = "") {
     const definition = getDefinition("team_master");
     const draft = drafts.get("team_master");
@@ -1408,6 +1561,7 @@
     openTeamEditor(entry.id, snapshotState);
   }
 
+  // 課・係の新規作成ダイアログを初期化し、必要な親課の選択肢を表示する。
   function openTeamCreateDialog(level = "department", parentTeamId = "") {
     if (hasEditorChanges("team_master")) {
       notify({ text: "現在の編集内容を保存してから追加してください。", type: "warning" });
@@ -1428,6 +1582,7 @@
     requestAnimationFrame(() => byId("teamCreateName").focus());
   }
 
+  // チーム新規作成ダイアログを閉じ、入力エラー表示をクリアする。
   function closeTeamCreateDialog() {
     const dialog = byId("teamCreateDialog");
     if (typeof dialog.close === "function" && dialog.open) dialog.close();
@@ -1435,6 +1590,7 @@
     byId("teamCreateError").textContent = "";
   }
 
+  // チーム新規作成フォームを検証し、入力値をチーム追加処理へ渡す。
   function submitTeamCreateDialog(event) {
     event.preventDefault();
     const form = byId("teamCreateForm");
@@ -1453,6 +1609,7 @@
     addTeam(level, parentTeamId, teamName);
   }
 
+  // 選択された階層に合わせて親課フィールドを生成・更新し、作成可否を反映する。
   function renderTeamCreateParentChoices(preferredParentId = null) {
     const level = byId("teamCreateLevel").value;
     const nameField = byId("teamCreateName").closest(".inspector-field");
@@ -1488,6 +1645,7 @@
     updateTeamCreateDialogState();
   }
 
+  // チーム名と親課の入力状態から、新規作成ボタンの有効・無効を切り替える。
   function updateTeamCreateDialogState() {
     const level = byId("teamCreateLevel").value;
     const parentTeamId = byId("teamCreateParent")?.dataset.teamId || "";
@@ -1497,6 +1655,7 @@
       !teamName || (level !== "department" && !parent);
   }
 
+  // 同じ親を持つチームの最大表示順から、末尾に追加する順序番号を算出する。
   function nextSiblingOrder(parentTeamId, excludedEntryId = "") {
     const orders = (drafts.get("team_master")?.entries || [])
       .filter(
@@ -1509,6 +1668,7 @@
     return (orders.length ? Math.max(...orders) : 0) + 10;
   }
 
+  // 指定した親配下のチームを表示順に並べ直し、10刻みの順序番号を再採番する。
   function normalizeSiblingOrders(parentTeamId) {
     (drafts.get("team_master")?.entries || [])
       .filter((entry) => valueFor(entry, "parent_team_id") === parentTeamId)
@@ -1518,6 +1678,7 @@
       });
   }
 
+  // すべての親階層について兄弟チームの表示順を正規化し、保存時の順序を統一する。
   function normalizeAllTeamOrders() {
     const parentIds = new Set(
       (drafts.get("team_master")?.entries || []).map((entry) =>
@@ -1527,6 +1688,7 @@
     parentIds.forEach(normalizeSiblingOrders);
   }
 
+  // 選択行を参照関係ごと検証して削除し、保存に失敗した場合は関連下書きを元へ戻す。
   async function deleteSelectedRow(rowId = "") {
     const draft = getDraft();
     const targetId = rowId || draft.selectedId;
@@ -1579,7 +1741,10 @@
       }
     }
     const definition = getDefinition();
-    const identifyingValue = valueFor(entry, definition.columns[0]?.key);
+    const identifyingValue =
+      activeMaster === "team_master"
+        ? valueFor(entry, "team_name") || valueFor(entry, "team_id")
+        : valueFor(entry, definition.columns[0]?.key);
     const confirmed = await requestConfirmationDialog({
       title: "削除の確認",
       description: `「${identifyingValue || "この行"}」を削除します。`,
@@ -1635,6 +1800,7 @@
     }
   }
 
+  // インスペクターの入力値を下書きへ反映し、関連設定の整合性を保ちながら表示を更新する。
   function updateSelectedRow(event) {
     const input = event.target.closest("[data-column]");
     if (!input) return;
@@ -1721,11 +1887,17 @@
     syncAdminChrome();
   }
 
+  // 現在選択されているユーザー行を取得し、該当しなければundefinedを返す。
   function getSelectedUser() {
     const draft = drafts.get("user_master");
     return draft?.entries.find((entry) => entry.id === draft.selectedId);
   }
 
+  // ---------------------------------------------------------------------------
+  // レンダリング
+  // ---------------------------------------------------------------------------
+  // 選択中マスターに応じて画面全体を再構築し、ナビゲーション・一覧・インスペクターを同期する。
+  // 各描画処理の後に管理画面クロームも更新し、未保存状態を表示へ反映する。
   function render() {
     byId("adminPanel").classList.toggle(
       "is-calendar-master",
@@ -1743,10 +1915,6 @@
       "is-calendar-master",
       activeMaster === "calendar",
     );
-    byId("masterInspector").hidden =
-      activeMaster === "calendar" ||
-      activeMaster === "user_master" ||
-      activeMaster === "team_master";
     renderMasterNav();
     renderTableHeading();
     renderTable();
@@ -1754,6 +1922,7 @@
     syncAdminChrome();
   }
 
+  // 表示対象のマスタータブを生成し、選択中・未保存状態とARIA属性を同期する。
   function renderMasterNav() {
     const navigation = byId("masterNav");
     navigation.replaceChildren();
@@ -1788,6 +1957,7 @@
     );
   }
 
+  // 現在のマスターに合わせて一覧見出し、追加ボタン、検索コントロールの文言と表示可否を切り替える。
   function renderTableHeading() {
     const definition = getDefinition();
     const addButton = byId("adminAddRowButton");
@@ -1832,6 +2002,8 @@
     byId("adminSearchClearButton").hidden = !searchInput.value;
   }
 
+  // 検索語を対象列へ適用し、一覧に表示する下書き行だけを返す。
+  // 元の下書き配列は変更せず、並べ替えや表示制御は呼び出し側に委ねる。
   function filteredEntries() {
     const draft = getDraft();
     if (!searchText) return draft.entries;
@@ -1844,6 +2016,8 @@
     );
   }
 
+  // 現在のマスターとモーダル状態に応じた一覧レンダラーを選び、必要なSortableを管理する。
+  // モーダル編集中は一覧を再構築せず、入力中のDOMと選択状態を保つ。
   function renderTable() {
     if (activeMaster === "user_master" && userEditorModalState) return;
     if (activeMaster === "team_master" && teamEditorModalState) return;
@@ -1862,6 +2036,7 @@
     renderOrganizationMigrationNotice();
   }
 
+  // 旧形式の組織移行で解決が必要な件数と旧担当設定を一覧上部に通知する。
   function renderOrganizationMigrationNotice() {
     if (!organizationMigrationState || activeMaster === "calendar") return;
     const notice = document.createElement("section");
@@ -1894,6 +2069,7 @@
     byId("adminTableWrap").prepend(notice);
   }
 
+  // ユーザー下書きを検索・表示順で並べ、操作ボタン付きのアクセシブルな一覧テーブルを生成する。
   function renderUserList(draft) {
     const entries = filteredEntries().slice().sort(compareUserListEntries);
     const wrap = byId("adminTableWrap");
@@ -1937,8 +2113,6 @@
       const row = document.createElement("tr");
       row.tabIndex = 0;
       row.dataset.rowId = entry.id;
-      row.classList.toggle("is-selected", entry.id === draft.selectedId);
-      row.setAttribute("aria-selected", String(entry.id === draft.selectedId));
       const employeeId = document.createElement("td");
       employeeId.textContent = valueFor(entry, "employee_id") || "—";
       const name = document.createElement("td");
@@ -1974,6 +2148,7 @@
     wrap.append(table);
   }
 
+  // 対象年度の休日行を月別カレンダーへ描画し、年度移動・休日件数・編集操作を組み立てる。
   function renderCalendarList(draft) {
     const wrap = byId("adminTableWrap");
     wrap.replaceChildren();
@@ -2028,6 +2203,7 @@
     wrap.append(toolbar, calendar);
   }
 
+  // 年度内で維持可能なカレンダーのフォーカス日を選び、今日または年度初日にフォールバックする。
   function getCalendarFocusDate() {
     const candidate = calendarDate(calendarFocusDate);
     if (candidate && fiscalYearForDate(candidate) === activeFiscalYear) {
@@ -2046,6 +2222,7 @@
     return calendarIsoDate(activeFiscalYear, 3, 1);
   }
 
+  // 年度を前後へ移動するボタンを生成し、下限年度では戻る操作を無効化する。
   function createFiscalYearButton(direction, label) {
     const button = document.createElement("button");
     button.type = "button";
@@ -2061,6 +2238,7 @@
     return button;
   }
 
+  // 指定年月の曜日見出しと日付セルを生成し、休日状態とキーボードフォーカスをARIAへ反映する。
   function createCalendarMonth(year, monthIndex, entriesByDate) {
     const month = document.createElement("section");
     month.className = "fiscal-calendar-month";
@@ -2087,6 +2265,8 @@
     const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
     let cellIndex = 0;
     let week = null;
+    // 日付セルを7列の週行へ追加し、週の開始時に新しい行を作る。
+    // cellIndexを連続的に進め、空白セルと実日付セルで同じ配置規則を保つ。
     const appendCell = (cell) => {
       if (cellIndex % 7 === 0) {
         week = document.createElement("div");
@@ -2097,6 +2277,7 @@
       week.append(cell);
       cellIndex += 1;
     };
+    // 月初・月末の不足分を空白セルで埋め、カレンダーを必ず週単位に揃える。
     const appendEmptyCell = () => {
       const empty = document.createElement("span");
       empty.className = "fiscal-calendar-cell fiscal-calendar-day-empty";
@@ -2134,6 +2315,8 @@
     return month;
   }
 
+  // 課・係を選択状態と並び順付きのカード2ペインへ描画し、描画後にSortableを初期化する。
+  // 選択中の課だけ係を表示し、空状態でも追加導線を維持する。
   function renderOrganizationTree(draft) {
     const wrap = byId("adminTableWrap");
     destroyOrganizationSortables();
@@ -2251,6 +2434,7 @@
     initializeOrganizationSortables();
   }
 
+  // 組織ペインの見出しを生成し、呼び出し側が追加ボタンを同じ領域へ配置できるようにする。
   function createOrganizationPaneHeading(id, titleText) {
     const heading = document.createElement("div");
     heading.className = "organization-pane-heading";
@@ -2261,6 +2445,7 @@
     return heading;
   }
 
+  // 組織追加用の共通ボタンを生成し、ラベルと装飾記号をアクセシブルなDOMへまとめる。
   function createOrganizationAddButton(label) {
     const button = document.createElement("button");
     button.type = "button";
@@ -2272,6 +2457,7 @@
     return button;
   }
 
+  // 固定の部長グループを組織カードとして生成し、担当者表示の起点を用意する。
   function createOrganizationDirectorCard() {
     const card = document.createElement("article");
     card.className = "organization-card organization-director-card";
@@ -2286,6 +2472,8 @@
     return card;
   }
 
+  // 課または係の下書き行を編集・選択・ドラッグ可能なカードへ変換する。
+  // optionsで操作可否を切り替え、Sortableとイベント委譲が使う識別属性も付与する。
   function createOrganizationCard(entry, options = {}) {
     const teamId = valueFor(entry, "team_id");
     const type = valueFor(entry, "team_type");
@@ -2314,6 +2502,7 @@
     return card;
   }
 
+  // 組織カードの名前、選択状態、並び替えハンドル、編集操作を共通ヘッダーへ組み立てる。
   function createOrganizationCardHeader(nameText, editId, options = {}) {
     const header = document.createElement("div");
     header.className = "organization-card-header";
@@ -2345,6 +2534,7 @@
     return header;
   }
 
+  // 係一覧の開閉状態を示すトグルを生成し、件数とARIAラベルで操作内容を伝える。
   function createOrganizationToggleButton(teamId, sectionCount, expanded) {
     const button = document.createElement("button");
     button.type = "button";
@@ -2360,6 +2550,7 @@
     return button;
   }
 
+  // 組織カードを同一階層内で並び替えるためのドラッグハンドルを生成する。
   function createOrganizationDragHandle(teamId, nameText) {
     const handle = document.createElement("span");
     handle.className = "organization-drag-handle";
@@ -2375,16 +2566,19 @@
     return handle;
   }
 
+  // リスト直下から組織カードだけを抽出し、空状態メッセージなどを順序計算から除外する。
   function organizationCardsIn(list) {
     return [...(list?.children || [])].filter((child) =>
       child.matches("[data-organization-card]"),
     );
   }
 
+  // 組織カードのDOM順をチームID配列として読み取り、Sortable後の順序比較に使う。
   function organizationOrderIn(list) {
     return organizationCardsIn(list).map((card) => card.dataset.teamId);
   }
 
+  // DOM上のチーム順と既存sort_orderを保存し、保存失敗時に元へ戻せるスナップショットを作る。
   function organizationOrderSnapshot(list) {
     return organizationOrderIn(list).map((teamId) => ({
       teamId,
@@ -2392,6 +2586,8 @@
     }));
   }
 
+  // 課・係リストへ同階層限定のSortableを登録し、ドラッグ開始前の順序を記録する。
+  // Sortableがない場合は通知して終了し、依存機能の不在で描画を壊さない。
   function initializeOrganizationSortables() {
     if (typeof window.Sortable !== "function") {
       notify({
@@ -2446,22 +2642,27 @@
     });
   }
 
+  // 組織リストに紐づくSortableを破棄し、並び替え中の状態をリセットする。
   function destroyOrganizationSortables() {
     organizationSortableInstances.forEach((sortable) => sortable.destroy());
     organizationSortableInstances = [];
     organizationDragState = null;
   }
 
+  // チーム編集ダイアログ直下からメンバーカードだけを抽出し、並び順操作の対象を限定する。
   function teamEditorMemberCardsIn(list) {
     return [...(list?.children || [])].filter((child) =>
       child.matches("[data-team-editor-member-card]"),
     );
   }
 
+  // メンバーカードのDOM順を社員番号配列として取得し、ドラッグ前後の比較に使う。
   function teamEditorMemberOrderIn(list) {
     return teamEditorMemberCardsIn(list).map((card) => card.dataset.employeeId || "");
   }
 
+  // チーム編集ダイアログのメンバー一覧へ同一リスト内限定のSortableを登録する。
+  // 空リストや登録済みリストはスキップし、再描画時の二重初期化を防ぐ。
   function initializeTeamEditorMemberSortables() {
     if (typeof window.Sortable !== "function") return;
     const form = byId("teamEditorDialogForm");
@@ -2512,6 +2713,7 @@
     });
   }
 
+  // メンバー用Sortableとドラッグ中の見た目・登録印をまとめて解除する。
   function destroyTeamEditorMemberSortables() {
     teamEditorMemberSortableInstances.forEach((sortable) => sortable.destroy());
     teamEditorMemberSortableInstances = [];
@@ -2526,6 +2728,8 @@
     });
   }
 
+  // ドラッグ後の社員順をmember_orderへ反映し、変更がない場合は副作用を起こさない。
+  // 順序は10刻みで再採番し、下書きと画面の表示順を一致させる。
   function commitTeamEditorMemberDrag() {
     const state = teamEditorMemberDragState;
     if (!state) return;
@@ -2546,6 +2750,8 @@
     syncAdminChrome();
   }
 
+  // 課・係カードのドラッグ結果を親IDとsort_orderへ反映し、変更があれば保存を開始する。
+  // 並び替え前のスナップショットを保持し、保存失敗時に元の順序へ戻せるようにする。
   function commitOrganizationDrag() {
     const state = organizationDragState;
     if (!state) return;
@@ -2573,6 +2779,7 @@
     void saveOrganizationOrder(previousOrders);
   }
 
+  // 組織順を保存し、失敗時はドラッグ前のsort_orderへ戻して一覧と未保存表示を再同期する。
   async function saveOrganizationOrder(previousOrders) {
     const saved = await save("team_master");
     if (saved) return;
@@ -2584,6 +2791,7 @@
     syncAdminChrome();
   }
 
+  // 組織カードの編集操作ボタンを生成し、名前入りのARIAラベルと編集アイコンを付ける。
   function createOrganizationEditButton(editId, nameText) {
     const button = document.createElement("button");
     button.type = "button";
@@ -2600,6 +2808,7 @@
     return button;
   }
 
+  // チームマスターの旧ツリー描画入口を組織ツリーへ委譲し、旧実装は移行参照用に保持する。
   function renderTeamTree(draft) {
     return renderOrganizationTree(draft);
     /* istanbul ignore next -- legacy renderer retained for migration reference */
@@ -2656,6 +2865,7 @@
     wrap.append(browser);
   }
 
+  // 検索で可視なチームを深さ付きの旧ブラウザー項目として再帰的に追加する。
   function appendTeamBrowserItem(container, entry, children, visibleIds, draft, depth) {
     const teamId = valueFor(entry, "team_id");
     if (!visibleIds.has(teamId)) return;
@@ -2680,6 +2890,8 @@
       });
   }
 
+  // 検索語に一致するチームとその祖先を可視集合へ含め、ツリーの経路を維持する。
+  // 循環参照で無限にたどらないよう、各経路の訪問済みIDを管理する。
   function visibleTeamIds(entries) {
     const allIds = new Set(entries.map((entry) => valueFor(entry, "team_id")));
     if (!searchText) return allIds;
@@ -2704,6 +2916,7 @@
     return visibleIds;
   }
 
+  // チーム表の表示番号をsort_orderから作り、欠損・重複時は行順の連番へフォールバックする。
   function createTeamDisplayNumbers(paths) {
     const sortOrders = paths.map((path) => {
       const entry = [...path].reverse().find(Boolean);
@@ -2717,6 +2930,7 @@
     );
   }
 
+  // 表の同一階層セルが連続する行数を数え、rowSpanで階層名をまとめるために使う。
   function countTeamPathRowSpan(paths, startIndex, columnIndex, entry) {
     const teamId = valueFor(entry, "team_id");
     let rowSpan = 1;
@@ -2727,6 +2941,8 @@
     return rowSpan;
   }
 
+  // 課・係・旧チームの親子関係を並び順どおりの表行パスへ展開する。
+  // 中間階層がない場合もnullを補い、常に3階層の表構造を返す。
   function createTeamTablePaths(entries) {
     const children = new Map();
     entries.forEach((entry) => {
@@ -2752,6 +2968,7 @@
     return paths;
   }
 
+  // チームと配下をARIAツリーのノードへ再帰的に変換し、検索結果と折りたたみ状態をDOMへ反映する。
   function createTeamTreeNode(entry, children, visibleIds, draft, depth) {
     const teamId = valueFor(entry, "team_id");
     if (!visibleIds.has(teamId)) return null;
@@ -2819,6 +3036,7 @@
     return branch;
   }
 
+  // チームをsort_order、名称、IDの順で安定的に比較し、同順でも表示順を決定できるようにする。
   function compareTeamEntries(left, right) {
     const leftOrder = Number(valueFor(left, "sort_order") || 999999);
     const rightOrder = Number(valueFor(right, "sort_order") || 999999);
@@ -2828,6 +3046,7 @@
     ) || valueFor(left, "team_id").localeCompare(valueFor(right, "team_id"), "ja");
   }
 
+  // 指定パスのインラインSVGアイコンを生成し、装飾用として支援技術から隠す。
   function createTeamSvgIcon(pathData) {
     const namespace = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(namespace, "svg");
@@ -2839,14 +3058,17 @@
     return svg;
   }
 
+  // 下書き行の値を常に文字列で安全に取り出し、欠損値を空文字へ正規化する。
   function valueFor(entry, key) {
     return String(entry?.values?.[key] || "");
   }
 
+  // 保存値の雇用区分を画面表示用の日本語ラベルへ変換する。
   function employmentTypeLabel(value) {
     return value === "temporary" ? "派遣社員" : "正社員";
   }
 
+  // 組織レベルの内部値を課・係などの日本語表示へ変換し、未知値はそのまま返す。
   function teamLevelLabel(level) {
     return {
       department: "課",
@@ -2857,6 +3079,7 @@
     }[level] || level || "—";
   }
 
+  // チームIDに対応する現在の名称を取得し、見つからない場合はIDを表示用に返す。
   function teamNameFor(teamId) {
     if (!teamId) return "";
     const entry = drafts
@@ -2865,6 +3088,7 @@
     return valueFor(entry, "team_name") || teamId;
   }
 
+  // チームのセミコロン区切りコメント担当IDを正規化済みの配列へ分解する。
   function teamCommenterIds(entry) {
     return valueFor(entry, "commenter_employee_ids")
       .split(";")
@@ -2872,6 +3096,7 @@
       .filter(Boolean);
   }
 
+  // 指定ユーザーがコメント担当になっているチームIDを表示順で返す。
   function commenterTeamIdsForUser(employeeId) {
     return (drafts.get("team_master")?.entries || [])
       .filter((team) => teamCommenterIds(team).includes(employeeId))
@@ -2879,6 +3104,7 @@
       .map((team) => valueFor(team, "team_id"));
   }
 
+  // 指定チームから子孫をたどり、循環を避けながら配下チームIDの集合を作る。
   function descendantTeamIds(rootIds) {
     const entries = drafts.get("team_master")?.entries || [];
     const covered = new Set(rootIds);
@@ -2898,6 +3124,7 @@
     return covered;
   }
 
+  // 上司の担当範囲に属するユーザー数を数え、本人は部下数から除外する。
   function countSubordinates(supervisor) {
     const covered = descendantTeamIds(
       commenterTeamIdsForUser(valueFor(supervisor, "employee_id")),
@@ -2908,313 +3135,27 @@
     ).length;
   }
 
+  // ---------------------------------------------------------------------------
+  // インスペクターと割り当てのレンダリング
+  // ---------------------------------------------------------------------------
+  // 選択中のユーザーまたはチームに対応する編集モーダルを再構築する。
   function renderInspector() {
-    if (activeMaster === "calendar") return;
     if (activeMaster === "user_master") {
-      const empty = byId("adminInspectorEmpty");
-      const form = byId("adminInspectorForm");
-      empty.classList.add("hidden");
-      form.classList.add("hidden");
-      form.replaceChildren();
       if (userEditorModalState) renderUserEditorDialog();
       return;
     }
     if (activeMaster === "team_master") {
-      const empty = byId("adminInspectorEmpty");
-      const form = byId("adminInspectorForm");
-      empty.classList.add("hidden");
-      form.classList.add("hidden");
-      form.replaceChildren();
       if (teamEditorModalState) renderTeamEditorDialog();
-      return;
-    }
-    const draft = getDraft();
-    const entry = draft.entries.find((item) => item.id === draft.selectedId);
-    const empty = byId("adminInspectorEmpty");
-    const form = byId("adminInspectorForm");
-    empty.classList.toggle("hidden", Boolean(entry));
-    form.classList.toggle("hidden", !entry);
-    form.replaceChildren();
-    if (!entry) {
-      const title = empty.querySelector("h3");
-      const description = empty.querySelector("p");
-      if (title) title.textContent = activeMaster === "calendar" ? "日付を選択" : "行を選択";
-      if (description) {
-        description.textContent =
-          activeMaster === "calendar"
-            ? "カレンダーの日付を押すと、休日と稼働日が切り替わります。"
-            : "一覧から編集する行を選んでください。";
-      }
-      return;
-    }
-
-    if (activeMaster === "user_master") {
-      renderUserInspector(form, entry);
-    } else if (activeMaster === "team_master") {
-      renderOrganizationInspector(form, entry);
-    } else {
-      renderGenericInspector(form, entry);
     }
   }
 
-  function renderTeamInspector(form, entry) {
-    const teamId = valueFor(entry, "team_id");
-    const level = valueFor(entry, "team_level");
-    const header = createTeamInspectorHeader(entry);
-    const basicSection = document.createElement("section");
-    basicSection.className = "team-settings-fields";
-    const fields = document.createElement("div");
-    fields.className = "inspector-fields team-editor-fields";
-    fields.append(...createTeamEditorFields(entry));
-    basicSection.append(fields);
 
-    const actions = document.createElement("div");
-    actions.className = "team-arrange-actions team-editor-actions";
-    const childActions = document.createElement("div");
-    childActions.className = "team-child-actions";
-    if (level === "large") {
-      childActions.append(
-        createChildTeamButton("medium", teamId, "係を追加"),
-      );
-    } else if (level === "medium") {
-          // 課・係の2階層。既存smallは読み書き可能だが新規作成しない。
-    }
-    if (childActions.childElementCount) actions.append(childActions);
-
-    const moveAvailability = teamMoveAvailability(entry);
-    if (moveAvailability.up || moveAvailability.down) {
-      const orderRow = document.createElement("div");
-      orderRow.className = "team-order-row";
-      const orderLabel = document.createElement("span");
-      orderLabel.textContent = "並び順";
-      orderRow.append(orderLabel);
-      const orderButtons = document.createElement("div");
-      orderButtons.className = "team-order-buttons";
-      [
-        ["up", "上へ移動", "M7 15l5-5 5 5"],
-        ["down", "下へ移動", "M7 9l5 5 5-5"],
-      ].forEach(([direction, label, pathData]) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "team-order-button";
-        button.dataset.moveTeam = direction;
-        button.setAttribute("aria-label", label);
-        button.title = label;
-        button.append(createTeamSvgIcon(pathData));
-        button.disabled = !moveAvailability[direction];
-        orderButtons.append(button);
-      });
-      orderRow.append(orderButtons);
-      actions.append(orderRow);
-    }
-
-    const assignmentGrid = document.createElement("div");
-    assignmentGrid.className = "team-assignment-grid";
-    assignmentGrid.append(
-      renderTeamAssignmentCard(teamId, "member"),
-      renderTeamAssignmentCard(teamId, "commenter"),
-    );
-    if (valueFor(entry, "commenter_scope") === "custom") {
-      assignmentGrid.append(renderTeamAssignmentCard(teamId, "target"));
-    }
-
-    const settings = document.createElement("details");
-    settings.className = "team-settings";
-    const settingsSummary = document.createElement("summary");
-    settingsSummary.textContent = "チーム情報を編集";
-    const settingsBody = document.createElement("div");
-    settingsBody.className = "team-settings-body";
-    settingsBody.append(
-      basicSection,
-      actions,
-      createDeleteActionBar(createDeleteButton("このチームを削除")),
-    );
-    settings.append(settingsSummary, settingsBody);
-    form.append(header, assignmentGrid, settings, createEditorActionBar());
-  }
-
-  function createTeamInspectorHeader(entry) {
-    const header = document.createElement("div");
-    header.className = "team-inspector-header";
-    const breadcrumb = document.createElement("div");
-    breadcrumb.className = "team-inspector-breadcrumb";
-    breadcrumb.textContent = `組織 ＞ ${teamPathLabel(entry)}`;
-    const detail = document.createElement("div");
-    detail.className = "team-inspector-title-row";
-    const copy = document.createElement("div");
-    const title = document.createElement("h3");
-    title.textContent = valueFor(entry, "team_name") || "名称未設定";
-    copy.append(title);
-    const status = document.createElement("span");
-    status.className = "team-status";
-    status.classList.toggle("is-inactive", valueFor(entry, "is_active") !== "1");
-    status.textContent = valueFor(entry, "is_active") === "1" ? "有効" : "廃止";
-    detail.append(copy, status);
-    header.append(breadcrumb, detail);
-    return header;
-  }
-
-  function renderTeamAssignmentCard(teamId, kind) {
-    const isMember = kind === "member";
-    const isTarget = kind === "target";
-    const currentEntries = isMember
-      ? teamMemberEntries(teamId)
-      : isTarget
-        ? teamTargetEntries(teamId)
-        : teamCommenterEntries(teamId);
-    const card = document.createElement("section");
-    card.className = "team-assignment-card assignment-card";
-    const heading = document.createElement("div");
-    heading.className = "section-heading";
-    const title = document.createElement("h3");
-      title.textContent = isMember
-        ? "所属ユーザー"
-        : isTarget
-          ? "カスタム対象ユーザー"
-        : valueFor(teamEntryFor(teamId), "commenter_scope") === "custom"
-          ? "カスタム対象ユーザー"
-          : "コメント担当ユーザー";
-    heading.append(title);
-    const list = document.createElement("div");
-    list.className = "team-member-list member-list";
-    if (!currentEntries.length) {
-      const empty = document.createElement("p");
-      empty.className = "team-assignment-empty";
-      empty.textContent = isMember
-        ? "所属ユーザーはまだいません。"
-        : isTarget
-          ? "カスタム対象ユーザーはまだいません。"
-          : "コメント担当ユーザーはまだいません。";
-      list.append(empty);
-    } else {
-      let previousAssignedTeamId = "";
-      currentEntries.forEach((user) => {
-        const employeeId = valueFor(user, "employee_id");
-        const assignedTeamId = valueFor(user, "small_team_id");
-        if (isMember && assignedTeamId !== previousAssignedTeamId) {
-          const groupHeading = document.createElement("div");
-          groupHeading.className = "team-member-group-heading";
-          groupHeading.textContent =
-            teamPathLabel(teamEntryFor(assignedTeamId)) ||
-            teamNameFor(assignedTeamId) ||
-            "所属なし";
-          list.append(groupHeading);
-          previousAssignedTeamId = assignedTeamId;
-        }
-        const row = document.createElement("div");
-        row.className = "team-member-row member-row";
-        const avatar = document.createElement("span");
-        avatar.className = "team-member-avatar avatar";
-        avatar.textContent = (valueFor(user, "display_name") || employeeId || "?").trim().slice(0, 1);
-        const meta = document.createElement("span");
-        meta.className = "team-member-meta member-meta";
-        const name = document.createElement("strong");
-        name.className = "member-name";
-        name.textContent = displayNameFor(employeeId);
-        const role = document.createElement("small");
-        role.className = "member-role";
-        role.textContent = isMember
-          ? "メンバー"
-          : isTarget ? "コメント対象" : "コメント担当";
-        meta.append(name, role);
-        const orderControls = document.createElement("span");
-        orderControls.className = "team-member-order-controls";
-        if (!isTarget) {
-          const availability = isMember
-            ? memberMoveAvailability(user)
-            : commenterMoveAvailability(teamId, employeeId);
-          [
-            ["up", "上へ", "M7 15l5-5 5 5"],
-            ["down", "下へ", "M7 9l5 5 5-5"],
-          ].forEach(([direction, label, pathData]) => {
-            const move = document.createElement("button");
-            move.type = "button";
-            move.className = "team-member-order-button";
-            if (isMember) {
-              move.dataset.memberMove = direction;
-              move.dataset.memberId = employeeId;
-            } else if (!isTarget) {
-              move.dataset.commenterMove = direction;
-              move.dataset.employeeId = employeeId;
-            }
-            move.disabled = !availability[direction];
-            move.title = label;
-            move.setAttribute("aria-label", `${displayNameFor(employeeId)}を${label}`);
-            move.append(createTeamSvgIcon(pathData));
-            orderControls.append(move);
-          });
-        }
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "team-assignment-remove remove";
-        remove.dataset.teamAssignmentRemove = "true";
-        remove.dataset.assignmentKind = kind;
-        remove.dataset.teamId = isMember
-          ? valueFor(user, "small_team_id")
-          : teamId;
-        remove.dataset.employeeId = employeeId;
-        remove.textContent = "解除";
-        remove.setAttribute("aria-label", `${displayNameFor(employeeId)}を対象から解除`);
-        row.append(avatar, meta);
-        row.append(orderControls);
-        row.append(remove);
-        list.append(row);
-      });
-    }
-
-    const picker = document.createElement("details");
-    picker.className = "team-assignment-picker";
-    const pickerSummary = document.createElement("summary");
-    pickerSummary.className = "add-link";
-    pickerSummary.textContent = isMember
-      ? "＋ 所属ユーザーを変更"
-      : isTarget ? "＋ 対象ユーザーを1人追加" : "＋ コメント担当を変更";
-    const select = document.createElement("select");
-    select.dataset.teamAssignmentSelect = "true";
-    select.dataset.assignmentKind = kind;
-    select.dataset.teamId = teamId;
-    select.setAttribute(
-      "aria-label",
-      isMember ? "所属ユーザーを1人追加" : "カスタム対象ユーザーを1人追加",
-    );
-    const canAssignMembers = !isMember || isAssignableTeam(teamId);
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = !canAssignMembers
-      ? "所属先の課・係・チームから変更してください"
-      : isMember
-        ? "ユーザーを追加…"
-        : isTarget ? "対象ユーザーを追加…" : "担当者を追加…";
-    select.append(placeholder);
-    const currentIds = new Set(currentEntries.map((user) => valueFor(user, "employee_id")));
-    const candidates = userEntriesForAssignment()
-      .filter((user) => {
-        const employeeId = valueFor(user, "employee_id");
-        if (!employeeId || currentIds.has(employeeId)) return false;
-        return (isMember || valueFor(user, "employment_type") !== "temporary") &&
-          (!isTarget || !currentIds.has(employeeId));
-      })
-      .sort(compareUserEntries);
-    candidates.forEach((user) => {
-      const option = document.createElement("option");
-      const employeeId = valueFor(user, "employee_id");
-      option.value = employeeId;
-      option.textContent = isMember
-        ? `${displayNameFor(employeeId)}${valueFor(user, "small_team_id") ? `（現在: ${teamNameFor(valueFor(user, "small_team_id")) || "所属あり"}）` : ""}`
-        : displayNameFor(employeeId);
-      select.append(option);
-    });
-    select.disabled = !candidates.length || !canAssignMembers;
-    picker.classList.toggle("is-disabled", select.disabled);
-    picker.append(pickerSummary, select);
-    card.append(heading, list, picker);
-    return card;
-  }
-
+  // 割り当て候補となるユーザー下書きの一覧を返す。未ロード時は空配列として描画側の分岐を安全にする。
   function userEntriesForAssignment() {
     return drafts.get("user_master")?.entries || [];
   }
 
+  // ユーザーを表示順、氏名、社員番号の順で比較する。未設定の順序は末尾へ送り、画面と保存前の並びを安定させる。
   function compareUserEntries(left, right) {
     const leftOrder = Number(valueFor(left, "member_order") || 999999);
     const rightOrder = Number(valueFor(right, "member_order") || 999999);
@@ -3227,8 +3168,10 @@
     );
   }
 
+  // ユーザー一覧用に所属組織の表示順を先に比較し、その後ユーザー順で安定して並べる。部長は最後に置く。
   function compareUserListEntries(left, right) {
     const organizationOrder = organizationDisplayOrder();
+    // ユーザー一覧の所属順比較キーを求める。部長と未所属を末尾側へ置き、組織順序を一覧へ反映する。
     const key = (entry) =>
       valueFor(entry, "affiliation_type") === "director"
         ? Number.MAX_SAFE_INTEGER
@@ -3237,6 +3180,7 @@
     return key(left) - key(right) || compareUserEntries(left, right);
   }
 
+  // 課と係を組織階層の並び順に展開し、ユーザー一覧で使う組織IDから順序への対応表を作る。
   function organizationDisplayOrder() {
     const entries = drafts.get("team_master")?.entries || [];
     const order = new Map();
@@ -3259,6 +3203,7 @@
     return order;
   }
 
+  // 指定した組織から親をたどり、循環を検知しながら最上位からの組織パスを返す。
   function teamPathEntries(teamId) {
     const path = [];
     let current = teamEntryFor(teamId);
@@ -3273,6 +3218,7 @@
     return path;
   }
 
+  // 2つの組織パスを各階層の表示順で比較する。片方が欠落していても比較結果を安定させる。
   function compareTeamPaths(leftTeamId, rightTeamId) {
     const leftPath = teamPathEntries(leftTeamId);
     const rightPath = teamPathEntries(rightTeamId);
@@ -3288,6 +3234,7 @@
     return 0;
   }
 
+  // 所属組織の階層順を優先してユーザーを比較し、同じ組織内ではユーザー表示順へ委譲する。
   function compareTeamScopedUsers(left, right) {
     return compareTeamPaths(
       valueFor(left, "organization_id"),
@@ -3295,6 +3242,7 @@
     ) || compareUserEntries(left, right);
   }
 
+  // 指定組織とその配下に直接所属するユーザーを集め、組織パスと表示順で並べる。
   function teamMemberEntries(teamId) {
     const scopeIds = descendantTeamIds([teamId]);
     return userEntriesForAssignment()
@@ -3302,6 +3250,7 @@
       .sort(compareTeamScopedUsers);
   }
 
+  // 組織のコメント担当IDをユーザー下書きへ解決し、存在する担当者だけを返す。
   function teamCommenterEntries(teamId) {
     const usersById = new Map(
       userEntriesForAssignment().map((entry) => [valueFor(entry, "employee_id"), entry]),
@@ -3311,11 +3260,13 @@
       .filter(Boolean);
   }
 
+  // 組織に保存された個別コメント対象IDをセミコロン区切りから配列へ変換する。
   function teamTargetIds(team) {
     return valueFor(team, "target_employee_ids")
       .split(";").map((id) => id.trim()).filter(Boolean);
   }
 
+  // 組織の個別対象IDをユーザー行へ解決し、存在する対象だけを返す。
   function teamTargetEntries(teamId) {
     const usersById = new Map(
       userEntriesForAssignment().map((entry) => [valueFor(entry, "employee_id"), entry]),
@@ -3324,6 +3275,7 @@
       .map((employeeId) => usersById.get(employeeId)).filter(Boolean);
   }
 
+  // 指定組織のコメント担当者について、上下移動ボタンを有効にできる位置か判定する。
   function commenterMoveAvailability(teamId, employeeId) {
     const commenterIds = teamCommenterIds(teamEntryFor(teamId));
     const index = commenterIds.indexOf(employeeId);
@@ -3333,10 +3285,12 @@
     };
   }
 
+  // 指定組織と配下に所属するユーザー数を返し、組織カードの件数表示に使う。
   function teamMemberCountFor(teamId) {
     return teamMemberEntries(teamId).length;
   }
 
+  // 同じ所属先のユーザー列における対象者の位置を調べ、上下移動の可否を返す。
   function memberMoveAvailability(entry) {
     const teamId = valueFor(entry, "small_team_id");
     const siblings = userEntriesForAssignment()
@@ -3349,6 +3303,7 @@
     };
   }
 
+  // 同じ所属先のユーザー表示順を再採番する。移動中の対象を除外できるため、移動元・移動先の順序を壊さず更新できる。
   function normalizeMemberDisplayOrders(teamId, excludedEntryId = "") {
     if (!teamId) return [];
     const siblings = userEntriesForAssignment()
@@ -3364,6 +3319,7 @@
     return siblings;
   }
 
+  // ユーザーの所属組織を変更し、移動前後の兄弟ユーザーの表示順を再調整する。所属なしへの移動も空IDで表す。
   function setUserTeamAssignment(entry, nextTeamId) {
     const previousTeamId = valueFor(entry, "small_team_id");
     const normalizedTeamId = String(nextTeamId || "");
@@ -3377,10 +3333,12 @@
     }
   }
 
+  // 指定組織が所属先として選択可能か、課・係の割り当て候補表で確認する。
   function isAssignableTeam(teamId) {
     return teamAssignmentChoices().some(([choiceId]) => choiceId === teamId);
   }
 
+  // 所属・コメント担当・カスタム対象のいずれかを追加または解除する。不正な組織、カスタム範囲外、許可されない所属は変更せず、更新後に関連画面を同期する。
   function setTeamAssignment(kind, teamId, employeeId, assigned) {
     const user = userEntriesForAssignment().find(
       (entry) => valueFor(entry, "employee_id") === employeeId,
@@ -3415,6 +3373,7 @@
     syncAdminChrome();
   }
 
+  // 指定した階層と親を持つ子組織追加ボタンを生成する。
   function createChildTeamButton(level, parentTeamId, text) {
     const button = document.createElement("button");
     button.type = "button";
@@ -3425,6 +3384,7 @@
     return button;
   }
 
+  // チームの名称・コメント範囲・親課/親係の編集フィールドを階層に応じて組み立てる。現行の課・係構造に合わせて選択肢を制限する。
   function createTeamEditorFields(entry) {
     const level = valueFor(entry, "team_level");
     const nameField = createInspectorField(
@@ -3475,6 +3435,7 @@
     return [sectionField, unitField, nameField, scopeField];
   }
 
+  // 組織の親を選ぶselectフィールドを生成する。必須・無効・補足説明などの表示制約を共通化する。
   function createTeamPlacementSelect(labelText, choices, value, options = {}) {
     const label = document.createElement("label");
     label.className = "inspector-field team-placement-field";
@@ -3509,12 +3470,14 @@
     return label;
   }
 
+  // 組織IDから対応するチーム下書き行を検索する。見つからない場合はundefinedを返す。
   function teamEntryFor(teamId) {
     return (drafts.get("team_master")?.entries || []).find(
       (entry) => valueFor(entry, "team_id") === teamId,
     );
   }
 
+  // 指定した親・階層に属する子組織を除外ID以外で集め、表示順の選択肢へ変換する。
   function teamChildrenChoices(parentTeamId, level, excludedTeamId) {
     return (drafts.get("team_master")?.entries || [])
       .filter((entry) => valueFor(entry, "parent_team_id") === parentTeamId)
@@ -3524,6 +3487,7 @@
       .map((entry) => [valueFor(entry, "team_id"), valueFor(entry, "team_name")]);
   }
 
+  // 組織行から親をたどり、循環を避けながらパンくず形式の名称を作る。
   function teamPathLabel(entry) {
     const entries = drafts.get("team_master")?.entries || [];
     const byTeamId = new Map(
@@ -3542,6 +3506,7 @@
     return names.join(" ＞ ");
   }
 
+  // 指定ユーザーを同じ所属内で上下に移動し、全兄弟の表示順を10刻みで振り直して画面へ反映する。
   function moveSelectedMember(employeeId, direction) {
     const userDraft = drafts.get("user_master");
     const selected = userDraft?.entries.find(
@@ -3568,6 +3533,7 @@
     syncAdminChrome();
   }
 
+  // 選択中チームのコメント担当順を上下入れ替え、ID列を更新して担当表示を再描画する。
   function moveSelectedCommenter(employeeId, direction) {
     const teamDraft = drafts.get("team_master");
     const team = teamDraft?.entries.find((entry) => entry.id === teamDraft.selectedId);
@@ -3586,6 +3552,7 @@
     syncAdminChrome();
   }
 
+  // 選択中チームを同じ親の兄弟間で上下移動し、sort_orderを再採番する。
   function moveSelectedTeam(direction) {
     const draft = drafts.get("team_master");
     const selected = draft?.entries.find((entry) => entry.id === draft.selectedId);
@@ -3606,6 +3573,7 @@
     syncAdminChrome();
   }
 
+  // 同じ親を持つチームの並び位置から、上下移動の可否を返す。
   function teamMoveAvailability(entry) {
     const draft = drafts.get("team_master");
     const parentId = valueFor(entry, "parent_team_id");
@@ -3619,91 +3587,20 @@
     };
   }
 
-  function renderOrganizationInspector(form, entry, options = {}) {
-    if (options.modal) {
-      renderTeamEditorModal(form, entry);
-      return;
-    }
-    const teamId = valueFor(entry, "team_id");
-    const teamType = valueFor(entry, "team_type");
-    const modal = Boolean(options.modal);
-    const header = createInspectorHeader(
-      teamType === "department" ? "選択中の課" : "選択中の係",
-      valueFor(entry, "team_name") || "名称未設定",
-    );
-    const basic = document.createElement("section");
-    basic.className = "organization-editor-section";
-    basic.append(createSectionHeading("基本情報", "組織IDは作成後に変更できません。"));
-    const fields = document.createElement("div");
-    fields.className = "inspector-fields team-editor-fields";
-    const definition = getDefinition("team_master");
-    ["team_id", "team_name", "team_type"].forEach((key) => {
-      const column = definition.columns.find((item) => item.key === key);
-      fields.append(
-        createInspectorField(column, valueFor(entry, key), {
-          required: true,
-          disabled: key !== "team_name",
-          hideKey: true,
-        }),
-      );
-    });
-    if (teamType === "section") {
-      const parentColumn = definition.columns.find(
-        (item) => item.key === "parent_team_id",
-      );
-      fields.append(
-        createInspectorField(parentColumn, valueFor(entry, "parent_team_id"), {
-          required: true,
-          disabled: true,
-          hideKey: true,
-        }),
-      );
-    }
-    basic.append(fields);
 
-    const arrange = document.createElement("div");
-    arrange.className = "team-arrange-actions organization-arrange-actions";
-    if (teamType === "department") {
-      const add = document.createElement("button");
-      add.type = "button";
-      add.className = "admin-add-button";
-      add.dataset.addChildLevel = "section";
-      add.dataset.parentTeamId = teamId;
-      add.textContent = "係を追加";
-      arrange.append(add);
-    }
-    const availability = teamMoveAvailability(entry);
-    [["up", "上へ"], ["down", "下へ"]].forEach(([direction, label]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "team-member-order-button";
-      button.dataset.moveTeam = direction;
-      button.textContent = label;
-      button.disabled = !availability[direction];
-      arrange.append(button);
-    });
-
-    form.append(header, basic, arrange);
-    renderOrganizationMembersInspector(form, "organization", teamId, entry, false);
-    const deleteActions = createDeleteActionBar(
-      createDeleteButton(`${teamType === "department" ? "課" : "係"}を削除`),
-    );
-    if (modal) {
-      form.append(deleteActions, createEditorActionBar({ modal: true }));
-    } else {
-      form.append(createEditorActionBar(), deleteActions);
-    }
-  }
-
+  // チーム編集モーダルのツールバー・基本フィールド・所属ユーザー一覧を描画し、Sortableを初期化する。
   function renderTeamEditorModal(form, entry) {
     const definition = getDefinition("team_master");
     const teamId = valueFor(entry, "team_id");
     const teamType = valueFor(entry, "team_type");
-    const toolbar = document.createElement("div");
-    toolbar.className = "team-editor-modal-toolbar";
-    toolbar.append(
-      createDeleteIconButton(`${teamType === "department" ? "課" : "係"}を削除`),
-    );
+    const content = form.closest(".user-editor-dialog-content");
+    const header = document.createElement("header");
+    header.className = "user-editor-dialog-header team-editor-dialog-header";
+    const title = document.createElement("h2");
+    title.id = "teamEditorDialogTitle";
+    title.textContent = teamType === "department" ? "課を編集" : "係を編集";
+    header.append(title);
+    content?.insertBefore(header, form);
 
     const fields = document.createElement("div");
     fields.className = "inspector-fields team-editor-fields team-editor-modal-fields";
@@ -3720,14 +3617,18 @@
     });
 
     form.append(
-      toolbar,
       fields,
       renderTeamEditorMembers(teamId),
-      createEditorActionBar({ modal: true }),
+      createEditorActionBar({
+        modal: true,
+        saveLabel: entry.isNew ? "作成" : "更新",
+        deleteLabel: `${teamType === "department" ? "課" : "係"}を削除`,
+      }),
     );
     initializeTeamEditorMemberSortables();
   }
 
+  // 課・係または部長に直接所属するユーザーをモーダル用カードとして描画する。通常の組織所属だけドラッグ並べ替え対象にする。
   function renderTeamEditorMembers(teamId, affiliationType = "organization") {
     const section = document.createElement("section");
     section.className = "organization-members-section team-editor-modal-members";
@@ -3783,6 +3684,7 @@
     return section;
   }
 
+  // 組織/部長グループの直接所属ユーザー、順序操作、別所属への移動・追加UIを描画する。表示順を日報とコメント担当で共有する。
   function renderOrganizationMembersInspector(
     form,
     affiliationType,
@@ -3883,6 +3785,7 @@
     if (includeHeader) form.append(createEditorActionBar({ modal: Boolean(options.modal) }));
   }
 
+  // 同じ直接所属グループ内でユーザーを上下移動し、member_orderを再採番して一覧とインスペクターを同期する。
   function moveOrganizationMember(employeeId, direction) {
     const user = drafts
       .get("user_master")
@@ -3904,6 +3807,7 @@
     syncAdminChrome();
   }
 
+  // 社員番号に対応するコメント担当設定行を取得する。create指定時は初期値付きの新規行を下書きへ補完する。
   function assignmentEntryForUser(employeeId, create = false) {
     const draft = drafts.get("comment_assignment");
     let entry = draft?.entries.find(
@@ -3925,6 +3829,7 @@
     return entry || null;
   }
 
+  // 現在選択中のユーザーのコメント担当設定行を取得し、必要なら作成する。
   function assignmentEntryForSelectedUser(create = false) {
     return assignmentEntryForUser(
       valueFor(getSelectedUser(), "employee_id"),
@@ -3932,6 +3837,7 @@
     );
   }
 
+  // 指定ユーザーのコメント対象種別と対象IDをすべて解除し、所属変更などに伴う古い参照を残さない。
   function resetCommentAssignment(employeeId) {
     const assignment = assignmentEntryForUser(employeeId, true);
     if (!assignment) return;
@@ -3940,18 +3846,21 @@
     assignment.values.target_employee_ids = "";
   }
 
+  // ユーザーの所属を部長またはorganization:IDの選択値へ変換する。
   function affiliationValue(entry) {
     return valueFor(entry, "affiliation_type") === "director"
       ? "director"
       : `organization:${valueFor(entry, "organization_id")}`;
   }
 
+  // ユーザーの所属を部長または組織パスの表示名へ変換し、未設定時は明示的なラベルを返す。
   function affiliationLabel(entry) {
     if (valueFor(entry, "affiliation_type") === "director") return "部長";
     const organizationId = valueFor(entry, "organization_id");
     return teamPathLabel(teamEntryFor(organizationId)) || "所属未設定";
   }
 
+  // 部長または指定組織に直接所属するユーザーだけを抽出し、ユーザー一覧と同じ順序で並べる。
   function directMembersFor(affiliationType, organizationId) {
     return (drafts.get("user_master")?.entries || [])
       .filter((entry) =>
@@ -3963,6 +3872,7 @@
       .sort(compareUserListEntries);
   }
 
+  // コメント担当設定を一覧表示用の短い日本語へ要約する。なし・組織・複数課・個別設定を件数付きで区別する。
   function commentAssignmentSummary(employeeId) {
     const assignment = assignmentEntryForUser(employeeId);
     const type = valueFor(assignment, "target_type") || "none";
@@ -3982,10 +3892,7 @@
     return "個別設定（" + count + "人）";
   }
 
-  function splitIds(value) {
-    return [...new Set(String(value || "").split(";").map((item) => item.trim()).filter(Boolean))];
-  }
-
+  // 部長、課、係を階層順の所属選択肢へ展開する。ユーザーの移動先と編集フォームで同じ選択肢を使う。
   function organizationAffiliationChoices() {
     const teams = drafts.get("team_master")?.entries || [];
     const departments = teams
@@ -4012,12 +3919,14 @@
     return choices;
   }
 
+  // 選択中ユーザーの所属変更を受け付け、確認を含む共通処理へ渡す。
   async function changeUserAffiliation(nextValue) {
     const user = getSelectedUser();
     if (!user) return;
     await applyUserAffiliationChange(user, nextValue);
   }
 
+  // 指定社員番号のユーザーを探し、組織一覧からの所属移動を共通処理へ渡す。
   async function moveUserToAffiliation(employeeId, nextValue) {
     const user = drafts
       .get("user_master")
@@ -4026,6 +3935,7 @@
     await applyUserAffiliationChange(user, nextValue);
   }
 
+  // ユーザーの所属を変更し、担当設定がある場合は解除確認を行う。部長化時の入力制約と所属内表示順を更新して関連画面を再描画する。
   async function applyUserAffiliationChange(user, nextValue) {
     const previous = affiliationValue(user);
     if (!nextValue || previous === nextValue) {
@@ -4070,6 +3980,7 @@
     syncAdminChrome();
   }
 
+  // 所属変更後にカスタムコメント対象から許可範囲外のIDを除去し、空になった設定をなしへ戻す。
   function pruneInvalidCustomAssignments() {
     (drafts.get("comment_assignment")?.entries || []).forEach((assignment) => {
       if (valueFor(assignment, "target_type") !== "custom") return;
@@ -4094,6 +4005,7 @@
     });
   }
 
+  // 選択ユーザーのコメント対象種別を正規化して保存する。組織指定はIDへ分離し、種別変更時に旧対象IDを消去する。
   function updateCommentTargetType(targetType) {
     const assignment = assignmentEntryForSelectedUser(true);
     if (!assignment) return;
@@ -4110,6 +4022,7 @@
     syncAdminChrome();
   }
 
+  // コメント対象のIDを選択/解除に応じて追加または除去し、重複のない区切り文字列として保存する。
   function toggleAssignmentListValue(column, id, selected) {
     const assignment = assignmentEntryForSelectedUser(true);
     if (!assignment) return;
@@ -4123,6 +4036,7 @@
     syncAdminChrome();
   }
 
+  // ユーザーの所属に応じてコメント対象にできる課・係を返す。係所属では親課も含め、所属範囲外は候補に出さない。
   function allowedOrganizationTargets(user) {
     const organization = teamEntryFor(valueFor(user, "organization_id"));
     if (!organization) return [];
@@ -4143,6 +4057,7 @@
     ].sort(compareTeamPathOrder);
   }
 
+  // ユーザーと同じ所属範囲で日報入力可能な他ユーザーだけをカスタム対象候補にする。自分自身や派遣社員は除外する。
   function allowedCustomTargets(user) {
     const organization = teamEntryFor(valueFor(user, "organization_id"));
     if (!organization) return [];
@@ -4167,6 +4082,7 @@
       .sort(compareUserListEntries);
   }
 
+  // ユーザー編集モーダルを空にして、選択中ユーザーの組織所属・権限・コメント担当フォームを描画する。
   function renderUserEditorDialog() {
     const state = userEditorModalState;
     const entry = drafts
@@ -4174,11 +4090,21 @@
       ?.entries.find((item) => item.id === state?.entryId);
     const form = byId("userEditorDialogForm");
     if (!entry || !form) return;
+    const content = form.closest(".user-editor-dialog-content");
+    content?.querySelector(".user-editor-dialog-header")?.remove();
+    const header = document.createElement("header");
+    header.className = "user-editor-dialog-header";
+    const title = document.createElement("h2");
+    title.id = "userEditorDialogTitle";
+    title.textContent = entry.isNew ? "ユーザーを追加" : "ユーザーを編集";
+    header.append(title);
+    content?.insertBefore(header, form);
     form.replaceChildren();
-    renderOrganizationUserInspector(form, entry, { modal: true });
+    renderOrganizationUserInspector(form, entry);
   }
 
-  function renderOrganizationUserInspector(form, entry, options = {}) {
+  // 組織所属ユーザーの基本情報、所属、雇用/管理者/日報入力、コメント対象を一つの編集フォームへ構成する。最後の管理者を変更できない制約もフィールドへ反映する。
+  function renderOrganizationUserInspector(form, entry) {
     const definition = getDefinition("user_master");
     const fields = document.createElement("div");
     fields.className = "inspector-fields user-editor-fields";
@@ -4236,10 +4162,11 @@
     form.append(
       fields,
       assignmentSection,
-      createUserEditorActions({ modal: Boolean(options.modal) }),
+      createUserEditorActions({ isNew: entry.isNew }),
     );
   }
 
+  // 雇用区分・所属に応じたコメント対象の選択肢と、複数課/個別対象のチェックリストを描画する。
   function renderCommentAssignmentEditor(user) {
     const assignment = assignmentEntryForUser(valueFor(user, "employee_id"), true);
     const wrap = document.createElement("div");
@@ -4303,6 +4230,7 @@
     return wrap;
   }
 
+  // コメント対象IDのチェックリストを生成し、選択件数と空候補表示を付ける。
   function createAssignmentChecklist(titleText, entries, selectedIds, kind) {
     const fieldset = document.createElement("fieldset");
     fieldset.className = "assignment-checklist";
@@ -4335,101 +4263,27 @@
     return fieldset;
   }
 
-  function renderUserInspector(form, entry) {
-    return renderOrganizationUserInspector(form, entry);
-    /* istanbul ignore next -- legacy inspector retained for migration reference */
-    const fields = document.createElement("div");
-    fields.className = "user-editor-fields";
-    const definition = getDefinition("user_master");
-    const editorColumnOrder = [
-      "employee_id",
-      "display_name",
-      "employment_type",
-      "is_admin",
-      "small_team_id",
-      "can_input_own_report",
-    ];
-    editorColumnOrder.forEach((columnKey) => {
-      const column = definition.columns.find((candidate) => candidate.key === columnKey);
-      if (!column) return;
-      const field = createInspectorField(column, entry.values[column.key], {
-        required: Boolean(column.required),
-        disabled:
-          (column.key === "employee_id" && !entry.isNew) ||
-          (column.key === "is_admin" &&
-            valueFor(entry, "employment_type") !== "regular") ||
-          (column.key === "is_admin" && valueFor(entry, "is_admin") === "1" && regularAdministratorCount() <= 1),
-        hideKey: true,
-      });
-      field.dataset.userField = column.key;
-      fields.append(field);
-      if (column.key === "small_team_id") {
-        fields.append(createUserCommenterTeamsField(entry));
-      }
-    });
-    form.append(fields, createUserEditorActions());
-  }
 
-  function createUserCommenterTeamsField(entry) {
-    const field = document.createElement("div");
-    field.className = "inspector-field user-commenter-teams-field";
-    field.dataset.userField = "commenter_team_ids";
-
-    const label = document.createElement("span");
-    label.className = "inspector-field-label";
-    const labelText = document.createElement("span");
-    labelText.textContent = "コメント対象チーム";
-    label.append(labelText);
-
-    const values = document.createElement("div");
-    values.className = "user-commenter-teams";
-    const teamIds = commenterTeamIdsForUser(valueFor(entry, "employee_id"));
-    teamIds.forEach((teamId) => {
-      const team = document.createElement("span");
-      team.className = "user-commenter-team";
-      team.textContent = teamNameFor(teamId);
-      values.append(team);
-    });
-    if (!teamIds.length) {
-      values.classList.add("is-empty");
-      values.textContent = "—";
-    }
-
-    field.append(label, values);
-    return field;
-  }
-
-  function createUserEditorActions({ modal = false } = {}) {
+  // ユーザー編集モーダルの取消・作成/更新操作を生成する。
+  function createUserEditorActions({ isNew = false } = {}) {
     const actions = document.createElement("div");
     actions.className = "user-editor-actions";
-    if (modal) {
-      const cancelButton = document.createElement("button");
-      cancelButton.type = "button";
-      cancelButton.className = "inspector-cancel-button";
-      cancelButton.dataset.userEditorCancel = "true";
-      cancelButton.textContent = "キャンセル";
-      actions.append(cancelButton);
-    } else {
-      const deleteButton = createDeleteButton("削除");
-      deleteButton.classList.add("is-secondary");
-      const selectedUser = getDraft("user_master")?.entries.find((entry) => entry.id === getDraft("user_master")?.selectedId);
-      if (activeMaster === "user_master" && isProtectedAdministratorEntry(selectedUser)) {
-        deleteButton.disabled = true;
-        deleteButton.title = "最後の管理者またはログイン中の管理者は削除できません";
-        deleteButton.setAttribute("aria-label", "削除できません");
-        deleteButton.setAttribute("aria-disabled", "true");
-      }
-      actions.append(deleteButton);
-    }
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "inspector-cancel-button";
+    cancelButton.dataset.userEditorCancel = "true";
+    cancelButton.textContent = "キャンセル";
+    actions.append(cancelButton);
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.className = "inspector-save-button";
     saveButton.dataset.saveEditor = "true";
-    saveButton.textContent = "保存";
+    saveButton.textContent = isNew ? "作成" : "更新";
     actions.append(saveButton);
     return actions;
   }
 
+  // 社員番号から表示名を取得し、未登録なら社員番号を代替表示する。
   function displayNameFor(employeeId) {
     const entry = drafts
       .get("user_master")
@@ -4437,27 +4291,10 @@
     return valueFor(entry, "display_name") || employeeId;
   }
 
-  function renderGenericInspector(form, entry) {
-    const definition = getDefinition();
-    const header = createInspectorHeader(
-      "選択中の行",
-      entry.values[definition.columns[0].key] || "新しい行",
-    );
-    const fields = document.createElement("div");
-    fields.className = "inspector-fields";
-    definition.columns.forEach((column) => {
-      const field = createInspectorField(column, entry.values[column.key], {
-        required: Boolean(column.required),
-        disabled:
-          activeMaster === "team_master" &&
-          column.key === "team_id" &&
-          !entry.isNew,
-      });
-      fields.append(field);
-    });
-    form.append(header, fields, createUserEditorActions());
-  }
-
+  // ---------------------------------------------------------------------------
+  // 共通フォーム・操作DOMビルダー
+  // ---------------------------------------------------------------------------
+  // インスペクター上部の補助見出しとタイトルを生成する。
   function createInspectorHeader(eyebrowText, titleText) {
     const header = document.createElement("div");
     header.className = "inspector-form-header";
@@ -4469,6 +4306,7 @@
     return header;
   }
 
+  // セクション見出しと説明文を生成する。説明が空なら段落を追加しない。
   function createSectionHeading(titleText, descriptionText) {
     const heading = document.createElement("div");
     heading.className = "inspector-section-heading";
@@ -4483,6 +4321,7 @@
     return heading;
   }
 
+  // 列定義に応じてラジオ、select、inputを生成し、必須・無効・不正表示と選択肢を共通化する。
   function createInspectorField(column, value, options = {}) {
     const isRadioField = [
       "employment_type",
@@ -4629,6 +4468,7 @@
     return label;
   }
 
+  // 指定階層の組織を表示順と名称順で並べ、IDとラベルの選択肢へ変換する。
   function teamChoices(level) {
     return (drafts.get("team_master")?.entries || [])
       .filter((entry) =>
@@ -4649,6 +4489,7 @@
       ]);
   }
 
+  // 所属先として選択可能な課・係だけを組織パス順の選択肢へ変換する。
   function teamAssignmentChoices() {
     const entries = drafts.get("team_master")?.entries || [];
     return entries
@@ -4657,9 +4498,11 @@
       .map((entry) => [valueFor(entry, "team_id"), teamPathLabel(entry)]);
   }
 
+  // 親階層から積み上げたsort_order配列を比較し、組織パスの表示順を安定させる。
   function compareTeamPathOrder(left, right) {
     const entries = drafts.get("team_master")?.entries || [];
     const byId = new Map(entries.map((entry) => [valueFor(entry, "team_id"), entry]));
+    // 組織行から親をたどって各階層のsort_orderをキー化する。循環があっても処理を停止できる構造を保つ。
     const key = (entry) => {
       const orders = [];
       let current = entry;
@@ -4678,6 +4521,7 @@
     return valueFor(left, "team_name").localeCompare(valueFor(right, "team_name"), "ja");
   }
 
+  // 指定階層に該当する親候補を除外ID以外から集め、パス付き選択肢へ変換する。
   function teamParentChoices(levels, excludedTeamId) {
     return (drafts.get("team_master")?.entries || [])
       .filter((entry) =>
@@ -4689,33 +4533,7 @@
       .map((entry) => [valueFor(entry, "team_id"), teamPathLabel(entry)]);
   }
 
-  function createDeleteButton(text) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "inspector-delete-button";
-    button.dataset.deleteRow = "true";
-    button.textContent = text;
-    return button;
-  }
-
-  function createDeleteIconButton(label) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "api-key-action delete team-editor-modal-delete";
-    button.dataset.deleteRow = "true";
-    button.setAttribute("aria-label", label);
-    button.title = label;
-    const iconWrap = document.createElement("span");
-    const icon = createTeamSvgIcon(EMBEDDED_DELETE_ICON_PATH);
-    const iconPath = icon.querySelector("path");
-    iconPath.setAttribute("fill-rule", "evenodd");
-    iconPath.setAttribute("clip-rule", "evenodd");
-    iconPath.setAttribute("fill", "currentColor");
-    iconWrap.append(icon);
-    button.append(iconWrap);
-    return button;
-  }
-
+  // ユーザー行の編集/削除アクションボタンを生成する。管理者保護対象の削除は非表示にする。
   function createUserRowAction(action, entry, displayLabel) {
     const button = document.createElement("button");
     const isEdit = action === "edit";
@@ -4732,10 +4550,8 @@
     );
     button.title = isEdit ? "編集" : "削除";
     if (!isEdit && isProtectedAdministratorEntry(entry)) {
-      button.disabled = true;
-      button.title = "最後の管理者またはログイン中の管理者は削除できません";
-      button.setAttribute("aria-label", `${displayLabel}を削除できません`);
-      button.setAttribute("aria-disabled", "true");
+      button.hidden = true;
+      button.setAttribute("aria-hidden", "true");
     }
     const iconWrap = document.createElement("span");
     const icon = createTeamSvgIcon(iconPath);
@@ -4748,12 +4564,22 @@
     return button;
   }
 
-  function createEditorActionBar({ modal = false } = {}) {
+  // 編集フォームの保存ボタンと、モーダル時だけ削除・取消ボタンを持つ操作バーを生成する。
+  function createEditorActionBar({ modal = false, deleteLabel = "", saveLabel = "保存" } = {}) {
     const actions = document.createElement("div");
     actions.className = modal
       ? "team-editor-modal-actions"
       : "inspector-record-actions";
     if (modal) {
+      if (deleteLabel) {
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "inspector-delete-button";
+        deleteButton.dataset.deleteRow = "true";
+        deleteButton.textContent = "削除";
+        deleteButton.setAttribute("aria-label", deleteLabel);
+        actions.append(deleteButton);
+      }
       const cancelButton = document.createElement("button");
       cancelButton.type = "button";
       cancelButton.className = "inspector-cancel-button";
@@ -4765,18 +4591,15 @@
     saveButton.type = "button";
     saveButton.className = "inspector-save-button";
     saveButton.dataset.saveEditor = "true";
-    saveButton.textContent = "保存";
+    saveButton.textContent = saveLabel;
     actions.append(saveButton);
     return actions;
   }
 
-  function createDeleteActionBar(deleteButton) {
-    const actions = document.createElement("div");
-    actions.className = "inspector-delete-actions";
-    actions.append(deleteButton);
-    return actions;
-  }
-
+  // ---------------------------------------------------------------------------
+  // 公開APIとホスト側クロームの同期
+  // ---------------------------------------------------------------------------
+  // 4マスターそれぞれの未保存状態を数え、変更ファイル数バッジの基礎値を返す。
   function dirtyFileCount() {
     let count = 0;
     if (isDraftDirty(drafts.get("user_master"))) count += 1;
@@ -4786,6 +4609,7 @@
     return count;
   }
 
+  // 未保存件数、保存ボタンの有効状態、台帳表示、ホスト側未保存状態を現在の下書きへ同期する。
   function syncAdminChrome() {
     const count = dirtyFileCount();
     const badge = byId("adminDirtyBadge");
@@ -4807,6 +4631,7 @@
     }
   }
 
+  // いずれかのマスターに未保存変更があるかを返す。
   function hasUnsaved() {
     return dirtyFileCount() > 0;
   }
@@ -4818,6 +4643,7 @@
     hasUnsaved,
     save,
     syncChrome: syncAdminChrome,
+    // ログイン中の社員番号を記録し、管理者保護の判定に使う。読込済みなら保護対象表示を直ちに再描画する。
     setCurrentEmployeeId(employeeId) {
       currentEmployeeId = String(employeeId || "");
       if (isLoaded) render();

@@ -205,12 +205,22 @@
                 <div class="toolbar-left toolbar-left-wide">
                   <div class="period-control-container">
                       <div class="period-control">
-                        <div class="period-field-group">
+                        <div class="period-field-group native-date-picker-field">
                           <input id="startDate" type="date" aria-label="開始日" aria-describedby="periodError" />
+                          <span id="startDateDisplay" class="period-field-display" aria-hidden="true"></span>
+                          <svg class="period-field-display-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="4" y="5" width="16" height="15" rx="2" />
+                            <path d="M8 3v4M16 3v4M4 10h16" />
+                          </svg>
                         </div>
                         <span class="period-separator">〜</span>
-                        <div class="period-field-group">
+                        <div class="period-field-group native-date-picker-field">
                           <input id="endDate" type="date" aria-label="終了日" aria-describedby="periodError" />
+                          <span id="endDateDisplay" class="period-field-display" aria-hidden="true"></span>
+                          <svg class="period-field-display-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="4" y="5" width="16" height="15" rx="2" />
+                            <path d="M8 3v4M16 3v4M4 10h16" />
+                          </svg>
                         </div>
                       </div>
                       <div id="periodError" class="field-error period-error hidden" role="alert"></div>
@@ -424,24 +434,11 @@
                 <div id="adminTableWrap" class="admin-table-wrap"></div>
               </section>
 
-              <aside id="masterInspector" class="master-inspector" aria-label="行の編集">
-                <div id="adminInspectorEmpty" class="inspector-empty">
-                  <span class="inspector-empty-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M4 4h16v16H4z" />
-                      <path d="M8 9h8M8 13h6" />
-                    </svg>
-                  </span>
-                  <h3>行を選択</h3>
-                  <p>一覧から編集する行を選んでください。</p>
-                </div>
-                <div id="adminInspectorForm" class="inspector-form hidden"></div>
-              </aside>
             </div>
             <dialog
               id="userEditorDialog"
               class="user-editor-dialog"
-              aria-label="ユーザー編集"
+              aria-labelledby="userEditorDialogTitle"
             >
               <div class="user-editor-dialog-content">
                 <div id="userEditorDialogForm" class="inspector-form user-editor-dialog-form"></div>
@@ -450,7 +447,7 @@
             <dialog
               id="teamEditorDialog"
               class="user-editor-dialog team-editor-dialog"
-              aria-label="チーム編集"
+              aria-labelledby="teamEditorDialogTitle"
             >
               <div class="user-editor-dialog-content">
                 <div id="teamEditorDialogForm" class="inspector-form user-editor-dialog-form team-editor-dialog-form"></div>
@@ -489,27 +486,9 @@
               </section>
               <section id="settingsDisplayPanel" class="settings-section" aria-labelledby="settingsDisplayTitle">
                 <h2 id="settingsDisplayTitle">表示</h2>
-                <section class="appearance-setting" aria-labelledby="appearanceSettingTitle">
-                  <div class="settings-section-heading">
-                    <h3 id="appearanceSettingTitle">外観</h3>
-                  </div>
-                  <div id="colorThemeOptions" class="color-theme-options" role="radiogroup" aria-label="配色">
-                    <label class="color-theme-option">
-                      <input id="themeLight" type="radio" name="uiColorTheme" value="light" checked />
-                      <span class="color-theme-preview is-light" aria-hidden="true"><i></i></span>
-                      <span class="color-theme-option-copy">ライト</span>
-                    </label>
-                    <label class="color-theme-option">
-                      <input id="themeDark" type="radio" name="uiColorTheme" value="dark" />
-                      <span class="color-theme-preview is-dark" aria-hidden="true"><i></i></span>
-                      <span class="color-theme-option-copy">ダーク</span>
-                    </label>
-                  </div>
-                </section>
                 <section class="member-filter-setting" aria-labelledby="memberFilterSettingTitle">
                   <div class="settings-section-heading">
-                    <h3 id="memberFilterSettingTitle">日報フィルター</h3>
-                    <p>日報画面に表示するフィルターボタンを選択します。</p>
+                    <h3 id="memberFilterSettingTitle">日報に設置するフィルターボタン</h3>
                   </div>
                   <div
                     id="memberFilterOptions"
@@ -532,72 +511,59 @@
                   </div>
                 </section>
                 <section class="default-range-setting" aria-labelledby="defaultRangeTitle">
-                <div class="default-range-heading">
-                  <div>
+                  <div class="default-range-heading">
                     <h3 id="defaultRangeTitle">標準の表示範囲</h3>
                   </div>
-                  <div class="default-range-values" aria-live="polite">
-                    <span id="pastDaysValue">今日より1日前</span>
-                    <span id="futureDaysValue">今日まで</span>
+                  <div class="default-range-selects">
+                    <span>本日を起点に</span>
+                    <label>
+                      <select id="defaultStartOffsetDays" aria-label="表示範囲の開始日">
+                        <option value="5">ー5日</option>
+                        <option value="4">ー4日</option>
+                        <option value="3">ー3日</option>
+                        <option value="2">ー2日</option>
+                        <option value="1">ー1日</option>
+                        <option value="0">0日</option>
+                      </select>
+                    </label>
+                    <span>～</span>
+                    <label>
+                      <select id="defaultEndOffsetDays" aria-label="表示範囲の終了日">
+                        <option value="0">0日</option>
+                        <option value="1">＋1日</option>
+                        <option value="2">＋2日</option>
+                        <option value="3">＋3日</option>
+                        <option value="4">＋4日</option>
+                        <option value="5">＋5日</option>
+                      </select>
+                    </label>
+                    <span>の範囲を表示</span>
                   </div>
-                </div>
-                <div class="range-timeline">
-                  <label class="range-half range-past">
-                    <span class="range-side-label">開始</span>
-                    <input
-                      id="defaultStartOffsetDays"
-                      type="range"
-                      min="0"
-                      max="14"
-                      step="1"
-                      value="1"
-                      aria-label="今日より前に表示する日数"
-                    />
-                  </label>
-                  <div class="range-today" aria-hidden="true">
-                    <span>今日</span>
-                    <strong id="rangeTodayDate"></strong>
-                  </div>
-                  <label class="range-half range-future">
-                    <span class="range-side-label">終了</span>
-                    <input
-                      id="defaultEndOffsetDays"
-                      type="range"
-                      min="0"
-                      max="7"
-                      step="1"
-                      value="0"
-                      aria-label="今日より後に表示する日数"
-                    />
-                  </label>
-                </div>
-                <div class="range-scale" aria-hidden="true">
-                  <span>14日前</span>
-                  <span>7日前</span>
-                  <span>今日</span>
-                  <span>7日後</span>
-                </div>
-                <p id="defaultRangePreview" class="default-range-preview"></p>
                 </section>
               </section>
               <section id="settingsNotificationPanel" class="settings-section" aria-labelledby="settingsNotificationTitle">
                 <h2 id="settingsNotificationTitle">通知</h2>
                 <section class="missing-comment-setting" aria-labelledby="missingCommentSettingTitle">
-                <div class="settings-section-heading">
-                  <h3 id="missingCommentSettingTitle">未確認の集計</h3>
-                  <p>「未確認のみ」の集計期間と、当日分の扱いを設定します。</p>
-                </div>
-                <label class="settings-field">
-                  <span>集計を開始する日</span>
-                  <input id="missingCommentStartDate" type="date" />
-                </label>
-                <label class="settings-check-option">
-                  <input id="includeTodayInMissingComments" type="checkbox" />
-                  <span class="settings-check-copy">
-                    <strong>当日分を未確認日数に含める</strong>
-                    <small>今日の日報も未確認バッジと絞り込みの対象にします。</small>
-                  </span>
-                </label>
+                  <div class="settings-section-heading">
+                    <h3 id="missingCommentSettingTitle">未確認の集計</h3>
+                  </div>
+                  <div class="settings-field settings-date-field">
+                    <label class="settings-field-label" for="missingCommentStartDate">集計を開始する日</label>
+                    <div class="period-field-group native-date-picker-field">
+                      <input id="missingCommentStartDate" type="date" aria-label="集計を開始する日" />
+                      <span id="missingCommentStartDateDisplay" class="period-field-display" aria-hidden="true"></span>
+                      <svg class="period-field-display-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="5" width="16" height="15" rx="2" />
+                        <path d="M8 3v4M16 3v4M4 10h16" />
+                      </svg>
+                    </div>
+                  </div>
+                  <label class="settings-check-option">
+                    <input id="includeTodayInMissingComments" type="checkbox" />
+                    <span class="settings-check-copy">
+                      <strong>当日分を未確認日数に含める</strong>
+                    </span>
+                  </label>
                 </section>
               </section>
               <div class="actions">
@@ -606,7 +572,7 @@
                   class="toolbar-button primary"
                   type="button"
                 >
-                  設定を保存
+                  保存
                 </button>
               </div>
             </div>
@@ -675,7 +641,7 @@
         <p id="teamCreateError" class="team-create-error" role="alert"></p>
         <div class="user-editor-actions team-create-actions">
           <button id="cancelTeamCreateButton" class="inspector-cancel-button" type="button">キャンセル</button>
-          <button id="confirmTeamCreateButton" class="inspector-save-button" type="submit">保存</button>
+          <button id="confirmTeamCreateButton" class="inspector-save-button" type="submit">作成</button>
         </div>
       </form>
     </dialog>

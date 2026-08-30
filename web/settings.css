@@ -4,16 +4,25 @@ html body .settings-card input[type="text"],
 html body .settings-card input[type="date"] {
   min-height: var(--control-height);
   height: var(--control-height);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--input-bg);
-  color: var(--text);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-control);
+  background: var(--field-bg);
+  color: var(--field-fg);
   box-shadow: none;
 }
 
 html body .settings-card input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 16%, transparent);
+  border-color: var(--field-focus-border);
+  box-shadow: none;
+}
+
+html body .settings-card input:hover {
+  border-color: var(--field-hover-border);
+}
+
+html body .settings-card input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 html body .settings-panel {
@@ -22,6 +31,13 @@ html body .settings-panel {
   overflow: auto;
   background: var(--app-bg);
   padding: 0;
+}
+
+/* Settings labels and field values use the regular text tone. Emphasis is
+   reserved for control borders and state colors, not the content itself. */
+html body #settingsPanel {
+  --field-fg: var(--text);
+  --form-option-fg: var(--text);
 }
 
 html body .settings-card {
@@ -42,7 +58,7 @@ html body .settings-header {
 
 html body .settings-header h2 {
   margin: 0;
-  color: var(--text-strong);
+  color: var(--text);
   font-size: 18px;
   font-weight: 700;
 }
@@ -60,6 +76,15 @@ html body .settings-card label:has(input[type="checkbox"]) {
   display: flex;
 }
 
+/* The date field wrapper must stay outside the label so its click handling
+   matches the report date controls and does not trigger label activation. */
+html body .settings-card .settings-field-label {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+}
+
 html body .settings-card input[type="text"],
 html body .settings-card input[type="date"] {
   width: 100%;
@@ -69,14 +94,14 @@ html body .settings-card input[type="date"] {
   line-height: 1.2;
 }
 
-html body .field-error {
+html body #settingsPanel .field-error {
   color: var(--error);
   font-size: var(--font-12);
   font-weight: 600;
   line-height: 1.35;
 }
 
-html body .settings-field > .field-error {
+html body #settingsPanel .settings-field > .field-error {
   grid-column: 2;
   margin-top: -6px;
 }
@@ -115,20 +140,13 @@ html body .missing-comment-setting {
   padding: 16px 0 0;
 }
 
-html body .settings-section-heading h3,
-html body .settings-section-heading p {
+html body .settings-section-heading h3 {
   margin: 0;
 }
 
 html body .settings-section-heading h3 {
-  color: var(--text-strong);
+  color: var(--text);
   font-size: var(--font-15);
-}
-
-html body .settings-section-heading p {
-  margin-top: 3px;
-  color: var(--text-muted);
-  font-size: var(--font-12);
 }
 
 html body .missing-comment-setting .settings-field {
@@ -165,136 +183,7 @@ html body .settings-check-copy strong {
   font-size: var(--font-13);
 }
 
-html body .settings-check-copy small {
-  color: var(--text-muted);
-  font-size: var(--font-12);
-  line-height: 1.35;
-}
-
-html body .default-range-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-html body .default-range-heading h3,
-html body .default-range-preview {
-  margin: 0;
-}
-
-html body .default-range-heading h3 {
-  color: var(--text-strong);
-  font-size: var(--font-15);
-}
-
-html body .default-range-values {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 12px;
-  color: var(--primary);
-  font-size: var(--font-13);
-  font-weight: 600;
-}
-
-html body .range-timeline {
-  display: grid;
-  grid-template-columns: minmax(100px, 1fr) 84px minmax(100px, 1fr);
-  align-items: end;
-  gap: 0;
-  margin-top: 18px;
-}
-
-html body .default-range-setting .range-half {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-}
-
-html body .range-side-label {
-  color: var(--text-muted);
-  font-size: var(--font-12);
-  font-weight: 500;
-}
-
-html body .range-future .range-side-label {
-  text-align: right;
-}
-
-html body .range-timeline input[type="range"] {
-  width: 100%;
-  height: 32px;
-  margin: 0;
-  accent-color: var(--primary);
-  cursor: pointer;
-}
-
-html body .range-past input[type="range"] {
-  direction: rtl;
-}
-
-html body .range-timeline input[type="range"]::-webkit-slider-thumb {
-  width: 22px;
-  height: 22px;
-  cursor: grab;
-}
-
-html body .range-timeline input[type="range"]::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  cursor: grab;
-}
-
-html body .range-today {
-  display: flex;
-  min-height: var(--range-today-height);
-  align-items: center;
-  justify-content: center;
-  border-right: 1px solid var(--primary-border);
-  border-left: 1px solid var(--primary-border);
-  color: var(--primary);
-  flex-direction: column;
-  font-size: var(--font-13);
-  font-weight: 700;
-}
-
-html body .range-today strong {
-  color: var(--text-muted);
-  font-size: var(--font-10);
-  font-weight: 600;
-}
-
-html body .range-scale {
-  display: grid;
-  grid-template-columns: 1fr 1fr 84px 1fr;
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: var(--font-10);
-}
-
-html body .range-scale span:nth-child(2),
-html body .range-scale span:nth-child(3) {
-  text-align: center;
-}
-
-html body .range-scale span:last-child {
-  text-align: right;
-}
-
-html body .default-range-preview {
-  margin-top: 12px;
-  border-radius: var(--radius-sm);
-  background: var(--primary-soft);
-  color: var(--primary);
-  padding: 8px 10px;
-  text-align: center;
-  font-size: var(--font-13);
-  font-weight: 600;
-}
-
-html body .actions {
+html body #settingsPanel .actions {
   margin-top: 14px;
   text-align: right;
 }
@@ -320,12 +209,13 @@ html body .settings-section:first-child {
 
 html body .settings-section > h2 {
   margin: 0 0 18px;
-  color: var(--text-strong);
+  color: var(--text);
   font-size: var(--font-16);
   font-weight: 700;
 }
 
 html body .settings-section > .settings-field {
+  display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
   gap: 20px;
   margin-top: 0;
@@ -334,8 +224,9 @@ html body .settings-section > .settings-field {
   padding-bottom: 16px;
 }
 
-html body .settings-section > .settings-field > span:first-child {
-  color: var(--text-strong);
+html body .settings-section > .settings-field > span:first-child,
+html body .settings-section > .settings-field > .settings-field-label {
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -364,14 +255,6 @@ html body .settings-header {
   display: none;
 }
 
-html body .appearance-setting {
-  margin: 0 0 22px;
-}
-
-html body .appearance-setting .settings-section-heading {
-  margin-bottom: 12px;
-}
-
 html body .member-filter-setting {
   margin: 0 0 22px;
   border-top: 1px solid var(--border);
@@ -391,16 +274,16 @@ html body .member-filter-options {
 html body .settings-card .member-filter-option {
   display: inline-flex;
   min-width: 84px;
-  min-height: 40px;
+  min-height: var(--control-height);
   align-items: center;
   justify-content: center;
   gap: 8px;
   margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
+  border: 1px solid var(--form-option-border);
+  border-radius: var(--radius-control);
+  background: var(--form-option-bg);
   padding: 0 14px;
-  color: var(--text-strong);
+  color: var(--form-option-fg);
   cursor: pointer;
   font-size: var(--font-13);
   font-weight: 600;
@@ -408,8 +291,19 @@ html body .settings-card .member-filter-option {
 
 html body .settings-card .member-filter-option:hover,
 html body .settings-card .member-filter-option:has(input:checked) {
-  border-color: var(--text-strong);
-  background: var(--surface-hover);
+  border-color: var(--form-option-hover-border);
+  background: var(--form-option-hover-bg);
+}
+
+html body .settings-card .member-filter-option:has(input:checked) {
+  border-color: var(--form-option-selected-border);
+}
+
+html body .settings-card .member-filter-option:has(input:disabled) {
+  border-color: var(--control-disabled-border);
+  background: var(--control-disabled-bg);
+  color: var(--control-disabled-fg);
+  cursor: not-allowed;
 }
 
 html body .member-filter-option input[type="checkbox"] {
@@ -421,126 +315,108 @@ html body .member-filter-option input[type="checkbox"] {
 }
 
 html body .member-filter-option:has(input:focus-visible) {
-  outline: 2px solid color-mix(in srgb, var(--text-strong) 42%, transparent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-html body .color-theme-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+html body .default-range-heading h3 {
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: var(--font-15);
 }
 
-html body .settings-card .color-theme-option {
-  position: relative;
-  display: grid;
-  width: 136px;
-  grid-template-columns: 1fr;
+html body .default-range-selects {
+  display: flex;
+  min-width: 0;
+  align-items: center;
   gap: 8px;
-  margin: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: transparent;
-  padding: 8px;
   color: var(--text);
+  font-size: var(--font-13);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+html body .default-range-selects label {
+  display: block;
+  margin: 0;
+}
+
+html body .default-range-selects select {
+  min-width: 76px;
+  min-height: var(--control-height);
+  height: var(--control-height);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-control);
+  background: var(--field-bg);
+  color: var(--text);
+  padding: 0 8px;
+  font-size: var(--font-13);
+  font-weight: 600;
   cursor: pointer;
 }
 
-html body .settings-card .color-theme-option:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-hover);
+html body .default-range-selects select:hover {
+  border-color: var(--field-hover-border);
 }
 
-html body .settings-card .color-theme-option:has(input:checked) {
-  border-color: var(--text-strong);
-  box-shadow: inset 0 0 0 1px var(--text-strong);
+html body .default-range-selects select:focus {
+  border-color: var(--field-focus-border);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
-html body .color-theme-option input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-html body .color-theme-option:has(input:focus-visible) {
-  outline: 2px solid color-mix(in srgb, var(--text-strong) 42%, transparent);
-  outline-offset: 2px;
-}
-
-html body .color-theme-preview {
+/* Keep the native date input available for the browser picker, but put it
+   above a custom display so its focused date segment is never painted. */
+html body #settingsPanel .period-field-group {
   position: relative;
-  display: block;
-  height: 54px;
-  overflow: hidden;
-  border: 1px solid rgb(17 17 17 / 16%);
-  border-radius: 7px;
+  display: flex;
+  min-height: var(--control-height);
+  height: var(--control-height);
+  align-items: center;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--field-bg);
+  box-shadow: inset 0 0 0 1px var(--field-border);
+  transition: box-shadow 0.14s ease;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-html body .color-theme-preview::before {
+html body #settingsPanel .period-field-group:hover,
+html body #settingsPanel .period-field-group:active {
+  box-shadow: inset 0 0 0 1px var(--field-hover-border);
+}
+
+html body #settingsPanel .period-field-group:focus-within {
+  box-shadow: inset 0 0 0 1px var(--field-focus-border);
+}
+
+html body #settingsPanel .period-field-group:has(input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+html body #settingsPanel .period-field-group.is-pointer-focused:has(input:focus-visible) {
+  outline: none;
+}
+
+html body #settingsPanel .period-field-group input[type="date"] {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 25%;
-  content: "";
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
-html body .color-theme-preview i {
-  position: absolute;
-  top: 11px;
-  right: 9px;
-  bottom: 9px;
-  left: calc(25% + 8px);
-  border-radius: 4px;
-}
-
-html body .color-theme-preview.is-light {
-  background: #f7f7f8;
-}
-
-html body .color-theme-preview.is-light::before {
-  background: #f1f1f2;
-}
-
-html body .color-theme-preview.is-light i {
-  border: 1px solid #dedee1;
-  background: #ffffff;
-}
-
-html body .color-theme-preview.is-dark {
-  border-color: rgb(255 255 255 / 18%);
-  background: #212121;
-}
-
-html body .color-theme-preview.is-dark::before {
-  background: #0d0d0d;
-}
-
-html body .color-theme-preview.is-dark i {
-  border: 1px solid rgb(255 255 255 / 12%);
-  background: #282828;
-}
-
-html body .color-theme-option-copy {
-  color: var(--text-strong);
-  font-size: var(--font-13);
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-html body .settings-card input[type="text"],
-html body .settings-card input[type="date"] {
-  min-height: 38px;
-  height: 38px;
-  border-color: var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text-strong);
-}
-
-html body .settings-card input:focus {
-  border-color: var(--text-strong);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-strong) 12%, transparent);
+html body #settingsPanel .period-field-group input[type="date"]:focus-visible {
+  outline: none;
 }
 
 html body .settings-card .default-range-setting,
@@ -554,7 +430,7 @@ html body .settings-card .settings-check-option {
   border-top-color: var(--border);
 }
 
-html body .settings-card > .actions {
+html body #settingsPanel .settings-card > .actions {
   justify-content: flex-end;
   margin-top: 24px;
   border-top: 1px solid var(--border);
@@ -566,7 +442,4 @@ html body .settings-card > .actions {
     padding: 20px 16px 28px;
   }
 
-  html body .settings-card .color-theme-option {
-    width: min(148px, calc(50% - 6px));
-  }
 }

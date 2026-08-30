@@ -145,11 +145,6 @@ function syncColorThemeControls(theme = state.colorTheme) {
   });
   if (selectedIndex >= 0) updateColorThemeRovingTabindex(selectedIndex);
   updateColorThemeIndicator();
-  document
-    .querySelectorAll('input[name="uiColorTheme"]')
-    .forEach((input) => {
-      input.checked = input.value === theme;
-    });
 }
 
 function setColorTheme(value, focus = true) {
@@ -281,16 +276,30 @@ function bindEvents() {
     if (button) setFontSize(button.dataset.fontSize);
   });
   initializeColorThemeControl();
-  $("defaultStartOffsetDays").addEventListener("input", updateDefaultRangePreview);
-  $("defaultEndOffsetDays").addEventListener("input", updateDefaultRangePreview);
-  ["startDate", "endDate"].forEach((inputId) => {
+  ["startDate", "endDate", "missingCommentStartDate"].forEach((inputId) => {
     const input = $(inputId);
     if (!input) return;
     const field = input.closest(".period-field-group");
-    input.addEventListener("change", handleDateChange);
+    const isNativeOverlayField = field?.classList.contains("native-date-picker-field");
+    if (inputId === "startDate" || inputId === "endDate") {
+      input.addEventListener("change", handleDateChange);
+    }
+    if (isNativeOverlayField) {
+      input.addEventListener("input", () => syncDateInputDisplay(inputId));
+      input.addEventListener("change", () => syncDateInputDisplay(inputId));
+      field?.addEventListener("click", (event) => {
+        event.preventDefault();
+        openDatePickerFromField(input);
+      });
+      return;
+    }
     field?.addEventListener("pointerdown", () => {
       clearDateInputSelection(input);
       field?.classList.add("is-pointer-focused");
+    });
+    field?.addEventListener("selectstart", (event) => {
+      event.preventDefault();
+      clearDateInputSelection(input);
     });
     input.addEventListener("keydown", () => {
       field?.classList.remove("is-pointer-focused");
@@ -379,6 +388,14 @@ function openDatePickerFromField(input) {
   }
 }
 
+function syncDateInputDisplay(inputId) {
+  const input = $(inputId);
+  const display = $(`${inputId}Display`);
+  if (!input || !display) return;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value);
+  display.textContent = match ? `${match[1]}/${match[2]}/${match[3]}` : "";
+}
+
 function clearDateInputSelection(input) {
   const selection = window.getSelection?.();
   selection?.removeAllRanges();
@@ -439,6 +456,10 @@ function restoreUiState(settings) {
   state.columnWidths = parseStoredColumnWidths(settings.ui_column_widths);
   syncPeriodPresets({ immediate: true });
   applyFontSize();
+  // fillSettings runs before this initializer and cannot read the theme from
+  // a settings-page control anymore. Re-baseline the draft after restoring
+  // the persisted theme and all other UI state.
+  if (typeof markSettingsClean === "function") markSettingsClean();
 }
 
 function persistUiState() {

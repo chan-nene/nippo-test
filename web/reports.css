@@ -3,31 +3,12 @@
 /* Command bar */
 
 html body #reportPanel {
-  --report-primary-bg: var(--interactive-fill);
-  --report-primary-fg: #fff;
-  --report-primary-hover: var(--interactive-fill-hover);
-  --report-filter-idle-bg: var(--report-soft-bg);
-  --report-filter-idle-fg: var(--report-soft-fg);
-  --report-filter-idle-hover-bg: var(--report-soft-hover);
-  --report-filter-idle-hover-fg: var(--report-soft-fg);
-  --report-filter-selected-bg: var(--interactive-fill);
-  --report-filter-selected-fg: #fff;
-  --report-filter-selected-hover: var(--interactive-fill-hover);
-  --report-filter-selected-border: transparent;
-  --report-action-ink: var(--interactive-ink);
-  --report-action-ink-hover: var(--interactive-ink);
-  --report-focus: #0169cc;
-  --report-soft-bg: oklab(0.159065 0 0 / 0.08);
-  --report-soft-hover: oklab(0.159065 0 0 / 0.12);
-  --report-soft-fg: var(--interactive-ink);
   --report-period-bg: #ededed;
   --report-period-indicator: #ffffff;
   --report-period-fg: var(--interactive-fill);
   --report-period-muted: #5d5d5d;
   --report-period-hover: #cdcdcd;
   --report-period-shadow: 0 1px 4px -1px rgb(0 0 0 / .2);
-  --report-disabled: #8f8f8f;
-  --report-disabled-bg: oklab(0.159065 0 0 / 0.05);
   --report-today-bg: oklab(0.683029 -0.16619 0.102668 / 0.15);
   --report-today-fg: #008635;
 }
@@ -38,30 +19,11 @@ html:not([data-theme="dark"]) body #reportPanel {
 }
 
 html[data-theme="dark"] body #reportPanel {
-  --report-primary-bg: var(--primary);
-  --report-primary-fg: var(--primary-on);
-  --report-primary-hover: var(--primary-hover);
-  --report-filter-idle-bg: #2b2b2b;
-  --report-filter-idle-fg: #b8b8b8;
-  --report-filter-idle-hover-bg: #353535;
-  --report-filter-idle-hover-fg: #d1d1d1;
-  --report-filter-selected-bg: #4a4a4a;
-  --report-filter-selected-fg: #e6e6e6;
-  --report-filter-selected-hover: #565656;
-  --report-filter-selected-border: #6a6a6a;
-  --report-action-ink: var(--text);
-  --report-action-ink-hover: var(--text-strong);
-  --report-focus: #0285ff;
-  --report-soft-bg: oklab(1 0 0 / 0.08);
-  --report-soft-hover: oklab(1 0 0 / 0.12);
-  --report-soft-fg: var(--text);
   --report-period-bg: #0d0d0d;
   --report-period-indicator: #303030;
   --report-period-fg: var(--text-strong);
   --report-period-muted: #afafaf;
   --report-period-hover: #303030;
-  --report-disabled: #5d5d5d;
-  --report-disabled-bg: oklab(1 0 0 / 0.05);
   --report-today-fg: #04b84c;
 }
 
@@ -139,36 +101,36 @@ html body .toolbar-button {
   white-space: nowrap;
   font-size: var(--font-13);
   font-weight: 600;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--input-bg);
-  color: var(--text);
+  border: 1px solid var(--action-secondary-border);
+  border-radius: var(--radius-control);
+  background: var(--action-secondary-bg);
+  color: var(--action-secondary-fg);
   box-shadow: none;
 }
 
 html body .toolbar-button:hover {
-  border-color: var(--primary-border);
-  background: var(--surface-hover);
-  color: var(--primary-ink);
+  border-color: var(--action-secondary-hover-border);
+  background: var(--action-secondary-hover-bg);
+  color: var(--action-secondary-hover-fg);
 }
 
 html body .toolbar-button.primary {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-on);
+  border-color: var(--action-primary-border);
+  background: var(--action-primary-bg);
+  color: var(--action-primary-fg);
 }
 
 html body .toolbar-button.primary:hover {
-  border-color: var(--primary-hover);
-  background: var(--primary-hover);
-  color: var(--primary-on);
+  border-color: var(--action-primary-hover-border);
+  background: var(--action-primary-hover-bg);
+  color: var(--action-primary-fg);
 }
 
 html body .toolbar-button:disabled,
 html body .toolbar-button.primary:disabled {
-  border-color: var(--border);
-  background: var(--surface-soft);
-  color: var(--text-muted);
+  border-color: var(--control-disabled-border);
+  background: var(--control-disabled-bg);
+  color: var(--control-disabled-fg);
 }
 
 html body .toolbar-button-icon {
@@ -276,12 +238,10 @@ html body .period-control-container {
 }
 
 html body .period-control input[type="date"] {
-  width: var(--period-date-input-width);
-  min-width: var(--period-date-input-width);
   height: 100%;
   border: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--field-fg);
   padding: 0 var(--field-padding-x);
   font-size: var(--ui-font-size);
   line-height: 1.2;
@@ -648,7 +608,7 @@ html body .editable-content.is-editable:hover {
 }
 
 html body td:has(.editable-content.is-editable:hover) {
-  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  background: var(--editable-cell-hover);
 }
 
 html body tr.holiday td:not(.date-col, .user-col):has(
@@ -768,7 +728,7 @@ html body .boss-comment-link {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-alt);
-  color: var(--report-action-ink);
+  color: var(--action-secondary-fg);
   padding: 0 var(--cell-padding-x);
   font-family: var(--font-ui);
   font-size: var(--ui-font-size);
@@ -780,11 +740,11 @@ html body .boss-comment-link:hover,
 html body .boss-comment-link:focus-visible {
   border-color: var(--primary-border);
   background: var(--surface-hover);
-  color: var(--report-action-ink-hover);
+  color: var(--action-secondary-hover-fg);
 }
 
 html body .reply-toggle-button {
-  min-height: var(--compact-control-height);
+  min-height: var(--control-height-compact);
   border: 1px solid var(--primary-border);
   border-radius: var(--radius-sm);
   padding: 3px var(--cell-padding-x);
@@ -809,7 +769,7 @@ html body .reply-section {
 html body .boss-reply-preview {
   display: flex;
   min-width: 0;
-  min-height: var(--compact-control-height);
+  min-height: var(--control-height-compact);
   align-items: flex-start;
   gap: 5px;
   margin: 0 8px 7px;
@@ -904,26 +864,28 @@ html body #reportPanel .period-field-group {
   min-height: var(--control-height);
   height: var(--control-height);
   border-color: transparent;
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: var(--radius-control);
+  background: var(--field-bg);
+  box-shadow: inset 0 0 0 1px var(--field-border);
   transition: box-shadow 0.14s ease;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 html body #reportPanel .period-field-group:hover,
 html body #reportPanel .period-field-group:active {
   border-color: transparent;
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--field-hover-border);
 }
 
 html body #reportPanel .period-field-group:focus-within {
   border-color: transparent;
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--field-focus-border);
 }
 
 html body #reportPanel .period-field-group:has(input:focus-visible) {
-  outline: 2px solid var(--report-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -1032,7 +994,7 @@ html body #reportPanel .period-presets > .preset-button[data-state="on"] {
 
 html body #reportPanel .period-presets > .preset-button:focus-visible,
 html body #reportPanel .period-presets:focus-visible {
-  outline: 2px solid var(--report-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 0;
 }
 
@@ -1120,7 +1082,7 @@ html body #reportPanel .period-navigation .period-shift-button::before {
 
 html body #reportPanel .period-navigation .period-shift-button:focus-visible,
 html body #reportPanel .period-navigation:focus-visible {
-  outline: 2px solid var(--report-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 0;
 }
 
@@ -1260,10 +1222,10 @@ html body #reportPanel #refreshButton {
   align-items: center;
   justify-content: center;
   padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--report-action-ink);
+  border: 1px solid var(--action-secondary-border);
+  border-radius: var(--radius-control);
+  background: var(--action-secondary-bg);
+  color: var(--action-secondary-fg);
   font-family: var(--font-ui);
   font-size: var(--ui-font-size);
   font-weight: 700;
@@ -1278,13 +1240,16 @@ html body #reportPanel #refreshButton:active:not(:disabled) {
 }
 
 html body #reportPanel #refreshButton:focus-visible {
-  outline: 2px solid var(--report-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 html body #reportPanel #refreshButton:disabled {
+  border-color: var(--control-disabled-border);
+  background: var(--control-disabled-bg);
+  color: var(--control-disabled-fg);
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 1;
 }
 
 html body #reportPanel #refreshButton > .toolbar-button-icon {
@@ -1329,15 +1294,11 @@ html body #reportPanel #saveButton {
   justify-content: center;
   gap: 8px;
   padding: 0 12px;
-  border: 0;
-  border-radius: 8px;
+  border: 1px solid var(--action-primary-border);
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--report-primary-fg);
+  color: var(--action-primary-fg);
   overflow: visible;
-  font-family: var(--font-ui);
-  font-size: var(--ui-font-size);
-  font-weight: 700;
-  line-height: normal;
   font-family: var(--font-ui);
   font-size: var(--ui-font-size);
   font-weight: 700;
@@ -1353,7 +1314,7 @@ html body #reportPanel #saveButton::before {
   z-index: -1;
   inset: 0;
   border-radius: inherit;
-  background: var(--report-primary-bg);
+  background: var(--action-primary-bg);
   content: "";
   pointer-events: none;
 }
@@ -1364,7 +1325,7 @@ html body #reportPanel #saveButton > * {
 }
 
 html body #reportPanel #saveButton:hover:not(:disabled)::before {
-  background: var(--report-primary-hover);
+  background: var(--action-primary-hover-bg);
 }
 
 html body #reportPanel #saveButton:active:not(:disabled) {
@@ -1372,19 +1333,20 @@ html body #reportPanel #saveButton:active:not(:disabled) {
 }
 
 html body #reportPanel #saveButton:focus-visible {
-  outline: 2px solid var(--report-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 html body #reportPanel #saveButton:disabled {
   cursor: not-allowed;
+  border-color: var(--control-disabled-border);
   background: transparent;
-  color: var(--report-disabled);
+  color: var(--control-disabled-fg);
   opacity: 1;
 }
 
 html body #reportPanel #saveButton:disabled::before {
-  background: var(--report-disabled-bg);
+  background: var(--control-disabled-bg);
   opacity: 1;
 }
 
@@ -1426,7 +1388,7 @@ html body #reportPanel .member-switch-button {
   border: 0;
   border-radius: 9999px;
   background: transparent;
-  color: var(--report-filter-idle-fg);
+  color: var(--filter-idle-fg);
   font-family: var(--font-ui);
   font-size: var(--ui-font-size);
   font-weight: 700;
@@ -1444,7 +1406,7 @@ html body #reportPanel .member-switch-button::before {
   z-index: -1;
   inset: 0;
   border-radius: inherit;
-  background: var(--report-filter-idle-bg);
+  background: var(--filter-idle-bg);
   content: "";
   pointer-events: none;
 }
@@ -1465,31 +1427,31 @@ html body #reportPanel .member-switch-button > .relative {
 }
 
 html body #reportPanel .member-switch-button:hover:not(:disabled)::before {
-  background: var(--report-filter-idle-hover-bg);
+  background: var(--filter-idle-hover-bg);
 }
 
 html body #reportPanel .member-switch-button:hover:not(:disabled) {
-  color: var(--report-filter-idle-hover-fg);
+  color: var(--filter-idle-hover-fg);
 }
 
 html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]) {
   border: 0;
-  background: var(--report-period-indicator);
-  color: var(--report-filter-selected-fg);
+  background: var(--filter-active-bg);
+  color: var(--filter-active-fg);
   box-shadow: none;
 }
 
 html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"])::before {
-  background: var(--report-filter-selected-bg);
-  box-shadow: inset 0 0 0 1px var(--report-filter-selected-border);
+  background: var(--filter-active-bg);
+  box-shadow: inset 0 0 0 1px var(--filter-active-border);
 }
 
 html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover:not(:disabled)::before {
-  background: var(--report-filter-selected-hover);
+  background: var(--filter-active-hover-bg);
 }
 
 html body #reportPanel .member-switch-button:is(.is-active, [aria-pressed="true"]):hover:not(:disabled) {
-  color: var(--report-filter-selected-fg);
+  color: var(--filter-active-fg);
 }
 
 html body #reportPanel .member-switch-button:active:not(:disabled) {
@@ -1497,13 +1459,16 @@ html body #reportPanel .member-switch-button:active:not(:disabled) {
 }
 
 html body #reportPanel .member-switch-button:focus-visible {
-  outline: 2px solid var(--report-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 html body #reportPanel .member-switch-button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  border-color: transparent;
+  background: var(--filter-disabled-bg);
+  color: var(--filter-disabled-fg);
+  opacity: 1;
 }
 
 html body #reportPanel .member-switch-button:disabled::before {
@@ -1523,10 +1488,10 @@ html body #reportPanel #showMissingCommentsButton {
   padding-block: 0;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--report-action-ink);
+  border: 1px solid var(--action-secondary-border);
+  border-radius: var(--radius-control);
+  background: var(--action-secondary-bg);
+  color: var(--action-secondary-fg);
   font-family: var(--font-ui);
   font-size: var(--ui-font-size);
   font-weight: 700;
@@ -1542,16 +1507,20 @@ html body #reportPanel #refreshButton:hover:not(:disabled),
 html body #reportPanel #showMissingCommentsButton:hover:not(:disabled) {
   border-color: var(--border-strong);
   background: var(--surface-hover);
-  color: var(--report-action-ink-hover);
+  color: var(--action-secondary-hover-fg);
 }
 
 html body #reportPanel #showMissingCommentsButton:focus-visible {
-  outline: 2px solid var(--report-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 html body #reportPanel #showMissingCommentsButton:disabled {
+  border-color: var(--control-disabled-border);
+  background: var(--control-disabled-bg);
+  color: var(--control-disabled-fg);
   cursor: not-allowed;
+  opacity: 1;
 }
 
 html body #reportPanel .toolbar-right > .toolbar-button {
@@ -1570,17 +1539,17 @@ html body #reportPanel .toolbar-right > .toolbar-button {
 
 html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]) {
   border-color: transparent;
-  background: var(--report-filter-selected-bg) !important;
-  color: var(--report-filter-selected-fg);
-  box-shadow: inset 0 0 0 1px var(--report-filter-selected-border);
+  background: var(--filter-active-bg) !important;
+  color: var(--filter-active-fg);
+  box-shadow: inset 0 0 0 1px var(--filter-active-border);
 }
 
 /* Active missing-comment filtering keeps the same hover contrast as active member filters. */
 html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]):hover:not(:disabled) {
   border-color: transparent;
-  background: var(--report-filter-selected-hover) !important;
-  color: var(--report-filter-selected-fg);
-  box-shadow: inset 0 0 0 1px var(--report-filter-selected-border);
+  background: var(--filter-active-hover-bg) !important;
+  color: var(--filter-active-fg);
+  box-shadow: inset 0 0 0 1px var(--filter-active-border);
 }
 
 /* At compact window widths, keep the date range and period actions on explicit rows. */

@@ -558,8 +558,14 @@ function exitMissingCommentsFilter() {
   const endInput = $("endDate");
   if (startInput) startInput.value = state.startDate;
   if (endInput) endInput.value = state.endDate;
+  syncReportDateDisplays();
   syncPeriodPresets();
   return true;
+}
+
+function syncReportDateDisplays() {
+  syncDateInputDisplay("startDate");
+  syncDateInputDisplay("endDate");
 }
 
 function getPeriodPresetOptions() {
@@ -984,6 +990,7 @@ async function loadData({
   state.legacyLoadPreset = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
+  syncReportDateDisplays();
   syncPeriodPresets();
   if (preserveDirty) {
     reapplyDirtyEditsToRows();
@@ -1170,6 +1177,7 @@ async function handleDateChange() {
   if (!(await confirmDiscardUnsaved("日付範囲を変更"))) {
     $("startDate").value = state.startDate;
     $("endDate").value = state.endDate;
+    syncReportDateDisplays();
     setFieldError("periodError", "", ["startDate", "endDate"]);
     return;
   }
@@ -1204,6 +1212,7 @@ async function shiftDateRange(direction) {
   discardDirtyEdits();
   startInput.value = startDate;
   endInput.value = endDate;
+  syncReportDateDisplays();
   state.startDate = startDate;
   state.endDate = endDate;
   state.showMissingCommentsOnly = false;
@@ -1278,6 +1287,7 @@ async function applyPreset(presetName) {
   state.legacyLoadPreset = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
+  syncReportDateDisplays();
   await loadData();
   persistUiState();
 }

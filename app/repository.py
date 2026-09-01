@@ -2014,7 +2014,6 @@ class DailyReportRepository:
                     applies
                     and target_employee_id in assigned_subordinate_ids
                     and superior_id == employee_id
-                    and (not superior_is_director or is_weekly_target)
                 )
                 comment_cells.append(
                     {

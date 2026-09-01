@@ -904,13 +904,34 @@ function positionToast(anchorId = "") {
   if (!anchor) return;
 
   const anchorRect = anchor.getBoundingClientRect();
-  const top = Math.max(0, Math.round(anchorRect.bottom + 8));
-  const regionWidth = Math.min(420, Math.max(0, window.innerWidth - 16));
-  const desiredRight = Math.max(8, Math.round(window.innerWidth - anchorRect.right));
-  const maximumRight = Math.max(8, window.innerWidth - regionWidth - 8);
-  const right = Math.min(desiredRight, maximumRight);
+  const top = state.activeView === "settings"
+    ? getAdminToastTop()
+    : Math.max(0, Math.round(anchorRect.bottom + 8));
   region.style.setProperty("--toast-top", `${top}px`);
-  region.style.setProperty("--toast-right", `${right}px`);
+  region.style.setProperty("--toast-right", "8px");
+}
+
+function getAdminToastTop() {
+  const adminReloadButton = $("adminReloadButton");
+  const visibleAnchorBottom = adminReloadButton?.getBoundingClientRect().bottom || 0;
+  if (visibleAnchorBottom > 0) return Math.round(visibleAnchorBottom + 8);
+
+  const content = $("mainPanel");
+  const adminPanel = $("adminPanel");
+  if (!content || !adminPanel || !adminReloadButton) return 0;
+
+  const contentTop = content.getBoundingClientRect().top;
+  const contentPaddingTop = Number.parseFloat(getComputedStyle(content).paddingTop) || 0;
+  const adminPaddingTop = Number.parseFloat(getComputedStyle(adminPanel).paddingTop) || 0;
+  const reloadButtonHeight = Number.parseFloat(
+    getComputedStyle(adminReloadButton).height,
+  ) || 0;
+  return Math.max(
+    0,
+    Math.round(
+      contentTop + contentPaddingTop + adminPaddingTop + reloadButtonHeight + 8,
+    ),
+  );
 }
 
 function shouldAutoHideToast(type) {

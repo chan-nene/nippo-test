@@ -1832,7 +1832,10 @@ function renderCommentCell(row, cell, rowIndex, commentIndex) {
 
 function createCommentRenderContext(row, cell, rowIndex, commentIndex) {
   const canEditComment = Boolean(cell.editable);
-  const canAddBossComment = canEditComment && rowCanReceiveBossComment(row);
+  const canShowBossCommentActions =
+    cell.comment_mode !== "weekly" || cell.is_weekly_target;
+  const canAddBossComment =
+    canEditComment && canShowBossCommentActions && rowCanReceiveBossComment(row);
   const hasBossComment = Boolean(String(cell.comment || "").trim());
   const hasReply = Boolean(String(cell.reply || "").trim());
   const canEditReply =

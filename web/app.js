@@ -81,7 +81,6 @@ let pendingConfirmation = null;
 const TOAST_SCOPES = Object.freeze(["reports", "admin", "settings"]);
 const TOAST_TYPES = Object.freeze(["success", "info", "warning", "error"]);
 const TOAST_VISIBLE_LIMIT = 3;
-const TOAST_RIGHT_INSET = 8;
 const TOAST_FADE_DURATION = 300;
 const TOAST_DURATIONS = Object.freeze({
   success: 4000,
@@ -906,8 +905,12 @@ function positionToast(anchorId = "") {
 
   const anchorRect = anchor.getBoundingClientRect();
   const top = Math.max(0, Math.round(anchorRect.bottom + 8));
+  const regionWidth = Math.min(420, Math.max(0, window.innerWidth - 16));
+  const desiredRight = Math.max(8, Math.round(window.innerWidth - anchorRect.right));
+  const maximumRight = Math.max(8, window.innerWidth - regionWidth - 8);
+  const right = Math.min(desiredRight, maximumRight);
   region.style.setProperty("--toast-top", `${top}px`);
-  region.style.setProperty("--toast-right", `${TOAST_RIGHT_INSET}px`);
+  region.style.setProperty("--toast-right", `${right}px`);
 }
 
 function shouldAutoHideToast(type) {

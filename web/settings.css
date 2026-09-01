@@ -82,15 +82,15 @@ html body .settings-primary-field > label {
 html body .settings-primary-control {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 510px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 510px);
   align-items: center;
-  gap: 12px;
 }
 
-html body .settings-primary-actions {
+html body .settings-section-actions {
   display: flex;
-  grid-column: 3;
+  min-width: 0;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 

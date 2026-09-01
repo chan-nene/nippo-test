@@ -486,26 +486,6 @@
                     <label for="usersDir">ユーザー日報フォルダ</label>
                     <div class="settings-primary-control">
                       <input id="usersDir" type="text" autocomplete="off" aria-describedby="usersDirError" />
-                      <div class="settings-primary-actions">
-                        <button
-                          id="settingsReloadButton"
-                          class="toolbar-button data-refresh-button"
-                          type="button"
-                          aria-label="最新データを取得"
-                          title="最新データを取得"
-                        >
-                          <span class="toolbar-button-icon" aria-hidden="true">
-                            <svg class="is-refresh-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M4.5 2.5a1 1 0 0 1 1 1v1.572A9.5 9.5 0 1 1 12 21.5c-4.87 0-8.882-3.663-9.435-8.384a1 1 0 0 1 1.986-.232A7.501 7.501 0 0 0 19.5 12 7.5 7.5 0 0 0 6.41 7H9a1 1 0 0 1 0 2H4.5a1 1 0 0 1-1-1.024V3.5a1 1 0 0 1 1-1Z" clip-rule="evenodd" /></svg>
-                          </span>
-                        </button>
-                        <button
-                          id="saveSettingsButton"
-                          class="toolbar-button primary"
-                          type="button"
-                        >
-                          保存
-                        </button>
-                      </div>
                     </div>
                     <span id="usersDirError" class="field-error hidden" role="alert"></span>
                   </div>
@@ -604,6 +584,26 @@
                         <span class="settings-check-copy">当日分を未確認日数に含める</span>
                       </label>
                     </div>
+                  </div>
+                  <div class="settings-section-actions">
+                    <button
+                      id="settingsReloadButton"
+                      class="toolbar-button data-refresh-button"
+                      type="button"
+                      aria-label="最新データを取得"
+                      title="最新データを取得"
+                    >
+                      <span class="toolbar-button-icon" aria-hidden="true">
+                        <svg class="is-refresh-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M4.5 2.5a1 1 0 0 1 1 1v1.572A9.5 9.5 0 1 1 12 21.5c-4.87 0-8.882-3.663-9.435-8.384a1 1 0 0 1 1.986-.232A7.501 7.501 0 0 0 19.5 12 7.5 7.5 0 0 0 6.41 7H9a1 1 0 0 1 0 2H4.5a1 1 0 0 1-1-1.024V3.5a1 1 0 0 1 1-1Z" clip-rule="evenodd" /></svg>
+                      </span>
+                    </button>
+                    <button
+                      id="saveSettingsButton"
+                      class="toolbar-button primary"
+                      type="button"
+                    >
+                      保存
+                    </button>
                   </div>
                 </div>
               </section>

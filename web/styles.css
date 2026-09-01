@@ -157,7 +157,7 @@
   --cell-padding-x: 10px;
   --cell-padding-y: 9px;
   --date-cell-padding-x: 10px;
-  --date-column-width: 140px;
+  --date-column-width: 120px;
   --period-date-content-gap: 0.55em;
   --period-date-icon-size: 1em;
   --badge-height: 17px;
@@ -260,7 +260,7 @@ html body[data-font-size="compact"] {
   --cell-padding-x: 8px;
   --cell-padding-y: 7px;
   --date-cell-padding-x: 8px;
-  --date-column-width: 136px;
+  --date-column-width: 116px;
   --badge-height: 16px;
   --settings-padding: 16px;
 }
@@ -288,7 +288,7 @@ html body[data-font-size="medium"] {
   --cell-padding-x: 11px;
   --cell-padding-y: 10px;
   --date-cell-padding-x: 11px;
-  --date-column-width: 144px;
+  --date-column-width: 124px;
   --badge-height: 19px;
   --settings-padding: 19px;
 }
@@ -316,7 +316,7 @@ html body[data-font-size="large"] {
   --cell-padding-x: 12px;
   --cell-padding-y: 11px;
   --date-cell-padding-x: 13px;
-  --date-column-width: 148px;
+  --date-column-width: 128px;
   --badge-height: 20px;
   --settings-padding: 20px;
 }
@@ -344,7 +344,7 @@ html body[data-font-size="xlarge"] {
   --cell-padding-x: 14px;
   --cell-padding-y: 12px;
   --date-cell-padding-x: 16px;
-  --date-column-width: 156px;
+  --date-column-width: 136px;
   --badge-height: 23px;
   --settings-padding: 22px;
 }

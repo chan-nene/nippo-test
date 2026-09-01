@@ -2801,8 +2801,13 @@
     userTable = new window.Tabulator(wrap, {
       data: rows,
       index: "id",
-      layout: "fitColumns",
+      layout: "fitData",
       height: "auto",
+      persistence: false,
+      resizableColumnFit: false,
+      columnDefaults: {
+        resizable: "header",
+      },
       selectableRows: 1,
       rowFormatter: (row) => {
         row.getElement().dataset.rowId = row.getData().id;
@@ -2812,38 +2817,11 @@
         ? "検索条件に一致するユーザーがいません。"
         : "ユーザーがいません。",
       columns: [
-        { title: "社員番号", field: "employee_id", minWidth: 105 },
-        { title: "氏名", field: "display_name", minWidth: 120 },
-        {
-          title: "雇用区分",
-          field: "employment_type",
-          minWidth: 92,
-          formatter: userStatusTagFormatter("is-employment"),
-        },
-        {
-          title: "権限",
-          field: "administrator",
-          minWidth: 78,
-          formatter: userStatusTagFormatter(
-            "is-administrator",
-            (value) => value === "管理者",
-          ),
-        },
-        {
-          title: "日報入力",
-          field: "own_report",
-          minWidth: 82,
-          formatter: userStatusTagFormatter(
-            "is-report-required",
-            (value) => value === "要",
-          ),
-        },
-        { title: "所属組織", field: "affiliation", minWidth: 180, widthGrow: 2 },
-        { title: "コメント対象", field: "comment_target", minWidth: 130, widthGrow: 1 },
         {
           title: "",
           field: "actions",
-          width: 92,
+          width: 100,
+          frozen: true,
           hozAlign: "center",
           headerSort: false,
           resizable: false,
@@ -2861,6 +2839,37 @@
             return actions.outerHTML;
           },
         },
+        { title: "社員番号", field: "employee_id", width: 150, tooltip: true },
+        { title: "氏名", field: "display_name", width: 150, tooltip: true },
+        {
+          title: "雇用区分",
+          field: "employment_type",
+          width: 150,
+          tooltip: true,
+          formatter: userStatusTagFormatter("is-employment"),
+        },
+        {
+          title: "権限",
+          field: "administrator",
+          width: 150,
+          tooltip: true,
+          formatter: userStatusTagFormatter(
+            "is-administrator",
+            (value) => value === "管理者",
+          ),
+        },
+        {
+          title: "日報入力",
+          field: "own_report",
+          width: 150,
+          tooltip: true,
+          formatter: userStatusTagFormatter(
+            "is-report-required",
+            (value) => value === "要",
+          ),
+        },
+        { title: "所属組織", field: "affiliation", width: 300, tooltip: true },
+        { title: "コメント対象", field: "comment_target", width: 300, tooltip: true },
       ],
     });
   }
@@ -2894,11 +2903,8 @@
     legend.className = "fiscal-calendar-legend";
     const holidayLegend = document.createElement("span");
     holidayLegend.className = "calendar-legend-item";
-    holidayLegend.innerHTML = '<i class="calendar-holiday-swatch" aria-hidden="true"></i>休日';
-    const summary = document.createElement("span");
-    summary.className = "fiscal-calendar-summary";
-    summary.textContent = `休日（計 ${holidayCount}日）`;
-    legend.append(holidayLegend, summary);
+    holidayLegend.innerHTML = `<i class="calendar-holiday-swatch" aria-hidden="true"></i><span>休日（計 ${holidayCount}日）</span>`;
+    legend.append(holidayLegend);
     const toolbarActions = document.createElement("div");
     toolbarActions.className = "fiscal-calendar-toolbar-actions";
     toolbarActions.append(legend);

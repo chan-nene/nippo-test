@@ -14,18 +14,18 @@ const IME_DIAGNOSTIC_BATCH_SIZE = 200;
 const IME_DIAGNOSTIC_MAX_BUFFERED_EVENTS = 1000;
 
 const TABLE_COLUMN_WIDTH_PROFILES = Object.freeze({
-  compact: { user: 112, date: 136, name: 170, detail: 300, comment: 230 },
-  standard: { user: 128, date: 140, name: 190, detail: 350, comment: 260 },
-  medium: { user: 136, date: 144, name: 205, detail: 390, comment: 280 },
-  large: { user: 144, date: 148, name: 220, detail: 420, comment: 300 },
-  xlarge: { user: 160, date: 156, name: 240, detail: 460, comment: 330 },
+  compact: { user: 112, date: 116, name: 170, detail: 300, comment: 230 },
+  standard: { user: 128, date: 120, name: 190, detail: 350, comment: 260 },
+  medium: { user: 136, date: 124, name: 205, detail: 390, comment: 280 },
+  large: { user: 144, date: 128, name: 220, detail: 420, comment: 300 },
+  xlarge: { user: 160, date: 136, name: 240, detail: 460, comment: 330 },
 });
 const TABLE_COLUMN_MIN_WIDTH_PROFILES = Object.freeze({
-  compact: { user: 88, date: 136, name: 112, detail: 160, comment: 145 },
-  standard: { user: 96, date: 140, name: 120, detail: 180, comment: 155 },
-  medium: { user: 104, date: 144, name: 130, detail: 195, comment: 165 },
-  large: { user: 112, date: 148, name: 140, detail: 210, comment: 175 },
-  xlarge: { user: 124, date: 156, name: 160, detail: 235, comment: 195 },
+  compact: { user: 88, date: 116, name: 112, detail: 160, comment: 145 },
+  standard: { user: 96, date: 120, name: 120, detail: 180, comment: 155 },
+  medium: { user: 104, date: 124, name: 130, detail: 195, comment: 165 },
+  large: { user: 112, date: 128, name: 140, detail: 210, comment: 175 },
+  xlarge: { user: 124, date: 136, name: 160, detail: 235, comment: 195 },
 });
 const TABLE_COLUMN_MAX_WIDTHS = Object.freeze({
   user: 360,
@@ -813,6 +813,7 @@ function getSaveButtonModel(dirty) {
     return {
       disabled: true,
       label: "保存",
+      hasPendingChanges: dirty.total > 0,
       ariaLabel: dirty.total > 0 ? `保存 未保存${dirty.total}件` : "保存",
     };
   }
@@ -820,6 +821,7 @@ function getSaveButtonModel(dirty) {
   return {
     disabled: state.isBusy || dirty.total === 0,
     label: "保存",
+    hasPendingChanges: dirty.total > 0,
     ariaLabel: dirty.total > 0 ? `保存 未保存${dirty.total}件` : "保存",
   };
 }
@@ -854,6 +856,12 @@ function renderActionButton(id, model) {
     label.className = "toolbar-button-label";
     label.textContent = model.label;
     children.push(label);
+    if (model.hasPendingChanges) {
+      const indicator = document.createElement("span");
+      indicator.className = "save-pending-indicator";
+      indicator.setAttribute("aria-hidden", "true");
+      children.push(indicator);
+    }
   }
   if (model.ariaLabel) {
     button.setAttribute("aria-label", model.ariaLabel);
@@ -1143,6 +1151,7 @@ async function loadData({
       label.textContent = teamName;
       btn.appendChild(label);
       btn.setAttribute("aria-label", teamName);
+      btn.title = teamName;
       btn.setAttribute("aria-pressed", "false");
       container.appendChild(btn);
     });
@@ -1158,6 +1167,7 @@ async function loadData({
       label.textContent = sub.name;
       btn.appendChild(label);
       btn.setAttribute("aria-label", sub.name);
+      btn.title = sub.name;
       btn.setAttribute("aria-pressed", "false");
       container.appendChild(btn);
     });
@@ -1675,20 +1685,19 @@ function renderReportRowClass(row, idx, context) {
 }
 
 function renderDateCell(row, idx, context) {
-  const todayLabel = row.is_today
-    ? `<span class="date-today-label">今日</span>`
-    : `<span class="date-today-label is-empty" aria-hidden="true"></span>`;
   const holidayLabel = renderHolidayLabel(row);
+  const todayAriaLabel = row.is_today
+    ? ` aria-label="今日、${escapeHtml(formatNavigationDate(row.date, true))}"`
+    : "";
   const content = renderCellFrame(
     `<div class="date-primary">
         <span class="date-value">${formatDisplayDateHTML(row.date)}</span>
-        ${todayLabel}
         ${holidayLabel}
       </div>
       `,
     "cell-frame-static date-content",
   );
-  return `<td class="date-col">${content}</td>`;
+  return `<td class="date-col"${todayAriaLabel}>${content}</td>`;
 }
 
 function renderHolidayLabel(row) {
@@ -1833,8 +1842,8 @@ function renderBossCommentCell(context) {
 function renderBossCommentActions(context) {
   if (!context.canAddBossComment) return "";
   return `<div class="cell-frame boss-comment-actions${context.hasBossComment ? " hidden" : ""}" data-boss-comment-actions="true">
-    <button class="boss-comment-link" type="button" data-action="sign-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}">サイン</button>
-    <button class="boss-comment-link" type="button" data-action="edit-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}">コメント入力</button>
+    <button class="boss-comment-link" type="button" data-action="sign-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}" aria-label="名前を記入" title="名前を記入"><svg class="boss-comment-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5h16" /><path d="m14.5 4.5 5 5" /><path d="m13 6 4 4-7.5 7.5-4.5 1 1-4.5Z" /></svg></button>
+    <button class="boss-comment-link" type="button" data-action="edit-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}" aria-label="コメントを記入" title="コメントを記入"><svg class="boss-comment-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19H5l-3 3V6a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v4" /><path d="m14 17 5.5-5.5a1.77 1.77 0 0 1 2.5 2.5L16.5 19.5 13 20Z" /></svg></button>
   </div>`;
 }
 
@@ -1873,7 +1882,7 @@ function renderBossCommentEditor(context, editable) {
 
 function renderBossReplyPreview(context) {
   if (!context.hasReply) return "";
-  return `<div class="cell-frame boss-reply-preview" aria-label="部下返信"><span class="boss-reply-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg></span><div class="boss-reply-text">${escapeHtml(displayText(context.cell.reply))}</div></div>`;
+  return `<div class="reply-section is-expanded">${renderReplyCard(context)}</div>`;
 }
 
 function renderDailyCommentCell(context) {
@@ -1882,7 +1891,10 @@ function renderDailyCommentCell(context) {
 
 function renderReplySection(context) {
   if (!canShowReplySection(context)) return "";
-  return `<div class="reply-section">${renderReplyToggleButton(context)}${renderReplyEditor(context)}</div>`;
+  const stateClass = isReplySectionExpanded(context)
+    ? " is-expanded"
+    : " is-collapsed";
+  return `<div class="reply-section${stateClass}">${renderReplyToggleButton(context)}${renderReplyCard(context)}</div>`;
 }
 
 function canShowReplySection(context) {
@@ -1895,7 +1907,19 @@ function isReplySectionExpanded(context) {
 
 function renderReplyToggleButton(context) {
   if (!context.canEditReply || isReplySectionExpanded(context)) return "";
-  return `<button class="reply-toggle-button" type="button" data-action="toggle-reply" data-row="${context.rowIndex}" data-comment="${context.commentIndex}">返信する</button>`;
+  return renderReplyToggleButtonMarkup(
+    context.rowIndex,
+    context.commentIndex,
+  );
+}
+
+function renderReplyToggleButtonMarkup(rowIndex, commentIndex) {
+  return `<button class="reply-toggle-button" type="button" data-action="toggle-reply" data-row="${rowIndex}" data-comment="${commentIndex}" aria-label="返信する" title="返信する"><svg class="reply-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg></button>`;
+}
+
+function renderReplyCard(context) {
+  if (!isReplySectionExpanded(context)) return "";
+  return `<div class="cell-frame reply-card" aria-label="部下返信"><span class="boss-reply-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg></span><div class="reply-card-content">${renderReplyEditor(context)}</div></div>`;
 }
 
 function renderReplyEditor(context) {
@@ -2496,9 +2520,14 @@ function finishEditing() {
     const replyKey = textarea.dataset.replyKey || "";
     if (isEmptyReply && replyKey) {
       state.expandedReplies.delete(replyKey);
-      const replySection = editingElement.parentElement;
+      const replySection = editingElement.closest(".reply-section");
       if (replySection?.classList.contains("reply-section")) {
-        replySection.innerHTML = `<button class="reply-toggle-button" type="button" data-action="toggle-reply" data-row="${textarea.dataset.row || ""}" data-comment="${textarea.dataset.comment || ""}">返信する</button>`;
+        replySection.classList.remove("is-expanded");
+        replySection.classList.add("is-collapsed");
+        replySection.innerHTML = renderReplyToggleButtonMarkup(
+          textarea.dataset.row || "",
+          textarea.dataset.comment || "",
+        );
       }
     }
   }
@@ -2881,42 +2910,58 @@ async function saveUpdates() {
     reportEntries.length === 0 || result?.result?.user?.saved === true;
   const commentSaved =
     commentEntries.length === 0 || result?.result?.comment?.saved === true;
-  const anySaved =
-    (reportEntries.length > 0 && userSaved) ||
-    (commentEntries.length > 0 && commentSaved);
+  const reportChangesSaved = reportEntries.length > 0 && userSaved;
+  const commentChangesSaved = commentEntries.length > 0 && commentSaved;
+  const anySaved = reportChangesSaved || commentChangesSaved;
   const allSaved = result?.ok === true && userSaved && commentSaved;
   let displayUpdateFailed = result?.cache_sync_failed === true;
 
   if (anySaved) {
     try {
-      if (userSaved) {
+      if (reportChangesSaved) {
         reportEntries.forEach((entry) => applySavedReportEntry(entry));
       }
-      if (commentSaved) {
+      if (commentChangesSaved) {
         commentEntries.forEach((entry) => applySavedCommentEntry(entry));
       }
     } catch (error) {
       displayUpdateFailed = true;
       console.error("日報の保存結果を画面に反映できませんでした。", error);
     }
-    if (userSaved) {
+    if (reportChangesSaved) {
       reportEntries.forEach((entry) => commitSavedReportEntry(entry));
     }
-    if (commentSaved) {
+    if (commentChangesSaved) {
       commentEntries.forEach((entry) => commitSavedCommentEntry(entry));
     }
     try {
-      let missingFilterExited = false;
-      if (
-        commentSaved &&
-        state.showMissingCommentsOnly &&
-        getMissingCommentSummary({ useCurrentRows: true }).count === 0
-      ) {
-        missingFilterExited = exitMissingCommentsFilter();
+      if (commentChangesSaved) {
+        const refreshResult = await loadData({
+          silent: true,
+          preserveDirty: true,
+          preserveTableScroll: true,
+        });
+        if (refreshResult?.ok !== true) {
+          displayUpdateFailed = true;
+          syncChrome();
+          renderTable({ preserveScroll: true });
+        } else if (
+          state.showMissingCommentsOnly &&
+          getMissingCommentSummary().count === 0
+        ) {
+          exitMissingCommentsFilter();
+          persistUiState();
+          const restoredResult = await loadData({
+            silent: true,
+            preserveDirty: true,
+            preserveTableScroll: true,
+          });
+          if (restoredResult?.ok !== true) displayUpdateFailed = true;
+        }
+      } else {
+        syncChrome();
+        renderTable({ preserveScroll: true });
       }
-      if (missingFilterExited) persistUiState();
-      syncChrome();
-      renderTable({ preserveScroll: true });
     } catch (error) {
       displayUpdateFailed = true;
       console.error("日報の保存結果を画面に反映できませんでした。", error);

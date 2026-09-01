@@ -463,8 +463,7 @@ html body .column-header-content {
   pointer-events: none;
 }
 
-html body #reportPanel table thead th .column-header-you,
-html body #reportPanel .date-today-label {
+html body #reportPanel table thead th .column-header-you {
   display: inline-flex;
   width: max-content;
   min-width: 0;
@@ -484,8 +483,16 @@ html body #reportPanel .date-today-label {
   white-space: nowrap;
 }
 
-html body #reportPanel .date-today-label.is-empty {
-  visibility: hidden;
+html body #reportPanel tr.is-today .date-value {
+  padding: 2px 5px 1px;
+  border-radius: 4px;
+  background: var(--report-today-bg);
+  color: var(--report-today-fg);
+  font-weight: 600;
+}
+
+html body #reportPanel tr.is-today .date-value .date-weekday {
+  color: inherit;
 }
 
 html body .column-resize-handle {
@@ -704,6 +711,7 @@ html body tr.holiday td.is-dirty-cell:not(.date-col) {
 }
 
 html body .comment-stack {
+  position: relative;
   display: grid;
   min-width: 0;
   max-width: 100%;
@@ -714,76 +722,132 @@ html body .comment-stack {
 html body .boss-comment-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   padding: 6px 8px;
 }
 
 html body .boss-comment-link {
-  min-height: calc(var(--control-height) - 4px);
+  display: inline-flex;
+  width: calc(var(--control-height) - 4px);
+  min-width: calc(var(--control-height) - 4px);
+  height: calc(var(--control-height) - 4px);
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface-alt);
+  background: transparent;
   color: var(--action-secondary-fg);
-  padding: 0 var(--cell-padding-x);
-  font-family: var(--font-ui);
-  font-size: var(--ui-font-size);
-  font-weight: 600;
-  line-height: normal;
+  padding: 0;
+}
+
+html body .boss-comment-action-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 html body .boss-comment-link:hover,
 html body .boss-comment-link:focus-visible {
   border-color: var(--primary-border);
-  background: var(--surface-hover);
+  background: transparent;
   color: var(--action-secondary-hover-fg);
 }
 
 html body .reply-toggle-button {
-  min-height: var(--control-height-compact);
-  border: 1px solid var(--primary-border);
+  display: inline-flex;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 3px var(--cell-padding-x);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.25;
-  text-decoration: none;
+  background: var(--surface-alt);
+  color: var(--action-secondary-fg);
+  padding: 0;
 }
 
-html body .reply-toggle-button:hover {
-  text-decoration: none;
+html body .reply-toggle-button:hover,
+html body .reply-toggle-button:focus-visible {
+  border-color: var(--primary-border);
+  background: var(--surface-hover);
+  color: var(--action-secondary-hover-fg);
 }
 
 html body .reply-section {
+  width: 100%;
   min-width: 0;
   max-width: 100%;
-  margin: 0 8px 7px;
-  border-top: 1px dashed var(--border-strong);
-  padding-top: 5px;
+  margin: 0;
 }
 
-html body .boss-reply-preview {
-  display: flex;
+html body .reply-section.is-collapsed {
+  position: absolute;
+  z-index: 11;
+  top: 6px;
+  right: 8px;
+  width: auto;
   min-width: 0;
+  max-width: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html body .comment-stack:hover > .reply-section.is-collapsed,
+html body .comment-stack:focus-within > .reply-section.is-collapsed {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+html body .reply-section.is-expanded {
+  padding: 0 8px 7px;
+}
+
+html body .reply-card {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: var(--control-height-compact);
   align-items: flex-start;
   gap: 5px;
-  margin: 0 8px 7px;
+  margin: 0;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--primary-border);
   border-radius: var(--radius-sm);
-  background: var(--surface-alt);
+  background: var(--report-today-bg);
+  color: var(--report-today-fg);
   padding: 6px 8px;
 }
 
-html body .boss-reply-text {
+html body .reply-card .boss-reply-icon {
+  color: inherit;
+}
+
+html body .reply-card-content {
   min-width: 0;
   max-width: 100%;
   flex: 1 1 auto;
-  color: var(--text);
+}
+
+html body .reply-card .reply-content {
+  min-height: 0;
+  padding: 0;
+  color: inherit;
   font-size: var(--font-13);
+  font-weight: normal;
   line-height: 1.35;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+html body .reply-card .reply-content.is-editing {
+  min-height: var(--control-height-compact);
 }
 
 html body .empty {
@@ -811,7 +875,8 @@ html body .table-content table {
 /* SVG icon system */
 
 html body .toolbar-button-icon svg,
-html body .boss-reply-icon svg {
+html body .boss-reply-icon svg,
+html body .reply-toggle-icon {
   display: block;
   width: 15px;
   height: 15px;
@@ -845,7 +910,7 @@ html body #tableWrap table th :is(.column-header-label, .column-header-content, 
 }
 
 html body #tableWrap table td,
-html body #tableWrap table td :is(.user-content, .editable-content, .comment-stack, .boss-reply-text) {
+html body #tableWrap table td :is(.user-content, .editable-content, .comment-stack, .reply-card-content) {
   font-weight: 400;
 }
 
@@ -1398,6 +1463,17 @@ html body #reportPanel #saveButton > * {
   z-index: 1;
 }
 
+html body #reportPanel #saveButton > .save-pending-indicator {
+  position: absolute;
+  top: -7px;
+  right: -11px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--danger-primary-bg);
+  pointer-events: none;
+}
+
 html body #reportPanel #saveButton:hover:not(:disabled)::before {
   background: var(--action-primary-hover-bg);
 }
@@ -1667,10 +1743,6 @@ html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="
     scrollbar-width: thin;
   }
 
-  html body #reportPanel .member-switch-list > .member-switch-button {
-    max-width: 118px;
-    flex: 0 0 auto;
-  }
 }
 
 @media (max-width: 760px) {
@@ -1710,12 +1782,10 @@ html body[data-font-size] #tableWrap table :is(th, td),
 html body[data-font-size] #tableWrap .user-content,
 html body[data-font-size] #tableWrap .editable-content,
 html body[data-font-size] #tableWrap .comment-stack,
-html body[data-font-size] #tableWrap .boss-reply-text {
+html body[data-font-size] #tableWrap .reply-card-content {
   font-size: var(--ui-font-size);
 }
 
-/* The two inline labels sit two pixels below the selected content size. */
-html body[data-font-size] #reportPanel .date-today-label,
 html body[data-font-size] #reportPanel table thead th .column-header-you {
   font-size: max(1px, calc(var(--ui-font-size) - 2px));
   line-height: 1.1;

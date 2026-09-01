@@ -465,6 +465,15 @@ function syncChrome() {
   if (textarea) queueImeDiagnostic("chrome_sync", textarea);
   const model = getChromeModel();
   renderActionButtons(model.actions);
+  const settingsSaveButton = $("saveSettingsButton");
+  const settingsIndicator = settingsSaveButton?.querySelector?.(
+    ".save-pending-indicator",
+  );
+  if (settingsIndicator) {
+    const settingsDirty =
+      typeof isSettingsDirty === "function" && isSettingsDirty();
+    settingsIndicator.classList.toggle("hidden", !settingsDirty);
+  }
   syncNativeUnsavedState(hasUnsavedChanges());
 }
 
@@ -572,6 +581,15 @@ function getPeriodPresetOptions() {
   return [
     ...document.querySelectorAll('.period-presets [role="radio"]'),
   ];
+}
+
+function isCurrentPeriodPreset(name) {
+  if (!["month", "week", "day"].includes(name)) return true;
+  const range = getPresetRange(name);
+  return (
+    range.startDate === state.startDate &&
+    range.endDate === state.endDate
+  );
 }
 
 function updatePeriodPresetIndicator(options = {}) {
@@ -697,7 +715,9 @@ function syncPeriodPresets(config = {}) {
   Object.entries(presets).forEach(([name, button]) => {
     if (!button) return;
     const isActive =
-      !state.showMissingCommentsOnly && state.activePeriodPreset === name;
+      !state.showMissingCommentsOnly &&
+      state.activePeriodPreset === name &&
+      isCurrentPeriodPreset(name);
     button.disabled = controlsBusy;
     button.classList.toggle("is-active", isActive);
     button.dataset.state = isActive ? "on" : "off";

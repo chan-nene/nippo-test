@@ -1344,14 +1344,14 @@
     syncAdminChrome();
   }
 
-  // 組織ツリーで選択中の課を切り替え、配下メンバーの表示対象を更新する。
+  // 組織ツリーで課を選択し、選択中の課を再クリックした場合は選択解除する。
   async function selectOrganizationDepartment(teamId) {
     if (activeMaster !== "team_master") return;
     const entry = teamEntryFor(teamId);
     if (!entry || valueFor(entry, "team_type") !== "department") return;
-    if (selectedOrganizationDepartmentId === teamId) return;
+    const isSameSelection = selectedOrganizationDepartmentId === teamId;
     if (!(await confirmAdminDraftDiscard(managementDraftKeys("team_master")))) return;
-    selectedOrganizationDepartmentId = teamId;
+    selectedOrganizationDepartmentId = isSameSelection ? "" : teamId;
     renderTable();
     syncAdminChrome();
   }
@@ -3242,7 +3242,10 @@
       select.type = "button";
       select.className = "organization-card-select";
       select.dataset.organizationSelect = options.organizationId;
-      select.setAttribute("aria-label", `${nameText}を選択`);
+      select.setAttribute(
+        "aria-label",
+        `${nameText}${options.selected ? "の選択を解除" : "を選択"}`,
+      );
       select.setAttribute("aria-pressed", String(Boolean(options.selected)));
       select.setAttribute("aria-current", options.selected ? "true" : "false");
       select.append(copy);
@@ -5197,9 +5200,17 @@
     const calendarSaveButton = byId("adminCalendarSaveButton");
     if (calendarSaveButton) {
       const calendarActive = activeMaster === "calendar";
+      const calendarDirty = isDefinitionDirty("calendar");
       calendarSaveButton.classList.toggle("hidden", !calendarActive);
       calendarSaveButton.disabled =
-        !calendarActive || !isDefinitionDirty("calendar") || isLoading;
+        !calendarActive || !calendarDirty || isLoading;
+      const calendarIndicator = calendarSaveButton.querySelector?.(
+        ".save-pending-indicator",
+      );
+      calendarIndicator?.classList.toggle(
+        "hidden",
+        !calendarActive || !calendarDirty,
+      );
     }
     if (ledger) ledger.textContent = count === 0 ? "変更はありません" : `${count}ファイルを編集中`;
     if (typeof syncNativeUnsavedState === "function") {

@@ -405,6 +405,18 @@ html body .hidden {
   display: none !important;
 }
 
+html body .toolbar-button > .save-pending-indicator {
+  position: absolute;
+  top: -7px;
+  right: -11px;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--danger-primary-bg);
+  pointer-events: none;
+}
+
 /* The fixed-width wrapper reserves room for the Flatpickr alternate input and
    calendar icon while following the application's font-size setting. */
 html body :is(#settingsPanel, #reportPanel) .period-field-group.flatpickr-date-field {

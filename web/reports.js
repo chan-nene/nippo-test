@@ -501,7 +501,7 @@ function syncMissingCommentCount() {
   if (!label) {
     label = document.createElement("span");
     label.className = "missing-filter-label";
-    label.textContent = "未確認のみ";
+    label.textContent = "未コメント";
     button.appendChild(label);
   }
   if (!badge) {
@@ -522,18 +522,18 @@ function syncMissingCommentCount() {
   const isDirectorSummary =
     state.isDirector && state.missingCommentMode === "weekly_director";
   let statusDescription = isDirectorSummary
-    ? "部長コメントの未確認対象はありません。最長経過0日"
-    : "未確認の日報はありません。対象0日";
+    ? "部長コメントがない対象者はいません。最長経過0日"
+    : "未コメントの日報はありません。対象0日";
   if (isLoading) {
-    statusDescription = "未確認の日数を確認中";
+    statusDescription = "未コメントの日数を確認中";
   } else if (summary.count > 0) {
     if (isDirectorSummary) {
-      statusDescription = `部長コメントが未確認の対象者だけを表示、最長経過${summary.count}稼働日`;
+      statusDescription = `部長コメントがない対象者だけを表示、最長経過${summary.count}稼働日`;
     } else {
       const overdueDescription = summary.hasOverdue
-        ? "、過去日の未確認あり"
+        ? "、過去日の未コメントあり"
         : "";
-      statusDescription = `未確認の日報だけを表示、対象${summary.count}日${overdueDescription}`;
+      statusDescription = `未コメントの日報だけを表示、対象${summary.count}日${overdueDescription}`;
     }
   }
   const todayScopeDescription = isDirectorSummary
@@ -558,23 +558,39 @@ function exitMissingCommentsFilter() {
     preset: "default",
     startDate: "",
     endDate: "",
+    memberScope: getDefaultMemberScope(),
+    selectedSubordinateId: "",
   };
   state.activePeriodPreset = previous.preset || "default";
   state.startDate = previous.startDate || state.startDate;
   state.endDate = previous.endDate || state.endDate;
+  const selectedMemberIsAvailable = state.viewableMembers.some(
+    (member) =>
+      member.employee_id === previous.selectedSubordinateId &&
+      Array.isArray(member.relations) &&
+      member.relations.includes("assigned_subordinate"),
+  );
+  const canRestoreMemberSelection =
+    previous.memberScope === "member" && selectedMemberIsAvailable;
+  const canRestoreScope =
+    previous.memberScope !== "member" &&
+    isAvailableMemberScope(previous.memberScope);
+  state.memberScope =
+    canRestoreMemberSelection || canRestoreScope
+      ? previous.memberScope
+      : getDefaultMemberScope();
+  state.selectedSubordinateId = canRestoreMemberSelection
+    ? previous.selectedSubordinateId
+    : "";
   state.showMissingCommentsOnly = false;
   state.periodBeforeMissing = null;
   const startInput = $("startDate");
   const endInput = $("endDate");
   if (startInput) startInput.value = state.startDate;
   if (endInput) endInput.value = state.endDate;
-  syncReportDateDisplays();
+  updateSubordinateFilterUi();
   syncPeriodPresets();
   return true;
-}
-
-function syncReportDateDisplays() {
-  syncReportDatePicker();
 }
 
 function getPeriodPresetOptions() {
@@ -584,7 +600,7 @@ function getPeriodPresetOptions() {
 }
 
 function isCurrentPeriodPreset(name) {
-  if (!["month", "week", "day"].includes(name)) return true;
+  if (!["month", "week"].includes(name)) return true;
   const range = getPresetRange(name);
   return (
     range.startDate === state.startDate &&
@@ -706,10 +722,15 @@ function movePeriodPresetFocus(index) {
 
 function syncPeriodPresets(config = {}) {
   const controlsBusy = state.isBusy && state.busyAction !== "save";
+  $("reportPanel")?.classList.toggle(
+    "is-missing-mode",
+    state.showMissingCommentsOnly,
+  );
+  const exitMissingButton = $("exitMissingCommentsButton");
+  if (exitMissingButton) exitMissingButton.disabled = controlsBusy;
   const presets = {
     month: $("presetMonthButton"),
     week: $("presetWeekButton"),
-    day: $("presetDayButton"),
     default: $("presetDefaultButton"),
   };
   Object.entries(presets).forEach(([name, button]) => {
@@ -792,11 +813,11 @@ function syncPeriodShiftButtons() {
 
 function getPeriodShiftStepLabel() {
   if (state.showMissingCommentsOnly) {
-    return "未確認のみ表示中";
+    return "未コメント";
   }
   if (state.activePeriodPreset === "month") return "1か月";
   if (state.activePeriodPreset === "week") return "1週間";
-  return "1日";
+  return "1稼働日";
 }
 
 function getChromeModel() {
@@ -1089,6 +1110,9 @@ async function loadData({
     ? result.data.my_rank
     : 9999;
   state.rows = Array.isArray(result.data.rows) ? result.data.rows : [];
+  state.holidayDates = new Set(
+    Array.isArray(result.data.holiday_dates) ? result.data.holiday_dates : [],
+  );
   state.cacheGeneration = Number(result.cache_generation || 0);
   const missingCommentSummary = result.data.missing_comment_summary;
   state.missingCommentDates = Array.isArray(missingCommentSummary?.dates)
@@ -1115,7 +1139,6 @@ async function loadData({
   state.legacyLoadPreset = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
-  syncReportDateDisplays();
   syncPeriodPresets();
   if (preserveDirty) {
     reapplyDirtyEditsToRows();
@@ -1284,7 +1307,6 @@ async function handleDateChange() {
   if (!(await confirmDiscardUnsaved("日付範囲を変更"))) {
     $("startDate").value = state.startDate;
     $("endDate").value = state.endDate;
-    syncReportDateDisplays();
     return;
   }
   discardDirtyEdits();
@@ -1317,7 +1339,6 @@ async function shiftDateRange(direction) {
   discardDirtyEdits();
   startInput.value = startDate;
   endInput.value = endDate;
-  syncReportDateDisplays();
   state.startDate = startDate;
   state.endDate = endDate;
   state.showMissingCommentsOnly = false;
@@ -1337,11 +1358,31 @@ function getShiftedPeriodRange(
   if (state.activePeriodPreset === "month") {
     return getCalendarMonthRange(startDate, step);
   }
+  if (state.activePeriodPreset === "default") {
+    return {
+      startDate: offsetWorkingDate(startDate, step),
+      endDate: offsetWorkingDate(endDate, step),
+    };
+  }
   const deltaDays = state.activePeriodPreset === "week" ? step * 7 : step;
   return {
     startDate: offsetDateStr(startDate, deltaDays),
     endDate: offsetDateStr(endDate, deltaDays),
   };
+}
+
+function offsetWorkingDate(dateStr, workingDays) {
+  const direction = workingDays < 0 ? -1 : 1;
+  let remaining = Math.abs(workingDays);
+  let candidate = dateStr;
+  while (remaining > 0) {
+    candidate = offsetDateStr(candidate, direction);
+    const day = new Date(`${candidate}T00:00:00Z`).getUTCDay();
+    if (day !== 0 && day !== 6 && !state.holidayDates.has(candidate)) {
+      remaining -= 1;
+    }
+  }
+  return candidate;
 }
 
 function formatDisplayDateHTML(value) {
@@ -1372,6 +1413,8 @@ async function applyPreset(presetName) {
       preset: state.activePeriodPreset,
       startDate: state.startDate,
       endDate: state.endDate,
+      memberScope: state.memberScope,
+      selectedSubordinateId: state.selectedSubordinateId,
     };
     const range = getPresetRange("missing");
     state.startDate = range.startDate;
@@ -1391,7 +1434,6 @@ async function applyPreset(presetName) {
   state.legacyLoadPreset = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
-  syncReportDateDisplays();
   await loadData();
   persistUiState();
 }
@@ -1402,9 +1444,6 @@ function getPresetRange(presetName, today = getTodayJST()) {
   }
   if (presetName === "week") {
     return getMondayBasedWeekRange(today);
-  }
-  if (presetName === "day") {
-    return { startDate: today, endDate: today };
   }
   if (presetName === "previousWorkday") {
     // 休日設定を含む判定はバックエンドで行い、loadData の応答で日付を確定する。
@@ -1442,6 +1481,10 @@ function getPresetRange(presetName, today = getTodayJST()) {
       startDate: startDate <= endDate ? startDate : endDate,
       endDate,
     };
+  }
+  if (presetName === "default") {
+    // 会社休日を含む稼働日計算はバックエンドで行い、応答で日付を確定する。
+    return { startDate: "", endDate: "" };
   }
   return { startDate: "", endDate: "" };
 }
@@ -1551,14 +1594,27 @@ function restoreTableScrollState(wrap, scrollState) {
 }
 
 function createTableRenderContext(rows) {
-  const sampleComments = getVisibleComments(
-    rows[0]?.comments || state.rows[0]?.comments || [],
-  );
+  const sampleComments = getApplicableCommentColumns(rows);
 
   return {
     sampleComments,
+    commenterIds: sampleComments.map((cell) => cell.superior_employee_id),
     columns: createTableColumnDefinitions(sampleComments),
   };
+}
+
+function getApplicableCommentColumns(rows) {
+  const columnsByCommenter = new Map();
+  rows.forEach((row) => {
+    getVisibleComments(row.comments || []).forEach((cell) => {
+      const commenterId = String(cell?.superior_employee_id || "");
+      if (!commenterId || cell.applies === false || columnsByCommenter.has(commenterId)) {
+        return;
+      }
+      columnsByCommenter.set(commenterId, cell);
+    });
+  });
+  return [...columnsByCommenter.values()];
 }
 
 function createTableColumnDefinitions(sampleComments) {
@@ -1638,7 +1694,7 @@ function renderReportRows(rows, context) {
     group.rows.push(row);
   });
   return groups
-    .map((group) => {
+    .map((group, groupIndex) => {
       const member = getViewableMember(group.employeeId);
       const displayName =
         member?.display_name || group.rows[0]?.display_name || group.employeeId;
@@ -1647,6 +1703,7 @@ function renderReportRows(rows, context) {
           displayName,
           rowSpan: group.rows.length,
           showUserCell: idx === 0,
+          showGroupDivider: groupIndex > 0 && idx === 0,
         }))
         .join("");
     })
@@ -1662,8 +1719,14 @@ function renderReportRow(row, idx, context, memberContext) {
     ? renderHolidayPlaceholderCells(context, row)
     : `${renderReportNameCell(row)}
     ${renderReportDetailCell(row)}
-    ${renderCommentCells(row)}`;
-  return `<tr class="${renderReportRowClass(row, idx, context)}" data-scroll-key="${escapeHtml(getReportRowKey(row))}">
+    ${renderCommentCells(row, context)}`;
+  const rowClass = [
+    renderReportRowClass(row, idx, context),
+    memberContext.showGroupDivider ? "member-group-start" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return `<tr class="${rowClass}" data-scroll-key="${escapeHtml(getReportRowKey(row))}">
     ${renderUserCell(memberContext)}
     ${renderDateCell(row, idx, context)}
     ${contentCells}
@@ -1680,15 +1743,9 @@ function renderUserCell(memberContext) {
 }
 
 function renderHolidayPlaceholderCells(context, row) {
-  const commentCells = getVisibleComments(row.comments || [])
-    .map((cell, index) => {
-      const originalIndex = row.comments.indexOf(cell);
-      return renderCommentCell(row, cell, row.__index, originalIndex);
-    })
-    .join("");
   return `<td class="name-col holiday-placeholder-cell" aria-label="休日のため日報なし"></td>
     <td class="detail-col holiday-placeholder-cell"></td>
-    ${commentCells}`;
+    ${renderCommentCells(row, context)}`;
 }
 
 function renderReportRowClass(row, idx, context) {
@@ -1706,6 +1763,9 @@ function renderReportRowClass(row, idx, context) {
 
 function renderDateCell(row, idx, context) {
   const holidayLabel = renderHolidayLabel(row);
+  const todayLabel = row.is_today
+    ? '<span class="date-today-label" aria-hidden="true">本日</span>'
+    : "";
   const todayAriaLabel = row.is_today
     ? ` aria-label="今日、${escapeHtml(formatNavigationDate(row.date, true))}"`
     : "";
@@ -1714,6 +1774,7 @@ function renderDateCell(row, idx, context) {
         <span class="date-value">${formatDisplayDateHTML(row.date)}</span>
         ${holidayLabel}
       </div>
+      ${todayLabel}
       `,
     "cell-frame-static date-content",
   );
@@ -1764,13 +1825,29 @@ function renderReportTdClass(baseClass, row, field) {
     .join(" ");
 }
 
-function renderCommentCells(row) {
-  return getVisibleComments(row.comments)
-    .map((cell) => {
+function renderCommentCells(row, context) {
+  const visibleComments = getVisibleComments(row.comments || []);
+  const commentsByCommenter = new Map(
+    visibleComments.map((cell) => [cell.superior_employee_id, cell]),
+  );
+  return context.commenterIds
+    .map((commenterId) => {
+      const cell = commentsByCommenter.get(commenterId);
+      if (!cell || cell.applies === false) {
+        const superiorName =
+          context.sampleComments.find(
+            (sample) => sample.superior_employee_id === commenterId,
+          )?.superior_name || commenterId;
+        return renderNotApplicableCommentCell(superiorName);
+      }
       const originalIndex = row.comments.indexOf(cell);
       return renderCommentCell(row, cell, row.__index, originalIndex);
     })
     .join("");
+}
+
+function renderNotApplicableCommentCell(superiorName) {
+  return `<td class="comment-col comment-not-applicable" aria-label="${escapeHtml(superiorName)}のコメント対象外"><span aria-hidden="true">ー</span></td>`;
 }
 
 function getDateShiftDirectionLabel(isPrevious) {
@@ -2724,7 +2801,7 @@ function collapseEmptyHolidayRows(rows) {
 
 function getEmptyMessage() {
   if (state.showMissingCommentsOnly) {
-    return "未確認の日報はありません。";
+    return "未コメントの日報はありません。";
   }
   return "条件に一致するメンバーの日報はありません。";
 }

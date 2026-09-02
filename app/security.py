@@ -948,6 +948,7 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
             "include_today_in_missing_comments",
             "comment_signature",
             "ui_color_theme",
+            "ui_color_palette",
             "ui_member_filter_levels",
         },
     )
@@ -957,16 +958,22 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
     _optional_iso_date(
         source.get("missing_comment_start_date"), "未コメント確認の開始日"
     )
-    _bounded_int(source.get("default_start_offset_days", -1), -14, 0, "開始日")
+    _bounded_int(source.get("default_start_offset_days", -2), -14, 0, "開始日")
     _bounded_int(source.get("default_end_offset_days", 0), 0, 7, "終了日")
     include_today = source.get("include_today_in_missing_comments", False)
     if not isinstance(include_today, bool):
         raise RequestValidationError("当日を含める設定が不正です。")
-    color_theme = source.get("ui_color_theme", "light")
+    color_theme = source.get("ui_color_theme", "dark")
     if not isinstance(color_theme, str) or color_theme not in {"light", "dark"}:
         raise RequestValidationError("配色の指定が不正です。")
+    color_palette = source.get("ui_color_palette", "default")
+    if not isinstance(color_palette, str) or color_palette not in {
+        "default",
+        "blue",
+    }:
+        raise RequestValidationError("カラーパレットの指定が不正です。")
     member_filter_levels = source.get(
-        "ui_member_filter_levels", ["department", "section", "member"]
+        "ui_member_filter_levels", []
     )
     if (
         not isinstance(member_filter_levels, list)
@@ -1013,7 +1020,7 @@ def validate_ui_state_request(payload: Any) -> Mapping[str, Any]:
         "xlarge",
     }:
         raise RequestValidationError("文字サイズの指定が不正です。")
-    color_theme = source.get("ui_color_theme", "light")
+    color_theme = source.get("ui_color_theme", "dark")
     if not isinstance(color_theme, str) or color_theme not in {"light", "dark"}:
         raise RequestValidationError("配色の指定が不正です。")
     column_widths = source.get("column_widths", {})

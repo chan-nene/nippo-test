@@ -5,7 +5,7 @@ const MEMBER_FILTER_LABELS = Object.freeze({
   section: "係",
   member: "個人",
 });
-function normalizeMemberFilterLevels(value, fallback = MEMBER_FILTER_LEVELS) {
+function normalizeMemberFilterLevels(value, fallback = []) {
   const parseLevels = (raw) => {
     const values = Array.isArray(raw)
       ? raw.map((item) => String(item).trim())
@@ -64,10 +64,12 @@ const state = {
   directorMissingDays: 0,
   commentSignature: "",
   settingsSnapshot: "",
-  colorTheme: "light",
+  colorTheme: "dark",
+  colorPalette: "default",
   fontSize: "large",
   columnWidths: {},
-  memberFilterLevels: [...MEMBER_FILTER_LEVELS],
+  memberFilterLevels: [],
+  holidayDates: new Set(),
   accessDenied: false,
   closeApproved: false,
   loadRequestSequence: 0,
@@ -95,11 +97,12 @@ const toastState = {
 };
 let viewSwitchSequence = 0;
 const actionButtonSignatures = new Map();
-const PERIOD_MODES = ["month", "week", "day", "default"];
+const PERIOD_MODES = ["month", "week", "default"];
 const LEGACY_PERIOD_MODE_MAP = Object.freeze({
   last7days: "default",
-  previousWorkday: "day",
-  today: "day",
+  previousWorkday: "default",
+  today: "default",
+  day: "default",
   previousWeek: "week",
   thisWeek: "week",
   previousMonth: "month",
@@ -109,7 +112,28 @@ const LEGACY_PERIOD_MODE_MAP = Object.freeze({
 const $ = (id) => document.getElementById(id);
 
 function normalizeColorTheme(value) {
-  return value === "dark" ? "dark" : "light";
+  return value === "light" ? "light" : "dark";
+}
+
+function normalizeColorPalette(value) {
+  return value === "blue" ? "blue" : "default";
+}
+
+let colorThemeTransitionReleaseFrame = null;
+
+function suppressColorThemeTransitions() {
+  const root = document.documentElement;
+  root.classList.add("is-color-theme-switching");
+  void root.offsetWidth;
+  if (colorThemeTransitionReleaseFrame !== null) {
+    cancelAnimationFrame(colorThemeTransitionReleaseFrame);
+  }
+  colorThemeTransitionReleaseFrame = requestAnimationFrame(() => {
+    colorThemeTransitionReleaseFrame = requestAnimationFrame(() => {
+      root.classList.remove("is-color-theme-switching");
+      colorThemeTransitionReleaseFrame = null;
+    });
+  });
 }
 
 function applyColorTheme(value) {
@@ -118,6 +142,27 @@ function applyColorTheme(value) {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
   syncColorThemeControls(theme);
+}
+
+function syncColorPaletteControls(palette = state.colorPalette) {
+  document
+    .querySelectorAll("[data-color-palette-option]")
+    .forEach((input) => {
+      input.checked = input.value === palette;
+    });
+}
+
+function applyColorPalette(value) {
+  const palette = normalizeColorPalette(value);
+  state.colorPalette = palette;
+  document.documentElement.dataset.colorPalette = palette;
+  syncColorPaletteControls(palette);
+}
+
+function previewColorPalette(value) {
+  suppressColorThemeTransitions();
+  applyColorPalette(value);
+  syncChrome();
 }
 
 function getColorThemeOptions() {
@@ -155,12 +200,18 @@ function syncColorThemeControls(theme = state.colorTheme) {
   });
   if (selectedIndex >= 0) updateColorThemeRovingTabindex(selectedIndex);
   updateColorThemeIndicator();
+  document
+    .querySelectorAll("[data-theme-setting-option]")
+    .forEach((input) => {
+      input.checked = input.value === theme;
+    });
 }
 
 function setColorTheme(value, focus = true) {
   const theme = normalizeColorTheme(value);
   const settingsWereDirty =
     typeof isSettingsDirty === "function" && isSettingsDirty();
+  suppressColorThemeTransitions();
   applyColorTheme(theme);
   if (!settingsWereDirty && typeof getSettingsDraftSnapshot === "function") {
     state.settingsSnapshot = getSettingsDraftSnapshot();
@@ -247,6 +298,16 @@ function bindEvents() {
   $("saveSettingsButton").addEventListener("click", saveSettings);
   $("settingsPanel").addEventListener("input", syncSettingsDirtyState);
   $("settingsPanel").addEventListener("change", syncSettingsDirtyState);
+  $("colorPaletteOptions")?.addEventListener("change", (event) => {
+    if (event.target.matches("[data-color-palette-option]")) {
+      previewColorPalette(event.target.value);
+    }
+  });
+  $("appearanceModeOptions")?.addEventListener("change", (event) => {
+    if (event.target.matches("[data-theme-setting-option]")) {
+      setColorTheme(event.target.value, false);
+    }
+  });
   $("refreshButton").addEventListener("click", refreshData);
   $("saveButton").addEventListener("click", saveUpdates);
   $("cancelActionConfirmButton").addEventListener("click", () => {
@@ -262,10 +323,10 @@ function bindEvents() {
   $("actionConfirmDialog").addEventListener("click", (event) => {
     if (event.target === event.currentTarget) resolveConfirmationDialog(false);
   });
-  $("resetColumnWidthsButton").addEventListener(
-    "click",
-    openResetColumnWidthsDialog,
-  );
+  $("resetColumnWidthsButton").addEventListener("click", () => {
+    closeFontSizeMenu();
+    openResetColumnWidthsDialog();
+  });
   $("cancelResetColumnWidthsButton").addEventListener(
     "click",
     closeResetColumnWidthsDialog,
@@ -308,6 +369,9 @@ function bindEvents() {
   if (btnMissingComments) {
     btnMissingComments.addEventListener("click", () => applyPreset("missing"));
   }
+  $("exitMissingCommentsButton")?.addEventListener("click", () =>
+    applyPreset("missing"),
+  );
 
   $("bossSearchControl").addEventListener("click", (e) => {
     const scopeButton = e.target.closest("[data-member-scope]");
@@ -418,37 +482,8 @@ function initializeFlatpickrDateInputs() {
       });
     },
   };
-  const rangeInput = $("periodDateRange");
   const settingsStart = $("missingCommentStartDate");
-  if (rangeInput) {
-    window.flatpickr(rangeInput, {
-      ...common,
-      mode: "range",
-      locale: { ...locale, rangeSeparator: " 〜 " },
-      onReady: (_, __, instance) => {
-        instance.altInput?.setAttribute("aria-label", "日報の期間");
-        instance.input.closest(".period-field-group")?.addEventListener("click", (event) => {
-          if (event.target === instance.altInput) return;
-          instance.open();
-        });
-        syncReportDatePicker();
-      },
-      onChange: (selectedDates, __, instance) => {
-        const format = (date) => instance.formatDate(date, "Y-m-d");
-        $("startDate").value = selectedDates[0] ? format(selectedDates[0]) : "";
-        $("endDate").value = selectedDates[1] ? format(selectedDates[1]) : "";
-        if (selectedDates.length === 2) void handleDateChange();
-      },
-    });
-  }
   if (settingsStart) window.flatpickr(settingsStart, { ...common });
-}
-
-function syncReportDatePicker() {
-  const picker = $("periodDateRange")?._flatpickr;
-  if (!picker) return;
-  const dates = [$("startDate")?.value, $("endDate")?.value].filter(Boolean);
-  picker.setDate(dates, false);
 }
 
 function openResetColumnWidthsDialog() {
@@ -471,6 +506,7 @@ function syncFlatpickrDateInput(inputId) {
 
 function restoreUiState(settings) {
   applyColorTheme(settings.ui_color_theme);
+  applyColorPalette(settings.ui_color_palette);
   state.memberFilterLevels = normalizeMemberFilterLevels(
     settings.ui_member_filter_levels,
   );
@@ -502,12 +538,11 @@ function restoreUiState(settings) {
       savedStartDate,
       savedEndDate,
     );
-    const range = restoredRange || getPresetRange(savedPreset);
+    const range = restoredRange || getPresetRange(periodMode);
     const hasUsableCustomRange = periodMode !== "" || Boolean(restoredRange);
     state.activePeriodPreset = hasUsableCustomRange ? periodMode : "default";
     state.showMissingCommentsOnly = false;
-    state.legacyLoadPreset =
-      savedPreset === "previousWorkday" ? "previousWorkday" : "";
+    state.legacyLoadPreset = "";
     state.startDate = hasUsableCustomRange ? range.startDate : "";
     state.endDate = hasUsableCustomRange ? range.endDate : "";
   }
@@ -533,7 +568,7 @@ function persistUiState() {
     : state.activePeriodPreset;
   const shouldPersistDates =
     !state.showMissingCommentsOnly &&
-    ["month", "week", "day", ""].includes(state.activePeriodPreset);
+    ["month", "week", ""].includes(state.activePeriodPreset);
   const payload = {
     period_preset: periodPreset,
     start_date: shouldPersistDates ? state.startDate : "",

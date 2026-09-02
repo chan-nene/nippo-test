@@ -124,7 +124,7 @@ html body .settings-card input:focus {
 
 html body .settings-card input:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
+  outline-offset: 0;
 }
 
 html body #settingsPanel .field-error {
@@ -203,7 +203,157 @@ html body .member-filter-option input[type="checkbox"] {
 
 html body .member-filter-option:has(input:focus-visible) {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0;
+}
+
+html body :is(.color-palette-options, .appearance-mode-options) {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(150px, 210px));
+  gap: 8px;
+}
+
+html body .settings-card :is(.color-palette-option, .appearance-mode-option) {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  border: 1px solid var(--choice-card-border);
+  border-radius: var(--radius-control);
+  background: var(--choice-card-bg);
+  padding: 9px 12px;
+  color: var(--choice-card-fg);
+  cursor: pointer;
+  font-size: var(--font-13);
+  font-weight: 600;
+}
+
+html body .settings-card :is(.color-palette-option, .appearance-mode-option):hover {
+  border-color: var(--choice-card-hover-border);
+  background: var(--choice-card-hover-bg);
+}
+
+html body .settings-card :is(.color-palette-option, .appearance-mode-option):has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+html body :is(.color-palette-option, .appearance-mode-option) input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+html body :is(.color-palette-option, .appearance-mode-option):has(input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 0;
+}
+
+html body .color-palette-preview {
+  display: grid;
+  width: 36px;
+  height: 28px;
+  grid-template-columns: repeat(3, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+html body .color-palette-preview > span:first-child {
+  background: #242424;
+}
+
+html body .color-palette-preview.is-default > span:nth-child(2) {
+  background: #ffffff;
+}
+
+html body .color-palette-preview.is-default > span:last-child {
+  background: #9b9b9b;
+}
+
+html[data-theme="dark"] body .color-palette-preview.is-default > span:first-child {
+  background: #e3e3e3;
+}
+
+html[data-theme="dark"] body .color-palette-preview.is-default > span:nth-child(2) {
+  background: #161616;
+}
+
+html[data-theme="dark"] body .color-palette-preview.is-default > span:last-child {
+  background: #686868;
+}
+
+html body .color-palette-preview.is-blue > span:first-child {
+  background: #006399;
+}
+
+html body .color-palette-preview.is-blue > span:nth-child(2) {
+  background: #dbeafe;
+}
+
+html body .color-palette-preview.is-blue > span:last-child {
+  background: #1e40af;
+}
+
+html[data-theme="dark"] body .color-palette-preview.is-blue > span:first-child {
+  background: #2893cc;
+}
+
+html[data-theme="dark"] body .color-palette-preview.is-blue > span:nth-child(2) {
+  background: rgb(59 130 246 / 15%);
+}
+
+html[data-theme="dark"] body .color-palette-preview.is-blue > span:last-child {
+  background: #60a5fa;
+}
+
+html body .appearance-mode-preview {
+  position: relative;
+  display: block;
+  width: 36px;
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+html body .appearance-mode-preview > span {
+  position: absolute;
+  inset: 6px 5px 4px 11px;
+  border-radius: 3px;
+}
+
+html body .appearance-mode-preview.is-light {
+  background: #f7f7f8;
+}
+
+html body .appearance-mode-preview.is-light > span {
+  background: #ffffff;
+  box-shadow: -6px 0 0 #e4e4e6;
+}
+
+html body .appearance-mode-preview.is-dark {
+  border-color: rgb(255 255 255 / 20%);
+  background: #131313;
+}
+
+html body .appearance-mode-preview.is-dark > span {
+  background: #282828;
+  box-shadow: -6px 0 0 #0d0d0d;
+}
+
+@media (max-width: 760px) {
+  html body :is(.color-palette-options, .appearance-mode-options) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 html body .default-range-selects {
@@ -244,7 +394,7 @@ html body .default-range-selects select:hover {
 html body .default-range-selects select:focus {
   border-color: var(--field-focus-border);
   outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
+  outline-offset: 0;
 }
 
 html body .settings-missing-controls {
@@ -282,7 +432,7 @@ html body #settingsPanel .period-field-group:focus-within {
 
 html body #settingsPanel .period-field-group:has(input:focus-visible) {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
+  outline-offset: 0;
 }
 
 html body .settings-card .settings-check-option {

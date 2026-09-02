@@ -2100,7 +2100,7 @@ html[data-theme="dark"] body #adminPanel {
 
 html body #adminPanel :is(button, input, select, summary):focus-visible {
   outline: 2px solid var(--org-focus);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 html body #adminPanel .admin-header,
@@ -2391,7 +2391,7 @@ html body #adminPanel :is(.master-search input, .team-browser-search, .inspector
 
 html body #adminPanel :is(.master-search input, .team-browser-search, .inspector-field input, .inspector-field select, .team-assignment-picker select, .user-team-picker select):focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
+  outline-offset: 0;
 }
 
 html body #adminPanel :is(.master-search input, .team-browser-search, .inspector-field input, .inspector-field select, .team-assignment-picker select, .user-team-picker select):disabled {
@@ -5144,8 +5144,8 @@ html body #adminPanel .tabulator {
 html body #adminPanel .tabulator .tabulator-header,
 html body #adminPanel .tabulator .tabulator-header .tabulator-col {
   border-color: var(--border);
-  background: var(--surface-soft);
-  color: var(--text-strong);
+  background: var(--table-header-bg);
+  color: var(--text-muted);
 }
 
 html body #adminPanel .tabulator .tabulator-row {

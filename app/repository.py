@@ -594,6 +594,12 @@ class DailyReportRepository:
             previous_working_date = self._previous_working_date(common["calendar"])
             start_date = previous_working_date.isoformat()
             end_date = start_date
+        holiday_dates = {
+            calendar_date
+            for row in common.get("calendar", [])
+            if self._calendar_row_is_holiday(row)
+            and (calendar_date := self._to_date(row.get("date"))) is not None
+        }
         scope = self.resolve_view_scope(common, employee_id)
         user_master = scope["user_master"]
         current_user = scope["current_user"]
@@ -641,6 +647,7 @@ class DailyReportRepository:
             ),
             "viewable_members": viewable_members,
             "rows": rows,
+            "holiday_dates": sorted(day.isoformat() for day in holiday_dates),
             "missing_comment_summary": missing_comment_summary,
             "my_rank": self._get_my_rank(common, employee_id),
             "start_date": default_start.isoformat() if default_start else None,
@@ -882,6 +889,19 @@ class DailyReportRepository:
         candidate = (reference_date or self.today_jst()) - timedelta(days=1)
         while candidate in holiday_dates:
             candidate -= timedelta(days=1)
+        return candidate
+
+    @classmethod
+    def _working_date_offset(
+        cls, reference_date: date, offset: int, holiday_dates: set[date]
+    ) -> date:
+        direction = -1 if offset < 0 else 1
+        remaining = abs(offset)
+        candidate = reference_date
+        while remaining:
+            candidate += timedelta(days=direction)
+            if cls._is_workday(candidate, holiday_dates):
+                remaining -= 1
         return candidate
 
     @staticmethod
@@ -1968,11 +1988,17 @@ class DailyReportRepository:
         default_start = self._to_date(start_date)
         default_end = self._to_date(end_date)
         if not default_start:
-            default_start = today + timedelta(
-                days=self.settings.default_start_offset_days
+            default_start = self._working_date_offset(
+                today,
+                self.settings.default_start_offset_days,
+                holiday_date_values,
             )
         if not default_end:
-            default_end = today + timedelta(days=self.settings.default_end_offset_days)
+            default_end = self._working_date_offset(
+                today,
+                self.settings.default_end_offset_days,
+                holiday_date_values,
+            )
         if default_start > default_end:
             default_start, default_end = default_end, default_start
 

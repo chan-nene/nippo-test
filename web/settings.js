@@ -16,7 +16,7 @@ function fillSettings(settings) {
   $("usersDir").value = settings.users_dir || "";
   $("commentsDir").value = settings.comments_dir || "";
   $("commonDir").value = settings.common_dir || "";
-  const startOffset = Number(settings.default_start_offset_days ?? -1);
+  const startOffset = Number(settings.default_start_offset_days ?? -2);
   const endOffset = Number(settings.default_end_offset_days ?? 0);
   $("defaultStartOffsetDays").value = String(
     clampNumber(Math.abs(Math.min(0, startOffset)), 0, 5),
@@ -28,6 +28,7 @@ function fillSettings(settings) {
     settings.include_today_in_missing_comments,
   );
   $("commentSignature").value = settings.comment_signature || "";
+  syncColorPaletteControls(normalizeColorPalette(settings.ui_color_palette));
   const memberFilterLevels = normalizeMemberFilterLevels(
     settings.ui_member_filter_levels,
   );
@@ -74,7 +75,8 @@ function setSettingsLoadFailure({ manual, hasDisplay }) {
 
 function discardSettingsChanges() {
   if (!settingsLoaded || !savedSettings) return;
-  applyColorTheme(savedSettings.ui_color_theme);
+  suppressColorThemeTransitions();
+  applyColorPalette(savedSettings.ui_color_palette);
   fillSettings(savedSettings);
   clearSettingsErrors();
   setSettingsSaveError("");
@@ -231,6 +233,7 @@ function getSettingsPayload() {
     // Theme selection lives in the title bar. Keep its value in the settings
     // payload so saving another setting never resets the persisted theme.
     ui_color_theme: state.colorTheme,
+    ui_color_palette: state.colorPalette,
     ui_member_filter_levels: [
       ...document.querySelectorAll("[data-member-filter-level]:checked"),
     ].map((input) => input.value),
@@ -238,7 +241,9 @@ function getSettingsPayload() {
 }
 
 function getSettingsDraftSnapshot() {
-  return JSON.stringify(getSettingsPayload());
+  const payload = getSettingsPayload();
+  delete payload.ui_color_theme;
+  return JSON.stringify(payload);
 }
 
 function isSettingsDirty() {
@@ -302,6 +307,7 @@ async function saveSettings() {
   }
 
   applyColorTheme(result.settings.ui_color_theme);
+  applyColorPalette(result.settings.ui_color_palette);
   fillSettings(result.settings);
   state.memberFilterLevels = normalizeMemberFilterLevels(
     result.settings.ui_member_filter_levels,

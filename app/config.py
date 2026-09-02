@@ -8,8 +8,9 @@ from typing import Any
 
 
 COLOR_THEMES = frozenset({"light", "dark"})
+COLOR_PALETTES = frozenset({"default", "blue"})
 MEMBER_FILTER_LEVELS = ("department", "section", "member")
-DEFAULT_MEMBER_FILTER_LEVELS = ",".join(MEMBER_FILTER_LEVELS)
+DEFAULT_MEMBER_FILTER_LEVELS = ""
 
 
 def to_int(value: Any, default: int) -> int:
@@ -30,10 +31,16 @@ def to_bool(value: Any, default: bool) -> bool:
     return default
 
 
-def normalize_color_theme(value: Any, default: str = "light") -> str:
-    fallback = default if default in COLOR_THEMES else "light"
+def normalize_color_theme(value: Any, default: str = "dark") -> str:
+    fallback = default if default in COLOR_THEMES else "dark"
     color_theme = str(value or "").strip().lower()
     return color_theme if color_theme in COLOR_THEMES else fallback
+
+
+def normalize_color_palette(value: Any, default: str = "default") -> str:
+    fallback = default if default in COLOR_PALETTES else "default"
+    color_palette = str(value or "").strip().lower()
+    return color_palette if color_palette in COLOR_PALETTES else fallback
 
 
 def normalize_member_filter_levels(
@@ -66,7 +73,7 @@ class AppSettings:
     users_dir: str = ""
     comments_dir: str = ""
     common_dir: str = ""
-    default_start_offset_days: int = -1
+    default_start_offset_days: int = -2
     default_end_offset_days: int = 0
     missing_comment_start_date: str = ""
     include_today_in_missing_comments: bool = False
@@ -77,7 +84,8 @@ class AppSettings:
     ui_end_date: str = ""
     ui_font_size: str = "large"
     ui_column_widths: str = ""
-    ui_color_theme: str = "light"
+    ui_color_theme: str = "dark"
+    ui_color_palette: str = "default"
     ui_member_filter_levels: str = DEFAULT_MEMBER_FILTER_LEVELS
 
     @property
@@ -93,6 +101,8 @@ class AppSettings:
             raw_value = source.get(field.name, default)
             if field.name == "ui_color_theme":
                 values[field.name] = normalize_color_theme(raw_value, default)
+            elif field.name == "ui_color_palette":
+                values[field.name] = normalize_color_palette(raw_value, default)
             elif field.name == "ui_member_filter_levels":
                 values[field.name] = normalize_member_filter_levels(raw_value, default)
             elif isinstance(default, bool):

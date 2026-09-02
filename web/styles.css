@@ -50,7 +50,7 @@
   --field-border: var(--border-strong);
   --field-hover-border: var(--text-strong);
   --field-focus-border: var(--text-strong);
-  --focus-ring: #0169cc;
+  --focus-ring: var(--primary);
   --filter-idle-bg: oklab(0.159065 0 0 / 0.08);
   --filter-idle-hover-bg: oklab(0.159065 0 0 / 0.12);
   --filter-idle-fg: #3f3f46;
@@ -198,7 +198,7 @@ html[data-theme="dark"] {
   --primary-soft: #303030;
   --primary-border: rgb(255 255 255 / 25%);
   --primary-on: #161616;
-  --focus-ring: #0285ff;
+  --focus-ring: var(--primary);
   --filter-idle-bg: #2b2b2b;
   --filter-idle-hover-bg: #353535;
   --filter-idle-fg: #b8b8b8;
@@ -235,6 +235,38 @@ html[data-theme="dark"] {
   --shadow-color: rgb(0 0 0 / 24%);
   --shadow-color-strong: rgb(0 0 0 / 40%);
   --shadow-popover: 0 12px 34px rgb(0 0 0 / 38%);
+}
+
+html[data-color-palette="blue"] {
+  --primary: #006399;
+  --primary-hover: #0078b8;
+  --primary-ink: #006399;
+  --primary-soft: #dbeafe;
+  --primary-border: #006399;
+  --primary-on: #ffffff;
+  --filter-active-bg: #006399;
+  --filter-active-hover-bg: #0078b8;
+  --filter-active-fg: #ffffff;
+  --filter-active-border: #006399;
+}
+
+html[data-color-palette="blue"][data-theme="dark"] {
+  --primary: #2893cc;
+  --primary-hover: #3aa5d4;
+  --primary-ink: #60a5fa;
+  --primary-soft: rgb(59 130 246 / 15%);
+  --primary-border: #2893cc;
+  --primary-on: #ffffff;
+  --filter-active-bg: #2893cc;
+  --filter-active-hover-bg: #3aa5d4;
+  --filter-active-fg: #ffffff;
+  --filter-active-border: #2893cc;
+}
+
+html.is-color-theme-switching *,
+html.is-color-theme-switching *::before,
+html.is-color-theme-switching *::after {
+  transition: none !important;
 }
 
 html body[data-font-size="compact"] {
@@ -393,7 +425,7 @@ html body button:disabled {
 
 html body :is(button, input, textarea, select, [role="button"], [tabindex]):focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
+  outline-offset: 0;
 }
 
 html body ::selection {
@@ -492,88 +524,6 @@ html body :is(#settingsPanel, #reportPanel)
   cursor: pointer;
 }
 
-html body #reportPanel .period-field-group.flatpickr-range-field {
-  --range-date-icon-right: var(--field-padding-x);
-  --range-date-icon-gap: var(--period-date-content-gap);
-  --range-date-input-padding-right: calc(
-    var(--range-date-icon-right) + var(--period-date-icon-size) +
-      var(--range-date-icon-gap)
-  );
-  position: relative;
-  display: inline-block;
-  box-sizing: border-box;
-  width: max-content;
-  min-width: 0;
-  min-height: var(--control-height);
-  height: var(--control-height);
-  padding: 0;
-  overflow: hidden;
-  font-size: var(--ui-font-size);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-/* The range format always has the same number of tabular digits. This hidden
-   reference determines the field width without relying on the wider `ch` unit,
-   so changing dates keeps the control fixed while UI font scaling still works. */
-html body #reportPanel .period-field-group.flatpickr-range-field::before {
-  content: "0000/00/00 〜 0000/00/00";
-  display: block;
-  visibility: hidden;
-  padding: 0 var(--range-date-input-padding-right) 0 var(--field-padding-x);
-  font: inherit;
-  line-height: var(--control-height);
-  white-space: nowrap;
-}
-
-html body #reportPanel .period-field-group.flatpickr-range-field
-  > input.period-field-flatpickr-input {
-  display: block;
-  position: absolute;
-  inset: 0;
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--field-fg);
-  padding: 0 var(--range-date-input-padding-right) 0 var(--field-padding-x);
-  font-size: var(--ui-font-size);
-  font-weight: inherit;
-  line-height: 1.2;
-  text-align: left;
-  font-variant-numeric: tabular-nums;
-  outline: 0;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-html body #reportPanel .period-field-group.flatpickr-range-field
-  > input.flatpickr-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-html body #reportPanel .period-field-group.flatpickr-range-field
-  > .period-field-display-icon {
-  position: absolute;
-  top: 50%;
-  right: var(--range-date-icon-right);
-  transform: translateY(-50%);
-  width: var(--period-date-icon-size);
-  height: var(--period-date-icon-size);
-  fill: none;
-  stroke: var(--field-fg);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-  pointer-events: none;
-}
-
 html[data-theme="dark"] .flatpickr-calendar {
   border-color: var(--border);
   background: var(--surface);
@@ -597,6 +547,36 @@ html[data-theme="dark"] .flatpickr-calendar .flatpickr-day:hover,
 html[data-theme="dark"] .flatpickr-calendar .flatpickr-day.prevMonthDay,
 html[data-theme="dark"] .flatpickr-calendar .flatpickr-day.nextMonthDay {
   color: var(--text-muted);
+}
+
+html[data-theme] body .flatpickr-calendar
+  .flatpickr-day:is(.selected, .startRange, .endRange) {
+  border-color: var(--filter-active-bg);
+  background: var(--filter-active-bg);
+  color: var(--filter-active-fg);
+  box-shadow: none;
+}
+
+html[data-theme] body .flatpickr-calendar
+  .flatpickr-day.inRange:not(.selected):not(.startRange):not(.endRange) {
+  border-color: var(--selection-soft);
+  background: var(--selection-soft);
+  color: var(--text);
+  box-shadow:
+    -5px 0 0 var(--selection-soft),
+    5px 0 0 var(--selection-soft);
+}
+
+html[data-theme] body .flatpickr-calendar
+  .flatpickr-day.startRange
+  + .flatpickr-day.endRange:not(:nth-child(7n + 1)) {
+  box-shadow: -10px 0 0 var(--filter-active-bg);
+}
+
+html[data-theme] body .flatpickr-calendar .flatpickr-day.week.selected {
+  box-shadow:
+    -5px 0 0 var(--filter-active-bg),
+    5px 0 0 var(--filter-active-bg);
 }
 
 /* Top bar */
@@ -715,10 +695,6 @@ html:not([data-theme="dark"]) body .current-user-icon {
 html:not([data-theme="dark"]) body .header-icon-button:hover,
 html:not([data-theme="dark"]) body .header-icon-button.is-active {
   color: var(--interactive-fill);
-}
-
-html body .column-width-reset-button {
-  margin-left: 0;
 }
 
 html body .theme-mode-switch {
@@ -981,15 +957,33 @@ html body .font-size-menu {
   z-index: 80;
   top: calc(100% + 8px);
   right: 0;
-  display: grid;
   width: 300px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-popover);
   padding: 6px;
+}
+
+html body .font-size-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+html body .font-size-menu-divider {
+  height: 1px;
+  margin: 6px 2px;
+  background: var(--border);
+}
+
+html body .font-size-menu .font-size-menu-reset {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0 10px;
+  text-align: left;
 }
 
 html body .font-size-menu.hidden {

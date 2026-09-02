@@ -3,6 +3,7 @@
 /* Command bar */
 
 html body #reportPanel {
+  --report-regular-row-height: 58px;
   --report-period-bg: #ededed;
   --report-period-indicator: #ffffff;
   --report-period-fg: var(--interactive-fill);
@@ -11,6 +12,22 @@ html body #reportPanel {
   --report-period-shadow: 0 1px 4px -1px rgb(0 0 0 / .2);
   --report-today-bg: oklab(0.683029 -0.16619 0.102668 / 0.15);
   --report-today-fg: #008635;
+}
+
+html body[data-font-size="compact"] #reportPanel {
+  --report-regular-row-height: 53px;
+}
+
+html body[data-font-size="medium"] #reportPanel {
+  --report-regular-row-height: 61px;
+}
+
+html body[data-font-size="large"] #reportPanel {
+  --report-regular-row-height: 64px;
+}
+
+html body[data-font-size="xlarge"] #reportPanel {
+  --report-regular-row-height: 67px;
 }
 
 html:not([data-theme="dark"]) body #reportPanel {
@@ -25,6 +42,16 @@ html[data-theme="dark"] body #reportPanel {
   --report-period-muted: #afafaf;
   --report-period-hover: #303030;
   --report-today-fg: #04b84c;
+}
+
+html[data-color-palette="blue"] body #reportPanel {
+  --report-today-bg: #dbeafe;
+  --report-today-fg: #1e40af;
+}
+
+html[data-color-palette="blue"][data-theme="dark"] body #reportPanel {
+  --report-today-bg: rgb(59 130 246 / 15%);
+  --report-today-fg: #60a5fa;
 }
 
 html body {
@@ -220,7 +247,54 @@ html body .missing-filter-group {
   align-items: center;
   gap: 14px;
   flex: 0 0 auto;
+  margin-left: 28px;
   margin-right: 8px;
+}
+
+html body #reportPanel .missing-mode-summary {
+  display: none;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+html body #reportPanel.is-missing-mode .missing-mode-summary {
+  display: flex;
+}
+
+html body #reportPanel.is-missing-mode :is(
+    .period-mode-control,
+    .period-navigation,
+    .missing-filter-group,
+    #bossFilterArea
+  ) {
+  display: none !important;
+}
+
+html body #reportPanel .missing-mode-status {
+  display: inline-flex;
+  min-height: var(--control-height);
+  align-items: center;
+  padding-inline: var(--control-wide-padding-x);
+  border: 1px solid var(--filter-active-border);
+  border-radius: var(--radius-control);
+  background: var(--filter-active-bg);
+  color: var(--filter-active-fg);
+  font-size: var(--ui-font-size);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+html body #reportPanel .missing-mode-target {
+  color: var(--text-muted);
+  font-size: var(--font-13);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html body #reportPanel .missing-mode-exit-button {
+  flex: 0 0 auto;
 }
 
 html body .period-filter-divider {
@@ -483,16 +557,21 @@ html body #reportPanel table thead th .column-header-you {
   white-space: nowrap;
 }
 
-html body #reportPanel tr.is-today .date-value {
-  padding: 2px 5px 1px;
+html body #reportPanel .date-today-label {
+  display: inline-flex;
+  width: max-content;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  margin-top: 3px;
+  padding: 2px 6px 1px;
   border-radius: 4px;
   background: var(--report-today-bg);
   color: var(--report-today-fg);
+  font-size: calc(var(--ui-font-size) - 2px);
   font-weight: 600;
-}
-
-html body #reportPanel tr.is-today .date-value .date-weekday {
-  color: inherit;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 html body .column-resize-handle {
@@ -600,6 +679,29 @@ html body tr.holiday td:not(.date-col, .user-col) {
   background: var(--holiday-row-bg);
 }
 
+html body #reportPanel tbody tr:not(.holiday) {
+  --table-row-height: var(--report-regular-row-height);
+}
+
+/* Holidays stay compact when their cells contain little or no content. The
+   row can still grow naturally for entered reports, comments, or replies. */
+html body #reportPanel tbody tr.holiday {
+  --table-row-height: max(30px, var(--compact-control-height));
+}
+
+html body #reportPanel td.comment-not-applicable {
+  color: var(--text-muted);
+  text-align: center;
+}
+
+html body #reportPanel td.comment-not-applicable > span {
+  display: flex;
+  min-height: calc(var(--table-row-height) - 1px);
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-12);
+}
+
 html body .editable-content.is-editable {
   cursor: text;
 }
@@ -659,10 +761,10 @@ html body .editable-content.is-editing:hover {
   box-shadow: none;
 }
 
-html body .editable-content.is-editing::after {
+html body td:has(.editable-content.is-editing)::after {
   position: absolute;
-  z-index: 2;
-  inset: 1px;
+  z-index: 10;
+  inset: 0;
   box-shadow: inset 0 0 0 2px var(--primary);
   content: "";
   pointer-events: none;
@@ -946,7 +1048,7 @@ html body #reportPanel .period-field-group:focus-within {
 
 html body #reportPanel .period-field-group:has(input:focus-visible) {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
+  outline-offset: 0;
 }
 
 html body #reportPanel .period-field-group.is-pointer-focused:has(input:focus-visible) {
@@ -1259,6 +1361,10 @@ html body #reportPanel table tbody tr + tr > :is(th, td) {
   border-top: 1px solid var(--table-border);
 }
 
+html body #reportPanel table tbody tr.member-group-start > :is(th, td) {
+  border-top: 2px solid var(--table-border-strong);
+}
+
 html body #reportPanel table :is(th, td).date-col {
   border-left: 0;
   border-right: 1px solid var(--table-border);
@@ -1301,7 +1407,7 @@ html body #reportPanel #refreshButton:active:not(:disabled) {
 
 html body #reportPanel #refreshButton:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 html body #reportPanel #refreshButton:disabled {
@@ -1380,7 +1486,7 @@ html body .data-refresh-button:active:not(:disabled) {
 
 html body .data-refresh-button:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 html body .data-refresh-button:disabled {
@@ -1484,7 +1590,7 @@ html body #reportPanel #saveButton:active:not(:disabled) {
 
 html body #reportPanel #saveButton:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 html body #reportPanel #saveButton:disabled {
@@ -1610,7 +1716,7 @@ html body #reportPanel .member-switch-button:active:not(:disabled) {
 
 html body #reportPanel .member-switch-button:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 html body #reportPanel .member-switch-button:disabled {
@@ -1662,7 +1768,7 @@ html body #reportPanel #showMissingCommentsButton:hover:not(:disabled) {
 
 html body #reportPanel #showMissingCommentsButton:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 html body #reportPanel #showMissingCommentsButton:disabled {
@@ -1736,6 +1842,16 @@ html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="
     margin-left: 0;
   }
 
+  html body #reportPanel.is-missing-mode .toolbar-filter-row .period-main-controls {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  html body #reportPanel.is-missing-mode .toolbar-filter-row .toolbar-right {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   html body #reportPanel .member-switch-list {
     overflow-x: auto;
     flex-wrap: nowrap;
@@ -1746,6 +1862,10 @@ html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="
 }
 
 @media (max-width: 760px) {
+  html body #reportPanel .missing-filter-group {
+    margin-left: 0;
+  }
+
   html body #reportPanel .toolbar-filter-row .toolbar-left-wide {
     grid-column: 1 / -1;
     grid-row: 1;
@@ -1763,6 +1883,15 @@ html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="
     flex-wrap: wrap;
     row-gap: 8px;
   }
+
+  html body #reportPanel.is-missing-mode .toolbar-filter-row .period-main-controls {
+    grid-row: 1;
+  }
+
+  html body #reportPanel.is-missing-mode .toolbar-filter-row .toolbar-right {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }
 
 @media (max-width: 520px) {
@@ -1774,6 +1903,16 @@ html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="
   html body #reportPanel .period-main-controls {
     grid-column: 1;
     width: 100%;
+  }
+
+  html body #reportPanel.is-missing-mode .toolbar-filter-row .period-main-controls {
+    grid-row: 1;
+  }
+
+  html body #reportPanel.is-missing-mode .toolbar-filter-row .toolbar-right {
+    grid-column: 1;
+    grid-row: 2;
+    justify-content: flex-start;
   }
 }
 

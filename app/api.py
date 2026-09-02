@@ -11,6 +11,7 @@ from typing import Any, Callable
 from app.calendar_policy import CALENDAR_MIN_FISCAL_YEAR
 from app.config import (
     SettingsManager,
+    normalize_color_palette,
     normalize_member_filter_levels,
     normalize_color_theme,
     to_bool,
@@ -145,7 +146,7 @@ class DailyReportApi:
                 comments_dir=str(payload.get("comments_dir", "")).strip(),
                 common_dir=str(payload.get("common_dir", "")).strip(),
                 default_start_offset_days=to_int(
-                    payload.get("default_start_offset_days"), -1
+                    payload.get("default_start_offset_days"), -2
                 ),
                 default_end_offset_days=to_int(
                     payload.get("default_end_offset_days"), 0
@@ -161,6 +162,10 @@ class DailyReportApi:
                 ui_color_theme=normalize_color_theme(
                     payload.get("ui_color_theme"),
                     self._settings.ui_color_theme,
+                ),
+                ui_color_palette=normalize_color_palette(
+                    payload.get("ui_color_palette"),
+                    self._settings.ui_color_palette,
                 ),
                 ui_member_filter_levels=normalize_member_filter_levels(
                     payload.get("ui_member_filter_levels"),

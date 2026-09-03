@@ -661,8 +661,7 @@ html body .date-value {
 }
 
 html body .date-weekday,
-html body .cell-sub-label,
-html body .boss-reply-icon {
+html body .cell-sub-label {
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -927,10 +926,6 @@ html body .reply-card {
   padding: 6px 8px;
 }
 
-html body .reply-card .boss-reply-icon {
-  color: inherit;
-}
-
 html body .reply-card-content {
   min-width: 0;
   max-width: 100%;
@@ -977,7 +972,6 @@ html body .table-content table {
 /* SVG icon system */
 
 html body .toolbar-button-icon svg,
-html body .boss-reply-icon svg,
 html body .reply-toggle-icon {
   display: block;
   width: 15px;
@@ -1928,4 +1922,33 @@ html body[data-font-size] #tableWrap .reply-card-content {
 html body[data-font-size] #reportPanel table thead th .column-header-you {
   font-size: max(1px, calc(var(--ui-font-size) - 2px));
   line-height: 1.1;
+}
+
+html body #reportPanel .missing-count-badge,
+html body #reportPanel .date-today-label {
+  padding-top: 3px;
+  padding-bottom: 0;
+}
+
+html body #reportPanel .date-today-label,
+html body #reportPanel table thead th .column-header-you {
+  top: 0 !important;
+}
+
+html body #reportPanel table thead th .column-header-you {
+  padding-top: 3px;
+  padding-bottom: 0;
+}
+
+html body #reportPanel .period-shift-step-label,
+html body #reportPanel .period-presets > .preset-button .relative,
+html body #reportPanel .member-switch-button > .relative,
+html body #reportPanel .missing-filter-label,
+html body #reportPanel .toolbar-button-label,
+html body #reportPanel .column-header-label,
+html body #reportPanel .date-value,
+html body #reportPanel .date-weekday,
+html body #reportPanel .cell-sub-label,
+html body #reportPanel .cell-frame:not(:has(> *)) {
+  top: var(--ui-text-offset-y) !important;
 }

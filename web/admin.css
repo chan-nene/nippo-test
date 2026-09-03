@@ -5222,3 +5222,46 @@ html body #adminPanel .user-status-tag.is-report-required {
   background: var(--dirty);
   color: var(--warning);
 }
+
+/* Keep fixed admin controls and table rows the same height while correcting
+   the IBM Plex Sans optical baseline. */
+html body #adminPanel .master-nav-button {
+  padding-top: 7px;
+  padding-bottom: 6px;
+}
+
+html body #adminPanel .admin-add-button {
+  padding-top: 2px;
+  padding-bottom: 0;
+}
+
+html body #adminPanel .tabulator .tabulator-cell {
+  padding-top: 11px;
+  padding-bottom: 9px;
+}
+
+html body #adminPanel .user-status-tag {
+  padding-top: 3px;
+  padding-bottom: 0;
+  top: 0 !important;
+}
+
+html body #adminPanel :is(
+    .admin-dirty-badge,
+    .team-level-label,
+    .team-unsaved-label,
+    .admin-rank-pill,
+    .admin-subordinate-count,
+    .admin-holiday-pill,
+    .user-role-badge
+  ) {
+  padding-top: 2px;
+  padding-bottom: 0;
+  top: 0 !important;
+}
+
+html body #adminPanel .section-count-badge {
+  padding-top: 3px;
+  padding-bottom: 1px;
+  top: 0 !important;
+}

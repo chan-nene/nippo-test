@@ -14,18 +14,18 @@ const IME_DIAGNOSTIC_BATCH_SIZE = 200;
 const IME_DIAGNOSTIC_MAX_BUFFERED_EVENTS = 1000;
 
 const TABLE_COLUMN_WIDTH_PROFILES = Object.freeze({
-  compact: { user: 112, date: 116, name: 170, detail: 300, comment: 230 },
-  standard: { user: 128, date: 120, name: 190, detail: 350, comment: 260 },
-  medium: { user: 136, date: 124, name: 205, detail: 390, comment: 280 },
-  large: { user: 144, date: 128, name: 220, detail: 420, comment: 300 },
-  xlarge: { user: 160, date: 136, name: 240, detail: 460, comment: 330 },
+  compact: { user: 112, date: 70, name: 170, detail: 300, comment: 117 },
+  standard: { user: 128, date: 78, name: 190, detail: 350, comment: 117 },
+  medium: { user: 136, date: 84, name: 205, detail: 390, comment: 129 },
+  large: { user: 144, date: 92, name: 220, detail: 420, comment: 141 },
+  xlarge: { user: 160, date: 102, name: 240, detail: 460, comment: 153 },
 });
 const TABLE_COLUMN_MIN_WIDTH_PROFILES = Object.freeze({
-  compact: { user: 88, date: 116, name: 112, detail: 160, comment: 145 },
-  standard: { user: 96, date: 120, name: 120, detail: 180, comment: 155 },
-  medium: { user: 104, date: 124, name: 130, detail: 195, comment: 165 },
-  large: { user: 112, date: 128, name: 140, detail: 210, comment: 175 },
-  xlarge: { user: 124, date: 136, name: 160, detail: 235, comment: 195 },
+  compact: { user: 88, date: 70, name: 112, detail: 160, comment: 78 },
+  standard: { user: 96, date: 78, name: 120, detail: 180, comment: 78 },
+  medium: { user: 104, date: 84, name: 130, detail: 195, comment: 86 },
+  large: { user: 112, date: 92, name: 140, detail: 210, comment: 94 },
+  xlarge: { user: 124, date: 102, name: 160, detail: 235, comment: 102 },
 });
 const TABLE_COLUMN_MAX_WIDTHS = Object.freeze({
   user: 360,
@@ -2019,7 +2019,7 @@ function renderReplyToggleButtonMarkup(rowIndex, commentIndex) {
 
 function renderReplyCard(context) {
   if (!isReplySectionExpanded(context)) return "";
-  return `<div class="cell-frame reply-card" aria-label="部下返信"><span class="boss-reply-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg></span><div class="reply-card-content">${renderReplyEditor(context)}</div></div>`;
+  return `<div class="cell-frame reply-card" aria-label="部下返信"><div class="reply-card-content">${renderReplyEditor(context)}</div></div>`;
 }
 
 function renderReplyEditor(context) {

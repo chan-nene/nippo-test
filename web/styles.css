@@ -13,6 +13,7 @@
   --font-15: 15px;
   --font-16: 16px;
   --font-18: 18px;
+  --ui-text-offset-y: 1px;
   /* Shared content scale: every requested size is an exact CSS pixel value. */
   --ui-font-size: 14px;
   --app-bg: #f7f7f8;
@@ -1379,8 +1380,7 @@ html body[data-font-size]
   :is(
     .date-weekday,
     .period-shift-button,
-    .preset-button,
-    .boss-reply-icon
+    .preset-button
 ) {
   font-size: var(--ui-font-size) !important;
 }
@@ -1550,4 +1550,49 @@ html body .current-user {
 html body[data-font-size] .sidebar .sidebar-item .sidebar-text,
 html body[data-font-size] .sidebar .sidebar-utility-button .sidebar-utility-text {
   font-size: 12px !important;
+}
+
+/* IBM Plex Sans JP sits slightly high inside a browser line box. Move
+   text-only nodes down by one pixel without moving their backgrounds or
+   borders. Fixed controls use asymmetric padding for the same optical shift. */
+html body :where(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    dt,
+    dd,
+    strong,
+    em,
+    small,
+    summary,
+    label,
+    a,
+    span,
+    .cell-frame:not(:has(> *))
+  ):not(:has(> *)):not(:empty):not([aria-hidden="true"]):not(.toolbar-button-icon):not(.sidebar-icon):not(.sidebar-utility-icon) {
+  position: relative;
+  top: var(--ui-text-offset-y) !important;
+}
+
+html body :is(
+    input[type="text"],
+    input[type="date"],
+    input[type="search"],
+    input[type="number"],
+    input[type="email"],
+    select
+  ) {
+  padding-top: 2px !important;
+  padding-bottom: 0 !important;
+}
+
+html body .font-size-button,
+html body .font-size-menu button,
+html body .dialog-button {
+  padding-top: 2px;
+  padding-bottom: 0;
 }

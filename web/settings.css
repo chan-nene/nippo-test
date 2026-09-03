@@ -466,6 +466,11 @@ html body #settingsPanel .settings-card > .actions {
   text-align: right;
 }
 
+html body #settingsPanel #saveSettingsButton {
+  padding-top: 2px;
+  padding-bottom: 0;
+}
+
 @media (max-width: 860px) {
   html body .settings-section {
     grid-template-columns: 1fr;

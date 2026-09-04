@@ -44,6 +44,7 @@ from app.security import (
 
 logger = logging.getLogger(__name__)
 UNREGISTERED_EMPLOYEE_MESSAGE = "このアプリは使用できません。管理者に連絡してください。"
+DEFAULT_ALLOWED_MEMBER_FILTER_LEVELS = ("department", "section", "member")
 
 
 class DailyReportApi:
@@ -109,6 +110,7 @@ class DailyReportApi:
     def get_initial_state(self) -> dict[str, Any]:
         employee_registered: bool | None = None
         is_admin = False
+        settings_context = self._default_settings_context()
         storage_runtime_error: StorageConfigError | None = None
         storage_error = getattr(self, "_storage_error", None)
         if self._settings.is_complete and storage_error is None:
@@ -118,6 +120,7 @@ class DailyReportApi:
                 current_user = self._current_user_master_row(repository)
                 employee_registered = current_user is not None
                 is_admin = self._user_is_admin(current_user)
+                settings_context = self._build_settings_context(repository=repository)
             except StorageConfigError as exc:
                 storage_runtime_error = exc
                 logger.error("Storage directory unavailable during bootstrap", exc_info=True)
@@ -153,6 +156,8 @@ class DailyReportApi:
                 if employee_registered is False
                 else ""
             ),
+            "settings_context": settings_context,
+            **settings_context,
         }
 
     def load_settings(self) -> dict[str, Any]:
@@ -162,11 +167,14 @@ class DailyReportApi:
             root_path = self._settings.root_path
             self._settings = self._settings_manager.load()
             self._settings.root_path = root_path
+            settings_context = self._build_settings_context()
             return {
                 "ok": True,
                 "settings": self._settings.to_dict(),
                 "settings_complete": self._settings.is_complete,
                 "storage_configured": self._storage_ready,
+                "settings_context": settings_context,
+                **settings_context,
             }
         except Exception:
             logger.exception("Failed to load settings")
@@ -209,12 +217,15 @@ class DailyReportApi:
             )
             self._settings = candidate
             self._settings_manager.save(self._settings)
+            settings_context = self._build_settings_context()
             return {
                 "ok": True,
                 "message": "設定を保存しました。",
                 "settings": self._settings.to_dict(),
                 "storage_configured": getattr(self, "_storage_error", None) is None
                 and self._settings.is_complete,
+                "settings_context": settings_context,
+                **settings_context,
             }
         except RequestValidationError as exc:
             return self._invalid_request(exc)
@@ -241,6 +252,10 @@ class DailyReportApi:
                 ui_font_size=self._validated_font_size(payload.get("font_size")),
                 ui_color_theme=normalize_color_theme(
                     payload.get("ui_color_theme"), self._settings.ui_color_theme
+                ),
+                ui_color_palette=normalize_color_palette(
+                    payload.get("ui_color_palette"),
+                    self._settings.ui_color_palette,
                 ),
                 ui_column_widths=(
                     json.dumps(
@@ -279,6 +294,11 @@ class DailyReportApi:
                 self._settings, self._employee_id
             ):
                 return self._employee_access_denied()
+            settings_context = self._build_settings_context()
+            data["allowed_member_filter_levels"] = settings_context[
+                "allowed_member_filter_levels"
+            ]
+            data["has_comment_targets"] = settings_context["has_comment_targets"]
             return {"ok": True, "data": data, **diagnostics}
         except RequestValidationError as exc:
             return self._invalid_request(exc)
@@ -355,6 +375,24 @@ class DailyReportApi:
         except Exception:
             logger.exception("Failed to load common masters")
             return {"ok": False, "message": "管理を読み込めませんでした。"}
+
+    def load_calendar(self) -> dict[str, Any]:
+        """Return only the shared holiday calendar to every registered user."""
+        try:
+            if not self._storage_ready:
+                return self._storage_unavailable_response()
+            repo = DailyReportRepository(self._settings, self._base_dir)
+            repo.validate_paths()
+            access_denied = self._registered_employee_access_denied(repo)
+            if access_denied:
+                return access_denied
+            return {"ok": True, "calendar": repo.load_calendar_master()}
+        except StorageConfigError as exc:
+            logger.error("Storage directory unavailable while loading calendar", exc_info=True)
+            return self._storage_operation_error(exc)
+        except Exception:
+            logger.exception("Failed to load calendar")
+            return {"ok": False, "message": "カレンダーを読み込めませんでした。"}
 
     def save_common_master(self, payload: Any) -> dict[str, Any]:
         try:
@@ -627,6 +665,106 @@ class DailyReportApi:
             getattr(self, "_storage_error", None) is None
             and bool(getattr(self._settings, "is_complete", False))
         )
+
+    @staticmethod
+    def _default_settings_context() -> dict[str, Any]:
+        return {
+            "has_comment_targets": False,
+            "current_team": [],
+            "affiliation_type": "",
+            "allowed_member_filter_levels": list(
+                DEFAULT_ALLOWED_MEMBER_FILTER_LEVELS
+            ),
+        }
+
+    def _build_settings_context(
+        self,
+        *,
+        repository: DailyReportRepository | None = None,
+        common: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+        """Return the role-scoped controls needed by the settings screen.
+
+        The comment-target check deliberately goes through the same
+        ``resolve_view_scope`` path used by daily reports.  This keeps the
+        settings screen from inferring permission from a stale or unrelated
+        user list.
+        """
+        context = self._default_settings_context()
+        if not self._storage_ready:
+            return context
+
+        employee_id = str(getattr(self, "_employee_id", "") or "").strip()
+        if not employee_id:
+            return context
+
+        try:
+            repo = repository or DailyReportRepository(
+                self._settings,
+                Path(
+                    getattr(
+                        self,
+                        "_base_dir",
+                        getattr(self._settings_manager, "base_dir", Path.cwd()),
+                    )
+                ),
+            )
+            if common is None:
+                data_cache = getattr(self, "_data_cache", None)
+                if data_cache is not None and data_cache.is_loaded:
+                    common = data_cache.get_common(self._settings, employee_id)
+                else:
+                    repo.validate_paths()
+                    common = repo.load_common_masters()
+
+            scope = repo.resolve_view_scope(common, employee_id)
+            current_user = scope.get("current_user") or {}
+            user_master = scope.get("user_master") or {}
+            assigned_ids = scope.get("assigned_subordinate_ids") or set()
+            valid_targets = {
+                str(target_id).strip()
+                for target_id in assigned_ids
+                if str(target_id).strip()
+                and str(target_id).strip() != employee_id
+                and str(target_id).strip() in user_master
+                and not repo._is_temporary_user(user_master[str(target_id).strip()])
+                and user_master[str(target_id).strip()].get("affiliation_type")
+                != "director"
+                and repo._user_can_input_own_report(
+                    user_master[str(target_id).strip()]
+                )
+            }
+
+            organization_id = str(
+                current_user.get("organization_id")
+                or current_user.get("small_team_id", "")
+            ).strip()
+            current_team = repo._team_path(common, organization_id)
+            path_levels = [
+                str(team.get("team_type") or team.get("team_level") or "")
+                for team in current_team
+            ]
+            affiliation_type = str(
+                current_user.get("affiliation_type", "")
+            ).strip()
+            if affiliation_type != "director" and any(
+                level in {"section", "medium"} for level in path_levels
+            ):
+                allowed_levels = ["section", "member"]
+            else:
+                # Department-level users and directors can narrow by every
+                # organization level represented by the report toolbar.
+                allowed_levels = list(DEFAULT_ALLOWED_MEMBER_FILTER_LEVELS)
+
+            return {
+                "has_comment_targets": bool(valid_targets),
+                "current_team": current_team,
+                "affiliation_type": affiliation_type,
+                "allowed_member_filter_levels": allowed_levels,
+            }
+        except Exception:
+            logger.exception("Failed to build settings screen context")
+            return context
 
     @staticmethod
     def _storage_error_message(exc: StorageConfigError) -> str:

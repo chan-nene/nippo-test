@@ -10,7 +10,7 @@ let savedSettings = null;
 let settingsLoadSequence = 0;
 let settingsLoading = false;
 
-function fillSettings(settings) {
+function fillSettings(settings, context = null) {
   savedSettings = { ...(settings || {}) };
   settingsLoaded = true;
   const startOffset = Number(settings.default_start_offset_days ?? -2);
@@ -39,6 +39,7 @@ function fillSettings(settings) {
     settings.include_today_in_missing_comments,
   );
   state.commentSignature = settings.comment_signature || "";
+  applySettingsContext(context || {});
   markSettingsClean();
 }
 
@@ -74,7 +75,7 @@ function discardSettingsChanges() {
   if (!settingsLoaded || !savedSettings) return;
   suppressColorThemeTransitions();
   applyColorPalette(savedSettings.ui_color_palette);
-  fillSettings(savedSettings);
+  fillSettings(savedSettings, state.settingsContext);
   clearSettingsErrors();
   setSettingsSaveError("");
   markSettingsClean();
@@ -138,7 +139,7 @@ async function loadSettings({
     return false;
   }
 
-  fillSettings(result.settings);
+  fillSettings(result.settings, result.settings_context || result);
   restoreUiState(result.settings);
   setSettingsContentVisible(true);
   clearScreenLoadError("settings");
@@ -226,14 +227,24 @@ function getSettingsPayload() {
     ui_color_palette: state.colorPalette,
     ui_member_filter_levels: [
       ...document.querySelectorAll("[data-member-filter-level]:checked"),
-    ].map((input) => input.value),
+    ]
+      .map((input) => input.value)
+      .filter((level) =>
+        (state.memberFilterAllowedLevels || MEMBER_FILTER_LEVELS).includes(level),
+      ),
   };
 }
 
 function getSettingsDraftSnapshot() {
   const payload = getSettingsPayload();
   delete payload.ui_color_theme;
+  delete payload.ui_color_palette;
   return JSON.stringify(payload);
+}
+
+function markColorPalettePersisted(value) {
+  if (!savedSettings) return;
+  savedSettings.ui_color_palette = normalizeColorPalette(value);
 }
 
 function isSettingsDirty() {
@@ -298,9 +309,11 @@ async function saveSettings() {
 
   applyColorTheme(result.settings.ui_color_theme);
   applyColorPalette(result.settings.ui_color_palette);
-  fillSettings(result.settings);
+  fillSettings(result.settings, result.settings_context || result);
   state.memberFilterLevels = normalizeMemberFilterLevels(
     result.settings.ui_member_filter_levels,
+  ).filter((level) =>
+    (state.memberFilterAllowedLevels || MEMBER_FILTER_LEVELS).includes(level),
   );
   setSettingsSetupNotice(false);
   setSettingsSaveError("");
@@ -313,3 +326,4 @@ window.loadSettings = loadSettings;
 window.reloadSettings = reloadSettings;
 window.discardSettingsChanges = discardSettingsChanges;
 window.setSettingsSetupNotice = setSettingsSetupNotice;
+window.markColorPalettePersisted = markColorPalettePersisted;

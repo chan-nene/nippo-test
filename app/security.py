@@ -979,7 +979,7 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
         )
         or len(set(member_filter_levels)) != len(member_filter_levels)
     ):
-        raise RequestValidationError("日報フィルターの表示設定が不正です。")
+        raise RequestValidationError("フィルタボタンの表示設定が不正です。")
     return source
 
 
@@ -995,6 +995,7 @@ def validate_ui_state_request(payload: Any) -> Mapping[str, Any]:
             "font_size",
             "column_widths",
             "ui_color_theme",
+            "ui_color_palette",
         },
     )
     validate_load_request(
@@ -1018,6 +1019,12 @@ def validate_ui_state_request(payload: Any) -> Mapping[str, Any]:
     color_theme = source.get("ui_color_theme", "dark")
     if not isinstance(color_theme, str) or color_theme not in {"light", "dark"}:
         raise RequestValidationError("配色の指定が不正です。")
+    color_palette = source.get("ui_color_palette", "default")
+    if not isinstance(color_palette, str) or color_palette not in {
+        "default",
+        "blue",
+    }:
+        raise RequestValidationError("カラーパレットの指定が不正です。")
     column_widths = source.get("column_widths", {})
     if not isinstance(column_widths, Mapping) or len(column_widths) > 64:
         raise RequestValidationError("列幅の表示状態が不正です。")

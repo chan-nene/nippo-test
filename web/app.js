@@ -69,6 +69,13 @@ const state = {
   fontSize: "large",
   columnWidths: {},
   memberFilterLevels: [],
+  memberFilterAllowedLevels: null,
+  settingsContext: {
+    has_comment_targets: false,
+    current_team: [],
+    affiliation_type: "",
+    allowed_member_filter_levels: [...MEMBER_FILTER_LEVELS],
+  },
   holidayDates: new Set(),
   accessDenied: false,
   closeApproved: false,
@@ -80,7 +87,7 @@ let currentEditingElement = null;
 let uiStateSaveQueue = Promise.resolve();
 let lastNativeUnsavedState = null;
 let pendingConfirmation = null;
-const TOAST_SCOPES = Object.freeze(["reports", "admin", "settings"]);
+const TOAST_SCOPES = Object.freeze(["reports", "calendar", "admin", "settings"]);
 const TOAST_TYPES = Object.freeze(["success", "info", "warning", "error"]);
 const TOAST_VISIBLE_LIMIT = 3;
 const TOAST_FADE_DURATION = 300;
@@ -117,6 +124,48 @@ function normalizeColorTheme(value) {
 
 function normalizeColorPalette(value) {
   return value === "blue" ? "blue" : "default";
+}
+
+function normalizeAllowedMemberFilterLevels(value) {
+  if (value === undefined || value === null) {
+    return [...MEMBER_FILTER_LEVELS];
+  }
+  return normalizeMemberFilterLevels(value, MEMBER_FILTER_LEVELS);
+}
+
+function getSettingsContext(source = {}) {
+  const context = source?.settings_context || source || {};
+  return {
+    has_comment_targets: context.has_comment_targets === true,
+    current_team: Array.isArray(context.current_team)
+      ? context.current_team
+      : [],
+    affiliation_type: String(context.affiliation_type || ""),
+    allowed_member_filter_levels: normalizeAllowedMemberFilterLevels(
+      context.allowed_member_filter_levels,
+    ),
+  };
+}
+
+function applySettingsContext(source = {}) {
+  const context = getSettingsContext(source);
+  state.settingsContext = context;
+  state.memberFilterAllowedLevels = [
+    ...context.allowed_member_filter_levels,
+  ];
+
+  const notificationPanel = $("settingsNotificationPanel");
+  notificationPanel?.classList.toggle(
+    "hidden",
+    !context.has_comment_targets,
+  );
+
+  document.querySelectorAll("[data-member-filter-level]").forEach((input) => {
+    const allowed = context.allowed_member_filter_levels.includes(input.value);
+    const option = input.closest(".member-filter-option");
+    option?.classList.toggle("hidden", !allowed);
+    input.disabled = !allowed;
+  });
 }
 
 let colorThemeTransitionReleaseFrame = null;
@@ -160,9 +209,12 @@ function applyColorPalette(value) {
 }
 
 function previewColorPalette(value) {
+  const palette = normalizeColorPalette(value);
   suppressColorThemeTransitions();
-  applyColorPalette(value);
+  applyColorPalette(palette);
+  window.markColorPalettePersisted?.(palette);
   syncChrome();
+  persistUiState();
 }
 
 function getColorThemeOptions() {
@@ -339,6 +391,7 @@ function bindEvents() {
     if (event.target === event.currentTarget) closeResetColumnWidthsDialog();
   });
   $("openSettingsButton").addEventListener("click", () => void switchView("settings"));
+  $("calendarViewButton").addEventListener("click", () => void switchView("calendar"));
   $("adminViewButton").addEventListener("click", () => void switchView("admin"));
   $("settingsReloadButton")?.addEventListener("click", () => {
     void reloadCurrentView();
@@ -509,6 +562,8 @@ function restoreUiState(settings) {
   applyColorPalette(settings.ui_color_palette);
   state.memberFilterLevels = normalizeMemberFilterLevels(
     settings.ui_member_filter_levels,
+  ).filter((level) =>
+    (state.memberFilterAllowedLevels || MEMBER_FILTER_LEVELS).includes(level),
   );
   const requestedPreset = String(settings.ui_period_preset ?? "default").trim();
   const supportedPresets = new Set([
@@ -576,6 +631,7 @@ function persistUiState() {
     font_size: state.fontSize,
     column_widths: state.columnWidths,
     ui_color_theme: state.colorTheme,
+    ui_color_palette: state.colorPalette,
   };
   uiStateSaveQueue = uiStateSaveQueue
     .catch((error) => {
@@ -701,6 +757,7 @@ function showMain(visible) {
 
 const SCREEN_LOAD_ERROR_IDS = Object.freeze({
   reports: ["reportLoadError", "reportLoadErrorMessage"],
+  calendar: ["adminLoadError", "adminLoadErrorMessage"],
   admin: ["adminLoadError", "adminLoadErrorMessage"],
   settings: ["settingsLoadError", "settingsLoadErrorMessage"],
 });
@@ -930,6 +987,7 @@ function positionToast(anchorId = "") {
 
   const anchorSelectors = {
     reports: "#reportPanel .report-toolbar",
+    calendar: "#adminPanel .fiscal-calendar-toolbar",
     admin: "#adminReloadButton",
     settings: "#settingsReloadButton",
   };
@@ -1269,6 +1327,13 @@ function setBusy(busy, action = "") {
 
 async function reloadCurrentView() {
   if (state.activeView === "reports") return refreshData();
+  if (state.activeView === "calendar") {
+    if (typeof window.adminMasters?.reloadCalendar !== "function") {
+      showScreenLoadError("calendar", "カレンダーの再読み込み機能を利用できません。", "error");
+      return false;
+    }
+    return window.adminMasters.reloadCalendar({ manual: true });
+  }
   if (state.activeView === "admin") {
     if (typeof window.adminMasters?.reload !== "function") {
       showScreenLoadError("admin", "管理の再読み込み機能を利用できません。", "error");
@@ -1306,6 +1371,13 @@ async function loadViewForSwitch(view, viewSequence) {
     }
     return window.adminMasters.activate({ viewSequence });
   }
+  if (view === "calendar") {
+    if (typeof window.adminMasters?.activateCalendar !== "function") {
+      showScreenLoadError("calendar", "カレンダーの読み込み機能を利用できません。", "error");
+      return false;
+    }
+    return window.adminMasters.activateCalendar({ viewSequence });
+  }
   if (view === "settings") {
     if (typeof window.loadSettings !== "function") {
       showScreenLoadError("settings", "設定の読み込み機能を利用できません。", "error");
@@ -1328,13 +1400,15 @@ function completeViewSwitch(view, previousView) {
   state.activeView = view;
   const isSettings = view === "settings";
   const isAdmin = view === "admin";
+  const isCalendar = view === "calendar";
   $("settingsPanel").classList.toggle("hidden", !isSettings);
-  $("adminPanel").classList.toggle("hidden", !isAdmin);
-  $("reportPanel").classList.toggle("hidden", isSettings || isAdmin);
+  $("adminPanel").classList.toggle("hidden", !isAdmin && !isCalendar);
+  $("adminPanel").classList.toggle("is-calendar-reader", isCalendar);
+  $("reportPanel").classList.toggle("hidden", isSettings || isAdmin || isCalendar);
   updateViewChrome();
   syncChrome();
   renderToasts();
-  if (!isSettings && !isAdmin) syncPeriodPresets({ immediate: true });
+  if (!isSettings && !isAdmin && !isCalendar) syncPeriodPresets({ immediate: true });
   const result = loadViewForSwitch(view, sequence);
   if (result && typeof result.then === "function") {
     return result.then((loaded) =>
@@ -1364,6 +1438,7 @@ function updateViewAvailability() {
     adminButton.classList.toggle("hidden", state.accessDenied || !state.isAdmin);
   }
   $("dailyViewButton")?.classList.remove("hidden");
+  $("calendarViewButton")?.classList.remove("hidden");
   $("openSettingsButton")?.classList.remove("hidden");
 }
 
@@ -1371,27 +1446,30 @@ function updateViewChrome() {
   const isReportView = state.activeView === "reports";
   const isSettingsView = state.activeView === "settings";
   const isAdminView = state.activeView === "admin";
+  const isCalendarView = state.activeView === "calendar";
   $("dailyViewButton").classList.toggle(
     "is-active",
-    isReportView && !isSettingsView && !isAdminView,
+    isReportView && !isSettingsView && !isAdminView && !isCalendarView,
   );
+  $("calendarViewButton").classList.toggle("is-active", isCalendarView);
   $("adminViewButton").classList.toggle("is-active", isAdminView);
   $("openSettingsButton").classList.toggle("is-active", isSettingsView);
   document.body.classList.toggle("is-boss-view", state.isSuperior && isReportView);
   document.body.classList.toggle("is-settings-view", isSettingsView);
   document.body.classList.toggle("is-admin-view", isAdminView);
+  document.body.classList.toggle("is-calendar-view", isCalendarView);
   const bossFilterArea = $("bossFilterArea");
   if (bossFilterArea) {
     bossFilterArea.classList.toggle(
       "hidden",
-      !isReportView || isSettingsView || isAdminView,
+      !isReportView || isSettingsView || isAdminView || isCalendarView,
     );
   }
   const missingCommentsFilterGroup = $("missingCommentsFilterGroup");
   if (missingCommentsFilterGroup) {
     missingCommentsFilterGroup.classList.toggle(
       "hidden",
-      !isReportView || !state.isSuperior || isSettingsView || isAdminView,
+      !isReportView || !state.isSuperior || isSettingsView || isAdminView || isCalendarView,
     );
   }
 }
@@ -1442,7 +1520,7 @@ window.addEventListener("pywebviewready", async () => {
     initial.access_denied === true || initial.employee_registered === false;
   updateViewAvailability();
   syncCurrentUserDisplay();
-  fillSettings(initial.settings || {});
+  fillSettings(initial.settings || {}, initial.settings_context || initial);
   restoreUiState(initial.settings || {});
   if (state.accessDenied) {
     clearReportViewForLoadFailure();

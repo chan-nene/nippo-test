@@ -245,6 +245,7 @@
   let isInitialized = false;
   let minimumFiscalYear = 0;
   let activeMaster = "user_master";
+  let isCalendarReadOnly = false;
   let activeFiscalYear = Math.max(
     minimumFiscalYear,
     fiscalYearForDate(new Date()),
@@ -582,6 +583,7 @@
       }
       const calendarDay = event.target.closest("[data-calendar-date]");
       if (calendarDay) {
+        if (isCalendarReadOnly) return;
         calendarFocusDate = calendarDay.dataset.calendarDate;
         toggleCalendarDay(calendarDay.dataset.calendarDate);
         return;
@@ -1018,6 +1020,9 @@
     viewSequence,
   } = {}) {
     if (isLoading) return false;
+    isCalendarReadOnly = false;
+    const loadingCopy = byId("adminLoading")?.querySelector("p");
+    if (loadingCopy) loadingCopy.textContent = "管理を読み込んでいます";
     const hadData = isLoaded;
     const hasDisplay = hadData && !transition;
     const api = window.pywebview?.api;
@@ -1127,6 +1132,90 @@
     return true;
   }
 
+  async function loadCalendarView({
+    manual = false,
+    transition = false,
+    viewSequence,
+  } = {}) {
+    if (isLoading) return false;
+    const hadData = isLoaded && isCalendarReadOnly && drafts.has("calendar");
+    const hasDisplay = hadData && !transition;
+    const api = window.pywebview?.api;
+    if (typeof api?.load_calendar !== "function") {
+      showScreenLoadError(
+        "calendar",
+        "カレンダーを読み込めませんでした。「再読み込み」を押してください。",
+        "error",
+      );
+      return false;
+    }
+    isCalendarReadOnly = true;
+    activeMaster = "calendar";
+    const loadingCopy = byId("adminLoading")?.querySelector("p");
+    if (loadingCopy) loadingCopy.textContent = "カレンダーを読み込んでいます";
+    if (transition || !hadData) {
+      isLoaded = false;
+      byId("adminLoading").classList.remove("hidden");
+      byId("adminWorkspace").classList.add("hidden");
+    }
+    clearScreenLoadError("calendar");
+    isLoading = true;
+    const requestSequence = ++loadSequence;
+    setBusy(true, "calendar-load");
+    let result;
+    try {
+      result = await api.load_calendar();
+    } catch (error) {
+      if (requestSequence !== loadSequence) return false;
+      console.error("カレンダーの読み込みに失敗しました。", error);
+      byId("adminLoading").classList.add("hidden");
+      if (!hasDisplay) byId("adminWorkspace").classList.add("hidden");
+      showScreenLoadError(
+        "calendar",
+        "カレンダーを読み込めませんでした。「再読み込み」を押してください。",
+        "error",
+      );
+      return false;
+    } finally {
+      if (requestSequence === loadSequence) {
+        isLoading = false;
+        setBusy(false);
+      }
+    }
+    if (requestSequence !== loadSequence) return false;
+    if (viewSequence !== undefined && viewSequence !== viewSwitchSequence) return false;
+    if (!result?.ok) {
+      byId("adminLoading").classList.add("hidden");
+      if (!hasDisplay) byId("adminWorkspace").classList.add("hidden");
+      showScreenLoadError(
+        "calendar",
+        result?.message || "カレンダーを読み込めませんでした。「再読み込み」を押してください。",
+        "error",
+      );
+      return false;
+    }
+    const definition = getDefinition("calendar");
+    const rows = Array.isArray(result.calendar) ? result.calendar : [];
+    const entries = rows.map((row) => createEntry(row, definition, false));
+    drafts.clear();
+    drafts.set("calendar", {
+      entries,
+      originalSnapshot: snapshot(entries.map((entry) => entry.values)),
+      revision: "",
+      migrationRequired: false,
+      selectedId: "",
+    });
+    activeFiscalYear = Math.max(minimumFiscalYear, fiscalYearForDate(new Date()));
+    calendarFocusDate = "";
+    isLoaded = true;
+    byId("adminLoading").classList.add("hidden");
+    byId("adminWorkspace").classList.remove("hidden");
+    clearScreenLoadError("calendar");
+    clearLoadToasts("calendar");
+    render();
+    return true;
+  }
+
   // 未保存変更がある場合は破棄確認を挟んで管理データを再読込する。キャンセル時は現在の編集状態を保持する。
   async function reload({ manual = true, confirm = true } = {}) {
     if (confirm && hasUnsaved()) {
@@ -1144,6 +1233,10 @@
     return load({ manual, forceRefresh: true });
   }
 
+  function reloadCalendar() {
+    return loadCalendarView({ manual: true });
+  }
+
   function activate(options = {}) {
     return load({
       manual: false,
@@ -1153,8 +1246,17 @@
     });
   }
 
+  function activateCalendar(options = {}) {
+    return loadCalendarView({
+      manual: false,
+      transition: true,
+      ...options,
+    });
+  }
+
   // ユーザー・組織・コメント担当の3マスターを一括保存し、カレンダーは単独保存する。dirty判定・管理者保護・revision更新を通して保存後の基準を確定する。
   async function save(targetMaster = activeMaster, options = {}) {
+    if (isCalendarReadOnly) return false;
     const saveAdministration = ["user_master", "team_master", "comment_assignment"].includes(targetMaster);
     const saveCalendar = targetMaster === "calendar";
     const targetIsDirty = saveAdministration
@@ -1855,6 +1957,12 @@
     if (targetFiscalYear < minimumFiscalYear) return;
     const draft = drafts.get("calendar");
     if (!draft) return;
+    if (isCalendarReadOnly) {
+      activeFiscalYear = targetFiscalYear;
+      calendarFocusDate = "";
+      render();
+      return;
+    }
     if (!hasCalendarEntriesForFiscalYear(targetFiscalYear)) {
       isChangingFiscalYear = true;
       try {
@@ -1884,6 +1992,7 @@
 
   // 指定日の休日行を追加・削除し、現在のカレンダー表示とフォーカスを保つ。
   function toggleCalendarDay(dateText) {
+    if (isCalendarReadOnly) return;
     const draft = drafts.get("calendar");
     const definition = getDefinition("calendar");
     const date = calendarDate(dateText);
@@ -2587,6 +2696,12 @@
   function renderMasterNav() {
     const navigation = byId("masterNav");
     navigation.replaceChildren();
+    if (isCalendarReadOnly) {
+      byId("adminWorkspace").removeAttribute("aria-labelledby");
+      byId("adminWorkspace").setAttribute("aria-label", "カレンダー");
+      return;
+    }
+    byId("adminWorkspace").removeAttribute("aria-label");
     MASTER_DEFINITIONS.filter((definition) => !definition.hidden).forEach((definition) => {
       const draft = drafts.get(definition.key);
       const button = document.createElement("button");
@@ -3016,17 +3131,24 @@
       const cell = document.createElement("span");
       cell.className = "fiscal-calendar-cell";
       cell.setAttribute("role", "gridcell");
-      const button = document.createElement("button");
-      button.type = "button";
+      const button = document.createElement(isCalendarReadOnly ? "span" : "button");
+      if (!isCalendarReadOnly) button.type = "button";
       button.className = "fiscal-calendar-day";
-      button.dataset.calendarDate = dateText;
-      button.tabIndex = dateText === calendarFocusDate ? 0 : -1;
       button.classList.toggle("is-holiday", isHoliday);
-      button.setAttribute("aria-pressed", String(isHoliday));
-      button.setAttribute(
-        "aria-label",
-        `${calendarDateLabel(dateText)}、${isHoliday ? "休日" : "稼働日"}。押すと${isHoliday ? "稼働日" : "休日"}に変更`,
-      );
+      if (isCalendarReadOnly) {
+        cell.setAttribute(
+          "aria-label",
+          `${calendarDateLabel(dateText)}、${isHoliday ? "休日" : "稼働日"}`,
+        );
+      } else {
+        button.dataset.calendarDate = dateText;
+        button.tabIndex = dateText === calendarFocusDate ? 0 : -1;
+        button.setAttribute("aria-pressed", String(isHoliday));
+        button.setAttribute(
+          "aria-label",
+          `${calendarDateLabel(dateText)}、${isHoliday ? "休日" : "稼働日"}。押すと${isHoliday ? "稼働日" : "休日"}に変更`,
+        );
+      }
       const number = document.createElement("span");
       number.textContent = String(day);
       button.append(number);
@@ -5198,10 +5320,12 @@
       button.disabled = !activeEditorDirty || isLoading;
     });
     const calendarSaveButton = byId("adminCalendarSaveButton");
+    const reloadButton = byId("adminReloadButton");
+    if (reloadButton) reloadButton.hidden = isCalendarReadOnly;
     if (calendarSaveButton) {
       const calendarActive = activeMaster === "calendar";
       const calendarDirty = isDefinitionDirty("calendar");
-      calendarSaveButton.classList.toggle("hidden", !calendarActive);
+      calendarSaveButton.classList.toggle("hidden", isCalendarReadOnly || !calendarActive);
       calendarSaveButton.disabled =
         !calendarActive || !calendarDirty || isLoading;
       const calendarIndicator = calendarSaveButton.querySelector?.(
@@ -5227,7 +5351,9 @@
     initialize,
     ensureLoaded,
     activate,
+    activateCalendar,
     reload,
+    reloadCalendar,
     discardUnsaved,
     hasUnsaved,
     save,

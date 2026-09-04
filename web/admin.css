@@ -3807,6 +3807,22 @@ html body #adminPanel .admin-workspace.is-team-master .master-table-pane {
   overflow: hidden;
 }
 
+html body.is-calendar-view #adminPanel .admin-header {
+  display: none;
+}
+
+html body.is-calendar-view #adminPanel .fiscal-calendar-day {
+  cursor: default;
+}
+
+html body.is-calendar-view #adminPanel .fiscal-calendar-day:not(.is-holiday):hover {
+  background: transparent;
+}
+
+html body.is-calendar-view #adminPanel .fiscal-calendar-day.is-holiday:hover {
+  background: var(--org-calendar-holiday);
+}
+
 html body #adminPanel .organization-browser-v2 {
   min-width: 0;
   min-height: 100%;
@@ -4580,7 +4596,7 @@ html[data-theme="dark"] body #adminPanel {
 }
 
 html body #adminPanel .fiscal-calendar-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   padding: 10px 12px 14px;
 }
@@ -4610,15 +4626,21 @@ html body #adminPanel .fiscal-calendar-day {
   font-size: var(--ui-font-size);
 }
 
+@media (max-width: 1400px) {
+  html body #adminPanel .fiscal-calendar-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1100px) {
   html body #adminPanel .fiscal-calendar-grid {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 900px) {
   html body #adminPanel .fiscal-calendar-grid {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -5090,6 +5112,10 @@ html body #adminPanel .organization-card-list > .organization-pane-empty {
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
+}
+
+html body #adminPanel .organization-section-list:has(> .organization-pane-empty:only-child) {
+  overflow-y: hidden;
 }
 
 @media (max-width: 900px) {

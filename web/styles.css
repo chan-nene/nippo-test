@@ -127,7 +127,7 @@
   --error-bg: oklch(95% 0.032 27);
   --weekday-sat: #4b4b4b;
   --weekday-sun: var(--text);
-  --title-bar-bg: var(--surface);
+  --title-bar-bg: var(--app-bg);
   --title-bar-border: var(--border);
   --sidebar-bg: var(--surface-soft);
   --sidebar-bg-deep: var(--surface-hover);
@@ -589,7 +589,6 @@ html body .title-bar {
   align-items: center;
   justify-content: space-between;
   padding: 0 18px 0 20px;
-  border-bottom: 1px solid var(--title-bar-border);
   background: var(--title-bar-bg);
   color: var(--text);
 }

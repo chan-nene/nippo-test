@@ -1,5 +1,5 @@
-/* Settings screen. Structure is expressed with alignment and whitespace;
-   borders are reserved for interactive controls. */
+/* Settings screen. Big sections use a quiet divider; controls keep their
+   existing field treatment. */
 
 html body .settings-panel {
   min-width: 0;
@@ -24,18 +24,26 @@ html body .settings-header {
 }
 
 html body .settings-section {
-  display: grid;
+  display: block;
   min-width: 0;
-  grid-template-columns: 144px minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-  margin: 0 0 34px;
+  max-width: 880px;
+  margin: 0;
+  padding: 0 0 30px;
+  border-bottom: 1px solid var(--border);
+}
+
+html body .settings-section + .settings-section {
+  padding-top: 30px;
+}
+
+html body .settings-section:last-of-type {
+  border-bottom: 0;
 }
 
 html body .settings-section > h2 {
-  margin: 3px 0 0;
+  margin: 0 0 18px;
   color: var(--text);
-  font-size: var(--font-14);
+  font-size: var(--font-16);
   font-weight: 700;
   line-height: 1.4;
 }
@@ -46,21 +54,21 @@ html body .settings-section-body {
   gap: 18px;
 }
 
-html body .settings-section:not(#settingsGeneralPanel),
+html body .settings-section,
 html body #settingsPanel .settings-card > .actions {
   max-width: 880px;
 }
 
-html body #settingsGeneralPanel .settings-field:not(.settings-primary-field) {
+html body .settings-signature-field {
   max-width: 720px;
 }
 
 html body .settings-field {
   display: grid;
   min-width: 0;
-  grid-template-columns: 190px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px 20px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
   margin: 0;
   color: var(--text);
 }
@@ -70,6 +78,13 @@ html body .settings-field > :is(span:first-child, .settings-field-label) {
   margin: 0;
   color: var(--text);
   font-weight: 600;
+}
+
+html body .settings-field-control,
+html body .settings-field > :is(input, select, textarea, .member-filter-options,
+    .color-palette-options, .appearance-mode-options, .default-range-selects,
+    .settings-missing-controls) {
+  min-width: 0;
 }
 
 html body .settings-primary-field > label {
@@ -89,13 +104,16 @@ html body .settings-primary-control {
 html body .settings-section-actions {
   display: flex;
   min-width: 0;
+  max-width: 880px;
+  margin-top: 2px;
+  padding-top: 4px;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
 }
 
 html body #settingsPanel .settings-primary-field > .field-error {
-  grid-column: 2;
+  grid-column: 1;
 }
 
 html body .settings-card input[type="text"],
@@ -143,7 +161,7 @@ html body #settingsPanel .settings-save-error {
 }
 
 html body #settingsPanel .settings-field > .field-error {
-  grid-column: 2;
+  grid-column: 1;
 }
 
 html body :is(input, textarea)[aria-invalid="true"] {
@@ -267,52 +285,20 @@ html body .color-palette-preview {
   background: var(--surface);
 }
 
-html body .color-palette-preview > span:first-child {
-  background: #242424;
-}
-
-html body .color-palette-preview.is-default > span:nth-child(2) {
-  background: #ffffff;
-}
-
-html body .color-palette-preview.is-default > span:last-child {
+html body .color-palette-preview.is-default > span {
   background: #9b9b9b;
 }
 
-html[data-theme="dark"] body .color-palette-preview.is-default > span:first-child {
-  background: #e3e3e3;
-}
-
-html[data-theme="dark"] body .color-palette-preview.is-default > span:nth-child(2) {
-  background: #161616;
-}
-
-html[data-theme="dark"] body .color-palette-preview.is-default > span:last-child {
+html[data-theme="dark"] body .color-palette-preview.is-default > span {
   background: #686868;
 }
 
-html body .color-palette-preview.is-blue > span:first-child {
+html body .color-palette-preview.is-blue > span {
   background: #006399;
 }
 
-html body .color-palette-preview.is-blue > span:nth-child(2) {
-  background: #dbeafe;
-}
-
-html body .color-palette-preview.is-blue > span:last-child {
-  background: #1e40af;
-}
-
-html[data-theme="dark"] body .color-palette-preview.is-blue > span:first-child {
+html[data-theme="dark"] body .color-palette-preview.is-blue > span {
   background: #2893cc;
-}
-
-html[data-theme="dark"] body .color-palette-preview.is-blue > span:nth-child(2) {
-  background: rgb(59 130 246 / 15%);
-}
-
-html[data-theme="dark"] body .color-palette-preview.is-blue > span:last-child {
-  background: #60a5fa;
 }
 
 html body .appearance-mode-preview {
@@ -398,11 +384,10 @@ html body .default-range-selects select:focus {
 }
 
 html body .settings-missing-controls {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 20px;
+  justify-items: start;
+  gap: 10px;
 }
 
 html body #settingsPanel .period-field-group {
@@ -473,13 +458,11 @@ html body #settingsPanel #saveSettingsButton {
 
 @media (max-width: 860px) {
   html body .settings-section {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin-bottom: 30px;
+    padding-bottom: 26px;
   }
 
-  html body .settings-section > h2 {
-    margin-top: 0;
+  html body .settings-section + .settings-section {
+    padding-top: 26px;
   }
 
   html body #settingsPanel .settings-card > .actions {

@@ -327,7 +327,9 @@ function installImeProtectedEditor(textarea) {
 
 function isMemberFilterLevelEnabled(level) {
   return Array.isArray(state.memberFilterLevels) &&
-    state.memberFilterLevels.includes(level);
+    state.memberFilterLevels.includes(level) &&
+    (!Array.isArray(state.memberFilterAllowedLevels) ||
+      state.memberFilterAllowedLevels.includes(level));
 }
 
 function memberMatchesTeamEntry(member, teamEntry) {
@@ -1146,6 +1148,13 @@ async function loadData({
   state.currentTeam = Array.isArray(result.data.current_team)
     ? result.data.current_team
     : [];
+  state.memberFilterAllowedLevels = normalizeAllowedMemberFilterLevels(
+    result.data.allowed_member_filter_levels,
+  );
+  state.memberFilterLevels = (Array.isArray(state.memberFilterLevels)
+    ? state.memberFilterLevels
+    : []
+  ).filter((level) => state.memberFilterAllowedLevels.includes(level));
   state.myRank = Number.isFinite(result.data.my_rank)
     ? result.data.my_rank
     : 9999;

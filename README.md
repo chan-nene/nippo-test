@@ -17,9 +17,9 @@ python -m pip install -r requirements.txt
 python .\main.py
 ```
 
-初回起動時に設定画面が開きます。日報、上司コメント、管理の各フォルダを指定してください。
+保存先は設定画面では変更できません。配布した `storage.example.ini` をアプリ（`NIPPO.exe`）と同じフォルダの `storage.ini` にコピーし、`[storage]` の `root_path` に共有ルートを設定してからアプリを起動してください。変更は外部で `storage.ini` を置換し、アプリを再起動して反映します。
 
-`settings.example.ini` は配布用の空ファイルです。実際の `settings.ini` はローカル設定を含むためGit管理しません。
+`storage.example.ini` は配布用の設定例です。実際の `storage.ini` と `settings.ini` は環境・個人設定を含むためGit管理しません。`settings.ini` は表示や未コメント集計などの個人/UI設定だけを保持します。
 
 ## 管理者機能
 
@@ -27,7 +27,14 @@ python .\main.py
 
 ## 管理と組織・コメント担当
 
-管理フォルダでは次の4ファイルを使用します。
+共有ルート直下には次の固定フォルダを用意します（アプリは不足フォルダを自動作成しません）。
+
+- `common_data`: `user_master.csv`、`team_master.csv`、`comment_assignment.csv`、`calendar.csv`
+- `supervisor_comments`: 上司IDごとのコメントCSV
+- `regular_employee_reports`: 正社員の日報CSV
+- `temporary_employee_reports`: 派遣社員の日報CSV
+
+共通情報の `employment_type` に応じて日報フォルダを選択します。派遣社員の画面では正社員日報フォルダを確認・走査しません。
 
 - `team_master.csv`: `team_id,team_name,team_type,parent_team_id,sort_order`
 - `user_master.csv`: `employee_id,display_name,can_input_own_report,employment_type,is_admin,affiliation_type,organization_id,member_order`

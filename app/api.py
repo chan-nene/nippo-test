@@ -10,17 +10,23 @@ from typing import Any, Callable
 
 from app.calendar_policy import CALENDAR_MIN_FISCAL_YEAR
 from app.config import (
+    StorageConfigError,
     SettingsManager,
+    StorageManager,
     normalize_color_palette,
     normalize_member_filter_levels,
     normalize_color_theme,
     to_bool,
     to_int,
-    validate_settings_paths,
 )
 from app.data_cache import DailyReportDataCache
 from app.ime_diagnostics import ImeDiagnosticRecorder
-from app.repository import CommonMasterConflictError, DailyReportRepository
+from app.repository import (
+    CommonMasterConflictError,
+    CsvFileLockedError,
+    CsvReadonlyError,
+    DailyReportRepository,
+)
 from app.security import (
     PERIOD_PRESETS,
     RequestValidationError,
@@ -45,6 +51,18 @@ class DailyReportApi:
         self._base_dir = base_dir
         self._settings_manager = SettingsManager(base_dir)
         self._settings = self._settings_manager.load()
+        self._storage_manager = StorageManager(base_dir)
+        self._storage_error: StorageConfigError | None = None
+        try:
+            self._settings.root_path = self._storage_manager.load()
+        except StorageConfigError as exc:
+            self._storage_error = exc
+            logger.error(
+                "Storage configuration is unavailable code=%s target=%s",
+                exc.code,
+                exc.target,
+                exc_info=True,
+            )
         self._employee_id = self._get_employee_id()
         self._has_unsaved_changes = False
         self._close_window_callback: Callable[[], None] | None = None
@@ -91,13 +109,18 @@ class DailyReportApi:
     def get_initial_state(self) -> dict[str, Any]:
         employee_registered: bool | None = None
         is_admin = False
-        if self._settings.is_complete:
+        storage_runtime_error: StorageConfigError | None = None
+        storage_error = getattr(self, "_storage_error", None)
+        if self._settings.is_complete and storage_error is None:
             try:
                 repository = DailyReportRepository(self._settings, self._base_dir)
                 repository.validate_paths()
                 current_user = self._current_user_master_row(repository)
                 employee_registered = current_user is not None
                 is_admin = self._user_is_admin(current_user)
+            except StorageConfigError as exc:
+                storage_runtime_error = exc
+                logger.error("Storage directory unavailable during bootstrap", exc_info=True)
             except Exception:
                 logger.exception("Failed to check employee registration")
         if employee_registered is False:
@@ -108,6 +131,21 @@ class DailyReportApi:
             "calendar_min_fiscal_year": CALENDAR_MIN_FISCAL_YEAR,
             "settings": self._settings.to_dict(),
             "settings_complete": self._settings.is_complete,
+            "storage_configured": (
+                storage_error is None
+                and storage_runtime_error is None
+                and self._settings.is_complete
+            ),
+            "storage_error_code": (
+                storage_error or storage_runtime_error
+            ).code
+            if (storage_error or storage_runtime_error)
+            else "",
+            "storage_error_message": (
+                self._storage_error_message(storage_error or storage_runtime_error)
+                if (storage_error or storage_runtime_error)
+                else ""
+            ),
             "employee_registered": employee_registered,
             "access_denied": employee_registered is False,
             "access_denied_message": (
@@ -119,11 +157,16 @@ class DailyReportApi:
 
     def load_settings(self) -> dict[str, Any]:
         try:
+            # storage.ini is deployment configuration and is read only at
+            # application startup. Replacing it takes effect after restart.
+            root_path = self._settings.root_path
             self._settings = self._settings_manager.load()
+            self._settings.root_path = root_path
             return {
                 "ok": True,
                 "settings": self._settings.to_dict(),
                 "settings_complete": self._settings.is_complete,
+                "storage_configured": self._storage_ready,
             }
         except Exception:
             logger.exception("Failed to load settings")
@@ -135,16 +178,8 @@ class DailyReportApi:
     def save_settings(self, payload: Any) -> dict[str, Any]:
         try:
             payload = validate_settings_request(payload)
-            previous_paths = (
-                self._settings.users_dir,
-                self._settings.comments_dir,
-                self._settings.common_dir,
-            )
             candidate = replace(
                 self._settings,
-                users_dir=str(payload.get("users_dir", "")).strip(),
-                comments_dir=str(payload.get("comments_dir", "")).strip(),
-                common_dir=str(payload.get("common_dir", "")).strip(),
                 default_start_offset_days=to_int(
                     payload.get("default_start_offset_days"), -2
                 ),
@@ -172,26 +207,14 @@ class DailyReportApi:
                     self._settings.ui_member_filter_levels,
                 ),
             )
-            field_errors = validate_settings_paths(candidate)
-            if field_errors:
-                return {
-                    "ok": False,
-                    "message": f"{len(field_errors)}項目を確認してください。",
-                    "field_errors": field_errors,
-                }
             self._settings = candidate
             self._settings_manager.save(self._settings)
-            current_paths = (
-                self._settings.users_dir,
-                self._settings.comments_dir,
-                self._settings.common_dir,
-            )
-            if current_paths != previous_paths:
-                self._get_data_cache().invalidate_all("settings paths changed")
             return {
                 "ok": True,
                 "message": "設定を保存しました。",
                 "settings": self._settings.to_dict(),
+                "storage_configured": getattr(self, "_storage_error", None) is None
+                and self._settings.is_complete,
             }
         except RequestValidationError as exc:
             return self._invalid_request(exc)
@@ -241,12 +264,8 @@ class DailyReportApi:
     def load_data(self, payload: Any = None) -> dict[str, Any]:
         try:
             payload = validate_load_request(payload)
-            if not self._settings.is_complete:
-                return {
-                    "ok": False,
-                    "message": "ネットワークFSパスが未設定です。",
-                    "needs_settings": True,
-                }
+            if not self._storage_ready:
+                return self._storage_unavailable_response()
             data_cache = self._get_data_cache()
             data, diagnostics = data_cache.load_view_data(
                 self._settings,
@@ -263,6 +282,9 @@ class DailyReportApi:
             return {"ok": True, "data": data, **diagnostics}
         except RequestValidationError as exc:
             return self._invalid_request(exc)
+        except StorageConfigError as exc:
+            logger.error("Storage directory unavailable while loading reports", exc_info=True)
+            return self._storage_operation_error(exc)
         except Exception:
             logger.exception("Failed to load daily report data")
             return {"ok": False, "message": "現在利用できません。"}
@@ -275,12 +297,8 @@ class DailyReportApi:
             access_denied = self._registered_employee_access_denied()
             if access_denied:
                 return access_denied
-            if not self._settings.is_complete:
-                return {
-                    "ok": False,
-                    "message": "ネットワークFSパスが未設定です。",
-                    "needs_settings": True,
-                }
+            if not self._storage_ready:
+                return self._storage_unavailable_response()
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
             data_cache = self._get_data_cache()
@@ -331,6 +349,9 @@ class DailyReportApi:
                     else {}
                 ),
             }
+        except StorageConfigError as exc:
+            logger.error("Storage directory unavailable while loading common masters", exc_info=True)
+            return self._storage_operation_error(exc)
         except Exception:
             logger.exception("Failed to load common masters")
             return {"ok": False, "message": "管理を読み込めませんでした。"}
@@ -347,8 +368,8 @@ class DailyReportApi:
                 raise RequestValidationError(
                     "ユーザー情報はユーザー管理画面から保存してください。"
                 )
-            if not self._settings.is_complete:
-                return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
+            if not self._storage_ready:
+                return self._storage_unavailable_response()
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
             new_revision = repo.save_common_master(
@@ -369,6 +390,15 @@ class DailyReportApi:
             }
         except RequestValidationError as exc:
             return self._invalid_request(exc)
+        except CsvFileLockedError as exc:
+            logger.exception("CSV is locked while saving common master")
+            return {"ok": False, "csv_locked": True, "message": str(exc)}
+        except CsvReadonlyError as exc:
+            logger.exception("Failed to restore common master CSV read-only state")
+            return {"ok": False, "csv_readonly": True, "message": str(exc)}
+        except StorageConfigError as exc:
+            logger.error("Storage directory unavailable while saving common master", exc_info=True)
+            return self._storage_operation_error(exc)
         except Exception:
             logger.exception("Failed to save common master")
             return {"ok": False, "message": "管理の保存に失敗しました。"}
@@ -391,8 +421,8 @@ class DailyReportApi:
                 users, revisions = validate_user_administration_save_request(payload)
                 teams = None
                 comment_assignments = None
-            if not self._settings.is_complete:
-                return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
+            if not self._storage_ready:
+                return self._storage_unavailable_response()
             repo = DailyReportRepository(self._settings, self._base_dir)
             repo.validate_paths()
             self._validate_protected_administrator_changes(repo, users)
@@ -426,6 +456,15 @@ class DailyReportApi:
             }
         except RequestValidationError as exc:
             return self._invalid_request(exc)
+        except CsvFileLockedError as exc:
+            logger.exception("CSV is locked while saving user administration")
+            return {"ok": False, "csv_locked": True, "message": str(exc)}
+        except CsvReadonlyError as exc:
+            logger.exception("Failed to restore user administration CSV read-only state")
+            return {"ok": False, "csv_readonly": True, "message": str(exc)}
+        except StorageConfigError as exc:
+            logger.error("Storage directory unavailable while saving user administration", exc_info=True)
+            return self._storage_operation_error(exc)
         except Exception:
             logger.exception("Failed to save user administration")
             return {"ok": False, "message": "ユーザー管理データの保存に失敗しました。"}
@@ -433,8 +472,8 @@ class DailyReportApi:
     def save_updates(self, payload: Any) -> dict[str, Any]:
         try:
             user_updates, comment_updates = validate_save_request(payload)
-            if not self._settings.is_complete:
-                return {"ok": False, "message": "ネットワークFSパスが未設定です。"}
+            if not self._storage_ready:
+                return self._storage_unavailable_response()
             data_cache = self._get_data_cache()
             common, cached_comments = data_cache.get_save_context(
                 self._settings, self._employee_id
@@ -511,16 +550,61 @@ class DailyReportApi:
             targets = [
                 value for value in public_result.values() if value.get("needed")
             ]
+            lock_failed = any(
+                value.get("error_code") == "csv_locked" for value in public_result.values()
+            )
+            readonly_failed = any(
+                value.get("error_code") == "csv_readonly"
+                for value in public_result.values()
+            )
             return {
                 "ok": bool(targets) and all(value.get("saved") for value in targets),
                 "no_targets": not targets,
                 "result": public_result,
                 "cache_sync_failed": cache_sync_failed,
+                **(
+                    {
+                        "csv_locked": True,
+                        "message": "CSVが使用中です。Excelなどで開いている場合は閉じてから、もう一度保存してください。",
+                    }
+                    if lock_failed
+                    else {
+                        "csv_readonly": True,
+                        "message": "CSVを読み取り専用に設定できませんでした。",
+                    }
+                    if readonly_failed
+                    else {}
+                ),
             }
         except RequestValidationError as exc:
             return {
                 **self._invalid_request(exc),
                 "no_targets": False,
+            }
+        except StorageConfigError as exc:
+            logger.error(
+                "Storage directory unavailable while saving daily report updates",
+                exc_info=True,
+            )
+            return {
+                **self._storage_operation_error(exc),
+                "no_targets": False,
+            }
+        except CsvFileLockedError as exc:
+            logger.exception("CSV is locked while saving daily report updates")
+            return {
+                "ok": False,
+                "no_targets": False,
+                "csv_locked": True,
+                "message": str(exc),
+            }
+        except CsvReadonlyError as exc:
+            logger.exception("CSV storage failure while saving daily report updates")
+            return {
+                "ok": False,
+                "no_targets": False,
+                "csv_readonly": True,
+                "message": str(exc) or "更新処理に失敗しました。",
             }
         except PermissionError:
             logger.warning("Rejected an unauthorized save request", exc_info=True)
@@ -536,6 +620,54 @@ class DailyReportApi:
                 "no_targets": False,
                 "message": "更新処理に失敗しました。",
             }
+
+    @property
+    def _storage_ready(self) -> bool:
+        return (
+            getattr(self, "_storage_error", None) is None
+            and bool(getattr(self._settings, "is_complete", False))
+        )
+
+    @staticmethod
+    def _storage_error_message(exc: StorageConfigError) -> str:
+        messages = {
+            "storage_config_missing": "storage.ini が見つかりません。アプリと同じフォルダに配置してから再起動してください。",
+            "storage_config_malformed": "storage.ini の [storage] root_path を確認してください。",
+            "storage_root_missing": "storage.ini の保存先ルートが見つかりません。設定を確認して再起動してください。",
+            "storage_root_invalid": "storage.ini の root_path にはフォルダを指定してください。",
+            "storage_root_inaccessible": "storage.ini の保存先ルートにアクセスできません。",
+            "storage_directory_unavailable": "共有ルートの必要なフォルダにアクセスできません（対象: {target}）。",
+        }
+        template = messages.get(
+            exc.code, "保存先を利用できません。storage.ini を確認してください。"
+        )
+        return template.format(target=exc.target) if "{target}" in template else template
+
+    def _storage_unavailable_response(self) -> dict[str, Any]:
+        error = self._storage_error
+        if error is None:
+            error = StorageConfigError(
+                "storage.ini の保存先が未設定です。",
+                code="storage_config_missing",
+                target="root_path",
+            )
+        return {
+            "ok": False,
+            "storage_error": True,
+            "storage_error_code": error.code,
+            "storage_configured": False,
+            "needs_storage_config": True,
+            "message": self._storage_error_message(error),
+        }
+
+    def _storage_operation_error(self, error: StorageConfigError) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "storage_error": True,
+            "storage_error_code": error.code,
+            "storage_error_target": error.target,
+            "message": self._storage_error_message(error),
+        }
 
     @staticmethod
     def _invalid_request(exc: RequestValidationError) -> dict[str, Any]:
@@ -609,7 +741,7 @@ class DailyReportApi:
     def _registered_employee_access_denied(
         self, repo: DailyReportRepository | None = None
     ) -> dict[str, Any] | None:
-        if not self._settings.is_complete:
+        if not self._storage_ready:
             return None
         if not self._is_employee_registered(repo):
             return self._employee_access_denied()
@@ -648,7 +780,7 @@ class DailyReportApi:
         )
 
     def _is_admin(self) -> bool:
-        if not self._settings.is_complete:
+        if not self._storage_ready:
             return False
         try:
             user = self._current_user_master_row()

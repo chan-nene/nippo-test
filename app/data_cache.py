@@ -27,7 +27,7 @@ class FileFingerprint:
 
 @dataclass(frozen=True)
 class CacheSnapshot:
-    settings_paths: tuple[str, str, str]
+    settings_paths: tuple[str, ...]
     employee_id: str
     common: dict[str, list[dict[str, Any]]]
     common_revisions: dict[str, str]
@@ -39,6 +39,8 @@ class CacheSnapshot:
     generation: int
     built_at: datetime
     warnings: tuple[dict[str, str], ...]
+    report_load_failures: tuple[dict[str, str], ...] = ()
+    comment_load_failures: tuple[dict[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -219,6 +221,16 @@ class DailyReportDataCache:
             end_date=end_date,
             period_preset=period_preset,
             load_warning_count=len(snapshot.warnings),
+            failed_report_employee_ids={
+                str(item.get("employee_id", ""))
+                for item in snapshot.report_load_failures
+                if item.get("employee_id")
+            },
+            failed_comment_superior_ids={
+                str(item.get("superior_employee_id", ""))
+                for item in snapshot.comment_load_failures
+                if item.get("superior_employee_id")
+            },
         )
         data_load_diagnostics = self._classify_view_data_load(settings, snapshot)
         view_duration_ms = (perf_counter() - view_started) * 1000
@@ -235,6 +247,12 @@ class DailyReportDataCache:
             "cache_status": access.status,
             "refresh_result": access.refresh_result.to_dict(),
             "cache_warning_count": len(snapshot.warnings),
+            "report_load_failures": [
+                dict(item) for item in snapshot.report_load_failures
+            ],
+            "comment_load_failures": [
+                dict(item) for item in snapshot.comment_load_failures
+            ],
             **data_load_diagnostics,
         }
         return data, diagnostics
@@ -242,38 +260,13 @@ class DailyReportDataCache:
     def _classify_view_data_load(
         self, settings: AppSettings, snapshot: CacheSnapshot
     ) -> dict[str, int | bool | str]:
-        """Report whether expected report/comment CSV reads failed entirely or partially."""
-        warning_paths = {
-            self._path_key(str(item.get("file", "")))
-            for item in snapshot.warnings
-            if item.get("file")
-        }
-
-        def partition_status(
-            paths: list[Path], partitions: dict[str, pl.DataFrame]
-        ) -> tuple[int, int, int]:
-            path_keys = {self._path_key(path): path for path in paths}
-            candidates = {
-                key
-                for key, path in path_keys.items()
-                if path.exists() or key in partitions or key in warning_paths
-            }
-            loaded = sum(1 for key in candidates if key in partitions)
-            failed = sum(1 for key in candidates if key in warning_paths)
-            return len(candidates), loaded, failed
-
-        report_total, report_loaded, report_failed = partition_status(
-            list(self._report_paths(settings, snapshot.target_employee_ids).values()),
-            snapshot.report_partitions,
-        )
-        comment_paths = (
-            self._csv_files(Path(settings.comments_dir))
-            if snapshot.target_employee_ids
-            else []
-        )
-        comment_total, comment_loaded, comment_failed = partition_status(
-            comment_paths, snapshot.comment_partitions
-        )
+        """Report report/comment CSV failures without treating them as blanks."""
+        report_failed = len(snapshot.report_load_failures)
+        report_loaded = len(snapshot.report_partitions)
+        report_total = report_loaded + report_failed
+        comment_failed = len(snapshot.comment_load_failures)
+        comment_loaded = len(snapshot.comment_partitions)
+        comment_total = comment_loaded + comment_failed
         total = report_total + comment_total
         loaded = report_loaded + comment_loaded
         failed = report_failed + comment_failed
@@ -292,6 +285,12 @@ class DailyReportDataCache:
             "comment_csv_total": comment_total,
             "comment_csv_loaded": comment_loaded,
             "comment_csv_failed": comment_failed,
+            "report_load_failures": [
+                dict(item) for item in snapshot.report_load_failures
+            ],
+            "comment_load_failures": [
+                dict(item) for item in snapshot.comment_load_failures
+            ],
         }
 
     def get_save_context(
@@ -350,6 +349,8 @@ class DailyReportDataCache:
             comments = dict(snapshot.comment_partitions)
             manifest = dict(snapshot.file_manifest)
             warnings = snapshot.warnings
+            report_load_failures = list(snapshot.report_load_failures)
+            comment_load_failures = list(snapshot.comment_load_failures)
             target_ids = set(snapshot.target_employee_ids)
             changed = False
 
@@ -363,6 +364,11 @@ class DailyReportDataCache:
                     if fingerprint is not None:
                         manifest[key] = fingerprint
                     warnings = self._remove_warning(warnings, key)
+                    report_load_failures = [
+                        item
+                        for item in report_load_failures
+                        if str(item.get("employee_id", "")) != target_id
+                    ]
                     self._invalid_paths.discard(key)
                     changed = True
 
@@ -375,6 +381,11 @@ class DailyReportDataCache:
                 if fingerprint is not None:
                     manifest[key] = fingerprint
                 warnings = self._remove_warning(warnings, key)
+                comment_load_failures = [
+                    item
+                    for item in comment_load_failures
+                    if str(item.get("superior_employee_id", "")) != Path(path).stem
+                ]
                 self._invalid_paths.discard(key)
                 changed = True
 
@@ -385,6 +396,8 @@ class DailyReportDataCache:
                     comment_partitions=comments,
                     file_manifest=manifest,
                     warnings=warnings,
+                    report_load_failures=tuple(report_load_failures),
+                    comment_load_failures=tuple(comment_load_failures),
                 )
             return changed
 
@@ -403,6 +416,8 @@ class DailyReportDataCache:
         target_set = set(target_ids)
         report_partitions: dict[str, pl.DataFrame] = {}
         comment_partitions: dict[str, pl.DataFrame] = {}
+        report_load_failures: list[dict[str, str]] = []
+        comment_load_failures: list[dict[str, str]] = []
         manifest: dict[str, FileFingerprint] = {}
         warnings: list[dict[str, str]] = [dict(item) for item in repository.load_warnings]
         warning_names = {str(item.get("file", "")) for item in warnings}
@@ -419,10 +434,27 @@ class DailyReportDataCache:
             if fingerprint is not None:
                 manifest[self._path_key(path)] = fingerprint
 
+        report_paths = self._report_paths(settings, target_ids, common)
+        user_master = {
+            str(row.get("employee_id", "")).strip(): row
+            for row in common.get("user_master", [])
+        }
         for target_id in target_ids:
             path: Path | None = None
             try:
-                path = safe_employee_csv_path(settings.users_dir, target_id)
+                path = report_paths[target_id]
+                if not path.parent.exists():
+                    raise FileNotFoundError(
+                        f"日報フォルダが見つかりません: {path.parent.name}"
+                    )
+                if not path.parent.is_dir():
+                    raise NotADirectoryError(
+                        f"日報パスがフォルダではありません: {path.parent.name}"
+                    )
+                if not os.access(path.parent, os.R_OK):
+                    raise PermissionError(
+                        f"日報フォルダにアクセスできません: {path.parent.name}"
+                    )
                 if not path.exists():
                     continue
                 frame = repository.load_report_partition(path, target_id)
@@ -434,9 +466,72 @@ class DailyReportDataCache:
                 csv_read_count += 1
             except Exception as exc:
                 warnings.append(self._warning(path or target_id, exc))
+                logger.warning(
+                    "Failed to load report CSV path=%s employee_id=%s",
+                    path or target_id,
+                    target_id,
+                    exc_info=True,
+                )
+                directory_failure = (
+                    path is None
+                    or not path.parent.is_dir()
+                    or not os.access(path.parent, os.R_OK)
+                )
+                report_load_failures.append(
+                    self._report_failure(
+                        target_id,
+                        user_master.get(target_id, {}),
+                        exc,
+                        source="directory" if directory_failure else "csv",
+                    )
+                )
 
         if target_set:
-            for path in self._csv_files(Path(settings.comments_dir)):
+            comments_dir = settings.storage_dir("comments")
+            comments_error: Exception | None = None
+            if not comments_dir.exists():
+                comments_error = FileNotFoundError(
+                    f"上司コメントフォルダが見つかりません: {comments_dir.name}"
+                )
+            elif not comments_dir.is_dir():
+                comments_error = NotADirectoryError(
+                    f"上司コメントパスがフォルダではありません: {comments_dir.name}"
+                )
+            elif not os.access(comments_dir, os.R_OK):
+                comments_error = PermissionError(
+                    f"上司コメントフォルダにアクセスできません: {comments_dir.name}"
+                )
+            try:
+                comment_files = (
+                    self._csv_files(comments_dir)
+                    if comments_error is None
+                    else []
+                )
+            except Exception as exc:
+                comments_error = exc
+                comment_files = []
+            if comments_error is not None:
+                exc = comments_error
+                warnings.append(self._warning(comments_dir, exc))
+                logger.warning(
+                    "Failed to access supervisor comment directory path=%s",
+                    comments_dir,
+                    exc_info=True,
+                )
+                superior_ids = repository._commenter_ids_for_targets(
+                    common, list(target_ids)
+                )
+                for superior_id in superior_ids or [""]:
+                    comment_load_failures.append(
+                        self._comment_failure(
+                            superior_id,
+                            user_master.get(superior_id, {}),
+                            exc,
+                            source="directory",
+                        )
+                    )
+                comment_files = []
+            for path in comment_files:
                 try:
                     frame = repository.load_comment_partition(path, target_set)
                     key = self._path_key(path)
@@ -447,6 +542,20 @@ class DailyReportDataCache:
                     csv_read_count += 1
                 except Exception as exc:
                     warnings.append(self._warning(path, exc))
+                    logger.warning(
+                        "Failed to load supervisor comment CSV path=%s superior_employee_id=%s",
+                        path,
+                        path.stem,
+                        exc_info=True,
+                    )
+                    superior_id = path.stem
+                    comment_load_failures.append(
+                        self._comment_failure(
+                            superior_id,
+                            user_master.get(superior_id, {}),
+                            exc,
+                        )
+                    )
 
         csv_read_duration_ms = (perf_counter() - csv_read_started) * 1000
 
@@ -463,6 +572,8 @@ class DailyReportDataCache:
             generation=self._next_generation(),
             built_at=datetime.now(),
             warnings=tuple(warnings),
+            report_load_failures=tuple(report_load_failures),
+            comment_load_failures=tuple(comment_load_failures),
         )
         logger.info(
             "daily-report cache generation=%s status=built csv_reads=%s csv_read_ms=%.2f build_ms=%.2f warnings=%s",
@@ -486,7 +597,7 @@ class DailyReportDataCache:
         scan_started = perf_counter()
         try:
             current_manifest = self._scan_manifest(
-                settings, snapshot.target_employee_ids
+                settings, snapshot.target_employee_ids, snapshot.common
             )
         except Exception as exc:
             logger.exception("Failed to scan daily-report cache manifest")
@@ -509,6 +620,8 @@ class DailyReportDataCache:
         target_ids = tuple(snapshot.target_employee_ids)
         migration_required = dict(snapshot.migration_required)
         warnings = snapshot.warnings
+        report_load_failures = [dict(item) for item in snapshot.report_load_failures]
+        comment_load_failures = [dict(item) for item in snapshot.comment_load_failures]
         changed_count = 0
         added_count = 0
         deleted_count = 0
@@ -579,6 +692,7 @@ class DailyReportDataCache:
                                 manifest,
                                 target_ids,
                                 candidate_targets,
+                                common=candidate_common,
                             )
                         )
                         warnings = self._merge_warnings(warnings, scope_warnings)
@@ -647,17 +761,108 @@ class DailyReportDataCache:
                 ) * 1000
 
         next_scan_started = perf_counter()
-        current_manifest = self._scan_manifest(settings, target_ids)
+        repository = DailyReportRepository(settings, self._base_dir)
+        report_paths = self._report_paths(settings, target_ids, common)
+        report_directory_errors: dict[str, Exception] = {}
+        for target_id, path in report_paths.items():
+            if not path.parent.exists():
+                report_directory_errors[target_id] = FileNotFoundError(
+                    f"日報フォルダが見つかりません: {path.parent.name}"
+                )
+            elif not path.parent.is_dir():
+                report_directory_errors[target_id] = NotADirectoryError(
+                    f"日報パスがフォルダではありません: {path.parent.name}"
+                )
+            elif not os.access(path.parent, os.R_OK):
+                report_directory_errors[target_id] = PermissionError(
+                    f"日報フォルダにアクセスできません: {path.parent.name}"
+                )
+
+        comments_dir = settings.storage_dir("comments")
+        comment_directory_error: Exception | None = None
+        if not comments_dir.exists():
+            comment_directory_error = FileNotFoundError(
+                f"上司コメントフォルダが見つかりません: {comments_dir.name}"
+            )
+        elif not comments_dir.is_dir():
+            comment_directory_error = NotADirectoryError(
+                f"上司コメントパスがフォルダではありません: {comments_dir.name}"
+            )
+        elif not os.access(comments_dir, os.R_OK):
+            comment_directory_error = PermissionError(
+                f"上司コメントフォルダにアクセスできません: {comments_dir.name}"
+            )
+
+        current_manifest = self._scan_manifest(settings, target_ids, common)
         manifest_scan_duration_ms += (perf_counter() - next_scan_started) * 1000
-        report_paths = self._report_paths(settings, target_ids)
         report_path_by_key = {
             self._path_key(path): (target_id, path)
             for target_id, path in report_paths.items()
         }
         comment_paths = {
             self._path_key(path): path
-            for path in self._csv_files(Path(settings.comments_dir))
+            for path in self._csv_files(comments_dir)
         }
+
+        user_master = {
+            str(row.get("employee_id", "")).strip(): row
+            for row in common.get("user_master", [])
+        }
+        for target_id, error in report_directory_errors.items():
+            report_load_failures = [
+                item
+                for item in report_load_failures
+                if str(item.get("employee_id", "")) != target_id
+            ]
+            report_load_failures.append(
+                self._report_failure(
+                    target_id,
+                    user_master.get(target_id, {}),
+                    error,
+                    source="directory",
+                )
+            )
+            warnings = self._merge_warning(
+                warnings,
+                str(report_paths[target_id].parent),
+                str(error),
+            )
+        valid_report_ids = set(report_paths) - set(report_directory_errors)
+        report_load_failures = [
+            item
+            for item in report_load_failures
+            if not (
+                str(item.get("employee_id", "")) in valid_report_ids
+                and item.get("source") == "directory"
+            )
+        ]
+        if comment_directory_error is not None:
+            superior_ids = repository._commenter_ids_for_targets(
+                common, list(target_ids)
+            )
+            comment_load_failures = [
+                item for item in comment_load_failures if item.get("source") != "directory"
+            ]
+            for superior_id in superior_ids or [""]:
+                comment_load_failures.append(
+                    self._comment_failure(
+                        superior_id,
+                        user_master.get(superior_id, {}),
+                        comment_directory_error,
+                        source="directory",
+                    )
+                )
+            warnings = self._merge_warning(
+                warnings,
+                str(comments_dir),
+                str(comment_directory_error),
+            )
+        else:
+            comment_load_failures = [
+                item
+                for item in comment_load_failures
+                if item.get("source") != "directory"
+            ]
 
         data_keys = set(report_path_by_key) | set(comment_paths) | set(reports) | set(comments)
         for key in sorted(data_keys):
@@ -678,6 +883,21 @@ class DailyReportDataCache:
                 if key in comments:
                     comments.pop(key, None)
                     removed = True
+                report_target = report_path_by_key.get(key, ("", None))[0]
+                if report_target:
+                    report_load_failures = [
+                        item
+                        for item in report_load_failures
+                        if str(item.get("employee_id", "")) != report_target
+                    ]
+                comment_path = comment_paths.get(key)
+                if comment_path is not None:
+                    comment_load_failures = [
+                        item
+                        for item in comment_load_failures
+                        if str(item.get("superior_employee_id", ""))
+                        != comment_path.stem
+                    ]
                 manifest.pop(key, None)
                 self._invalid_paths.discard(key)
                 warnings = self._remove_warning(warnings, key)
@@ -692,11 +912,21 @@ class DailyReportDataCache:
                 if key in report_path_by_key:
                     target_id, path = report_path_by_key[key]
                     reports[key] = repository.load_report_partition(path, target_id)
+                    report_load_failures = [
+                        item
+                        for item in report_load_failures
+                        if str(item.get("employee_id", "")) != target_id
+                    ]
                 elif key in comment_paths:
                     path = comment_paths[key]
                     comments[key] = repository.load_comment_partition(
                         path, set(target_ids)
                     )
+                    comment_load_failures = [
+                        item
+                        for item in comment_load_failures
+                        if str(item.get("superior_employee_id", "")) != path.stem
+                    ]
                 else:
                     continue
                 manifest[key] = new_fingerprint
@@ -711,6 +941,48 @@ class DailyReportDataCache:
             except Exception as exc:
                 failed_count += 1
                 warnings = self._merge_warning(warnings, key, str(exc))
+                if key in report_path_by_key:
+                    target_id, path = report_path_by_key[key]
+                    report_load_failures = [
+                        item
+                        for item in report_load_failures
+                        if str(item.get("employee_id", "")) != target_id
+                    ]
+                    report_load_failures.append(
+                        self._report_failure(
+                            target_id,
+                            next(
+                                (
+                                    row
+                                    for row in common.get("user_master", [])
+                                    if str(row.get("employee_id", "")) == target_id
+                                ),
+                                {},
+                            ),
+                            exc,
+                        )
+                    )
+                elif key in comment_paths:
+                    path = comment_paths[key]
+                    comment_load_failures = [
+                        item
+                        for item in comment_load_failures
+                        if str(item.get("superior_employee_id", "")) != path.stem
+                    ]
+                    comment_load_failures.append(
+                        self._comment_failure(
+                            path.stem,
+                            next(
+                                (
+                                    row
+                                    for row in common.get("user_master", [])
+                                    if str(row.get("employee_id", "")) == path.stem
+                                ),
+                                {},
+                            ),
+                            exc,
+                        )
+                    )
                 logger.warning(
                     "Failed to refresh cached CSV path=%s", key, exc_info=True
                 )
@@ -734,6 +1006,8 @@ class DailyReportDataCache:
                 target_employee_ids=target_ids,
                 migration_required=migration_required,
                 warnings=warnings,
+                report_load_failures=tuple(report_load_failures),
+                comment_load_failures=tuple(comment_load_failures),
             )
             self._snapshot = refreshed
             status = "refreshed"
@@ -764,6 +1038,7 @@ class DailyReportDataCache:
         manifest: dict[str, FileFingerprint],
         old_target_ids: tuple[str, ...],
         new_target_ids: tuple[str, ...],
+        common: dict[str, list[dict[str, Any]]] | None = None,
     ) -> tuple[
         dict[str, pl.DataFrame],
         dict[str, pl.DataFrame],
@@ -776,11 +1051,12 @@ class DailyReportDataCache:
         new_manifest = dict(manifest)
         warnings: list[dict[str, str]] = []
         reads = 0
+        common = common or repository.load_common()
         old_report_keys = {
             self._path_key(path)
-            for path in self._report_paths(settings, old_target_ids).values()
+            for path in self._report_paths(settings, old_target_ids, common).values()
         }
-        new_report_paths = self._report_paths(settings, new_target_ids)
+        new_report_paths = self._report_paths(settings, new_target_ids, common)
         new_report_keys = {
             self._path_key(path) for path in new_report_paths.values()
         }
@@ -809,7 +1085,7 @@ class DailyReportDataCache:
             new_manifest.pop(key, None)
         new_target_set = set(new_target_ids)
         if new_target_set:
-            for path in self._csv_files(Path(settings.comments_dir)):
+            for path in self._csv_files(settings.storage_dir("comments")):
                 key = self._path_key(path)
                 try:
                     new_comments[key] = repository.load_comment_partition(
@@ -836,13 +1112,16 @@ class DailyReportDataCache:
         )
 
     def _scan_manifest(
-        self, settings: AppSettings, target_employee_ids: tuple[str, ...]
+        self,
+        settings: AppSettings,
+        target_employee_ids: tuple[str, ...],
+        common: dict[str, list[dict[str, Any]]] | None = None,
     ) -> dict[str, FileFingerprint]:
         manifest: dict[str, FileFingerprint] = {}
         paths = [
             *self._common_paths(settings).values(),
-            *self._report_paths(settings, target_employee_ids).values(),
-            *self._csv_files(Path(settings.comments_dir)),
+            *self._report_paths(settings, target_employee_ids, common).values(),
+            *self._csv_files(settings.storage_dir("comments")),
         ]
         for path in paths:
             fingerprint = self._fingerprint(path)
@@ -876,7 +1155,7 @@ class DailyReportDataCache:
 
     @staticmethod
     def _common_paths(settings: AppSettings) -> dict[str, Path]:
-        root = Path(settings.common_dir)
+        root = settings.storage_dir("common")
         return {
             "user_master": root / "user_master.csv",
             "team_master": root / "team_master.csv",
@@ -896,13 +1175,25 @@ class DailyReportDataCache:
 
     @staticmethod
     def _report_paths(
-        settings: AppSettings, target_employee_ids: tuple[str, ...]
+        settings: AppSettings,
+        target_employee_ids: tuple[str, ...],
+        common: dict[str, list[dict[str, Any]]] | None = None,
     ) -> dict[str, Path]:
         paths: dict[str, Path] = {}
+        user_master = {
+            str(row.get("employee_id", "")).strip(): row
+            for row in (common or {}).get("user_master", [])
+        }
         for target_id in target_employee_ids:
             try:
+                user = user_master.get(str(target_id), {})
+                kind = (
+                    "temporary_reports"
+                    if str(user.get("employment_type", "")).strip() == "temporary"
+                    else "regular_reports"
+                )
                 paths[target_id] = safe_employee_csv_path(
-                    settings.users_dir, target_id
+                    settings.storage_dir(kind), target_id
                 )
             except ValueError:
                 logger.warning(
@@ -912,7 +1203,7 @@ class DailyReportDataCache:
 
     @staticmethod
     def _csv_files(directory: Path) -> list[Path]:
-        if not directory.exists():
+        if not directory.exists() or not directory.is_dir():
             return []
         return sorted(
             (
@@ -939,12 +1230,37 @@ class DailyReportDataCache:
     def _path_key(path: Path | str) -> str:
         return os.path.normcase(str(Path(path).resolve(strict=False)))
 
-    def _settings_paths(self, settings: AppSettings) -> tuple[str, str, str]:
-        return (
-            self._path_key(settings.users_dir),
-            self._path_key(settings.comments_dir),
-            self._path_key(settings.common_dir),
-        )
+    def _settings_paths(self, settings: AppSettings) -> tuple[str, ...]:
+        return (self._path_key(settings.storage_root),)
+
+    @staticmethod
+    def _report_failure(
+        employee_id: str,
+        user: dict[str, Any],
+        _error: Exception,
+        *,
+        source: str = "csv",
+    ) -> dict[str, str]:
+        return {
+            "employee_id": str(employee_id),
+            "display_name": str(user.get("display_name") or employee_id),
+            "source": source,
+        }
+
+    @staticmethod
+    def _comment_failure(
+        superior_employee_id: str,
+        user: dict[str, Any],
+        _error: Exception,
+        *,
+        source: str = "csv",
+    ) -> dict[str, str]:
+        superior_id = str(superior_employee_id or "")
+        return {
+            "superior_employee_id": superior_id,
+            "display_name": str(user.get("display_name") or superior_id),
+            "source": source,
+        }
 
     @staticmethod
     def _warning(path: Path | str, error: Exception) -> dict[str, str]:

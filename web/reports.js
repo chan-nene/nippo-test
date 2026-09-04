@@ -942,6 +942,44 @@ const REPORT_SAVE_FAILURE_MESSAGE =
 const REPORT_SAVE_CACHE_WARNING =
   "変更は保存されましたが、表示を更新できませんでした。「最新データを取得」を押してください。";
 
+function notifyCsvLoadFailures(result) {
+  const reportFailures = Array.isArray(result?.report_load_failures)
+    ? result.report_load_failures
+    : [];
+  const commentFailures = Array.isArray(result?.comment_load_failures)
+    ? result.comment_load_failures
+    : [];
+  const namesFor = (failures, idKey) => {
+    const names = failures
+      .map((failure) =>
+        String(failure?.display_name || failure?.[idKey] || "").trim(),
+      )
+      .filter(Boolean);
+    return [...new Set(names)];
+  };
+  const reportNames = namesFor(reportFailures, "employee_id");
+  const commentNames = namesFor(commentFailures, "superior_employee_id");
+  if (reportNames.length) {
+    notify({
+      text: `日報を読み込めませんでした：${reportNames.join("、")}`,
+      type: "warning",
+      scope: "reports",
+      source: "load",
+      autoHide: false,
+    });
+  }
+  if (commentNames.length) {
+    notify({
+      text: `上司コメントを読み込めませんでした：${commentNames.join("、")}`,
+      type: "warning",
+      scope: "reports",
+      source: "load",
+      autoHide: false,
+    });
+  }
+  return reportFailures.length > 0 || commentFailures.length > 0;
+}
+
 async function refreshData() {
   finishEditing();
   if (!(await confirmDiscardUnsaved("最新データを取得"))) return;
@@ -1031,6 +1069,16 @@ async function loadData({
     return { ok: false, stale: true };
   }
   if (!result.ok) {
+    if (result.storage_error === true) {
+      state.accessDenied = false;
+      if (transition || !hadData) clearReportViewForLoadFailure();
+      showScreenLoadError(
+        "reports",
+        result.message || REPORT_LOAD_ERROR_MESSAGE,
+        "error",
+      );
+      return { ok: false, storageError: true };
+    }
     const accessDenied =
       result.access_denied === true || result.employee_registered === false;
     if (accessDenied) {
@@ -1065,14 +1113,6 @@ async function loadData({
       );
     }
     return { ok: false };
-  }
-  if (result.data_load_status === "all_failed") {
-    state.accessDenied = false;
-    clearReportViewForLoadFailure();
-    updateViewAvailability();
-    updateViewChrome();
-    showScreenLoadError("reports", REPORT_LOAD_ERROR_MESSAGE, "error");
-    return { ok: false, allDataFailed: true };
   }
   state.accessDenied = false;
   state.displayName = result.data.display_name || result.data.employee_id || "";
@@ -1232,11 +1272,14 @@ async function loadData({
   const warningCount = Number(result.data.load_warning_count || 0);
   const refreshFailed = Number(refreshResult.failed || 0);
   const dataLoadPartial = result.data_load_status === "partial";
+  // A successful API response is authoritative for the current read. Remove
+  // stale load toasts before adding only the failures from this response.
+  clearLoadToasts("reports");
+  const hasCsvFailures = notifyCsvLoadFailures(result);
   if (dataLoadPartial || refreshFailed > 0 || warningCount > 0) {
     showScreenLoadError("reports", REPORT_PARTIAL_LOAD_MESSAGE, "warning");
   } else {
     clearScreenLoadError("reports");
-    clearLoadToasts("reports");
     if (manual) {
       notify({
         text: "最新データを取得しました。",
@@ -1246,7 +1289,7 @@ async function loadData({
   }
   return {
     ok: true,
-    partial: dataLoadPartial || refreshFailed > 0 || warningCount > 0,
+    partial: dataLoadPartial || refreshFailed > 0 || warningCount > 0 || hasCsvFailures,
   };
 }
 
@@ -1840,6 +1883,10 @@ function renderCommentCells(row, context) {
           )?.superior_name || commenterId;
         return renderNotApplicableCommentCell(superiorName);
       }
+      if (cell.load_failed === true || cell.available === false) {
+        const superiorName = cell.superior_name || commenterId;
+        return `<td class="comment-col comment-load-failed" data-load-failed="true" aria-label="${escapeHtml(superiorName)}のコメントを読み込めませんでした"><span aria-hidden="true">ー</span></td>`;
+      }
       const originalIndex = row.comments.indexOf(cell);
       return renderCommentCell(row, cell, row.__index, originalIndex);
     })
@@ -1847,7 +1894,7 @@ function renderCommentCells(row, context) {
 }
 
 function renderNotApplicableCommentCell(superiorName) {
-  return `<td class="comment-col comment-not-applicable" aria-label="${escapeHtml(superiorName)}のコメント対象外"><span aria-hidden="true">ー</span></td>`;
+  return `<td class="comment-col comment-not-applicable" aria-label="${escapeHtml(superiorName)}のコメント対象外"><span aria-hidden="true">-</span></td>`;
 }
 
 function getDateShiftDirectionLabel(isPrevious) {
@@ -3002,6 +3049,29 @@ async function saveUpdates() {
   }
 
   if (result?.no_targets === true) {
+    syncChrome();
+    return false;
+  }
+
+  if (result?.csv_locked === true) {
+    notify({
+      text:
+        result.message ||
+        "CSVが使用中です。Excelなどで開いている場合は閉じてから、もう一度保存してください。",
+      type: "error",
+      autoHide: false,
+      source: "save",
+    });
+    syncChrome();
+    return false;
+  }
+  if (result?.csv_readonly === true) {
+    notify({
+      text: result.message || "CSVを読み取り専用に設定できませんでした。",
+      type: "error",
+      autoHide: false,
+      source: "save",
+    });
     syncChrome();
     return false;
   }

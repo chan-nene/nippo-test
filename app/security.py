@@ -939,9 +939,6 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
     _reject_unknown_keys(
         source,
         {
-            "users_dir",
-            "comments_dir",
-            "common_dir",
             "default_start_offset_days",
             "default_end_offset_days",
             "missing_comment_start_date",
@@ -952,8 +949,6 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
             "ui_member_filter_levels",
         },
     )
-    for key in ("users_dir", "comments_dir", "common_dir"):
-        _bounded_string(source.get(key, ""), key, MAX_PATH_LENGTH)
     _bounded_string(source.get("comment_signature", ""), "サイン", 100)
     _optional_iso_date(
         source.get("missing_comment_start_date"), "未コメント確認の開始日"

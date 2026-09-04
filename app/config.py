@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from configparser import ConfigParser
+from configparser import ConfigParser, Error as ConfigParserError
 from dataclasses import asdict, dataclass, fields
+import os
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,34 @@ COLOR_THEMES = frozenset({"light", "dark"})
 COLOR_PALETTES = frozenset({"default", "blue"})
 MEMBER_FILTER_LEVELS = ("department", "section", "member")
 DEFAULT_MEMBER_FILTER_LEVELS = ""
+
+# Paths used by the application are deliberately not configurable one by one.
+# They are children of the single root in ``storage.ini``.  Keep these names in
+# one module so the repository, cache, validation and API cannot drift apart.
+STORAGE_DIRECTORY_NAMES = {
+    "common": "common_data",
+    "comments": "supervisor_comments",
+    "regular_reports": "regular_employee_reports",
+    "temporary_reports": "temporary_employee_reports",
+}
+STORAGE_INI_FILENAME = "storage.ini"
+SETTINGS_INI_FILENAME = "settings.ini"
+
+
+class StorageConfigError(RuntimeError):
+    """A storage.ini or fixed storage directory is not usable.
+
+    ``target`` is intentionally retained separately from the user-facing
+    message: raw paths belong in the log, while API responses can identify the
+    failed storage target without exposing the complete path.
+    """
+
+    def __init__(
+        self, message: str, *, code: str = "invalid_storage", target: str = ""
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.target = target
 
 
 def to_int(value: Any, default: int) -> int:
@@ -70,9 +99,11 @@ def normalize_member_filter_levels(
 
 @dataclass
 class AppSettings:
-    users_dir: str = ""
-    comments_dir: str = ""
-    common_dir: str = ""
+    # ``root_path`` is populated from storage.ini by the API.  It is kept on
+    # AppSettings as a resolved runtime value so existing service code can
+    # receive one settings object, but SettingsManager never persists it to
+    # settings.ini.
+    root_path: str = ""
     default_start_offset_days: int = -2
     default_end_offset_days: int = 0
     missing_comment_start_date: str = ""
@@ -90,13 +121,34 @@ class AppSettings:
 
     @property
     def is_complete(self) -> bool:
-        return bool(self.users_dir and self.comments_dir and self.common_dir)
+        return bool(self.root_path)
+
+    @property
+    def storage_root(self) -> Path:
+        """Return the configured storage root without creating it."""
+        return Path(self.root_path)
+
+    def storage_dir(self, kind: str) -> Path:
+        """Resolve one of the fixed application storage directories."""
+        if kind not in STORAGE_DIRECTORY_NAMES:
+            raise KeyError(f"Unknown storage directory kind: {kind}")
+        return self.storage_root / STORAGE_DIRECTORY_NAMES[kind]
+
+    @property
+    def fixed_storage_dirs(self) -> dict[str, Path]:
+        return {
+            kind: self.storage_dir(kind) for kind in STORAGE_DIRECTORY_NAMES
+        }
 
     @classmethod
     def from_mapping(cls, source: Mapping[str, Any]) -> AppSettings:
         defaults = cls()
         values: dict[str, Any] = {}
         for field in fields(cls):
+            if field.name == "root_path":
+                # Path configuration belongs exclusively to storage.ini.  Do
+                # not let a stale [database] section reintroduce it.
+                continue
             default = getattr(defaults, field.name)
             raw_value = source.get(field.name, default)
             if field.name == "ui_color_theme":
@@ -116,49 +168,191 @@ class AppSettings:
         return cls(**values)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        values = asdict(self)
+        values.pop("root_path", None)
+        return values
 
 
-PATH_FIELD_LABELS = {
-    "users_dir": "ユーザー日報フォルダ",
-    "comments_dir": "上司コメントフォルダ",
-    "common_dir": "管理フォルダ",
+STORAGE_DIRECTORY_LABELS = {
+    "common": "共通情報フォルダ",
+    "comments": "上司コメントフォルダ",
+    "regular_reports": "正社員日報フォルダ",
+    "temporary_reports": "派遣社員日報フォルダ",
 }
 
 
-def validate_settings_paths(settings: AppSettings) -> dict[str, str]:
+def validate_storage_directories(
+    settings: AppSettings,
+    *,
+    required_kinds: set[str] | frozenset[str] | None = None,
+    require_write: bool = False,
+) -> dict[str, str]:
+    """Validate only the fixed directories needed by the current operation.
+
+    The caller supplies ``required_kinds`` after common/user data has been
+    loaded.  In particular, a temporary employee must not probe the regular
+    report directory, so that directory is not part of the default set.
+    """
+    required = set(required_kinds or {"common", "comments"})
     errors: dict[str, str] = {}
-    for field, label in PATH_FIELD_LABELS.items():
-        raw_path = str(getattr(settings, field, "")).strip()
-        if not raw_path:
-            errors[field] = f"{label}を入力してください。"
-            continue
-        path = Path(raw_path)
-        if not path.exists():
-            errors[field] = f"{label}が見つかりません。パスを確認してください。"
-        elif not path.is_dir():
-            errors[field] = f"{label}にはフォルダを指定してください。"
+    if not settings.root_path:
+        errors["storage_root"] = "storage.ini の [storage] root_path が未設定です。"
+        return errors
+    root = settings.storage_root
+    try:
+        if not root.exists():
+            errors["storage_root"] = "保存先のルートフォルダが見つかりません。"
+        elif not root.is_dir():
+            errors["storage_root"] = "保存先のルートパスにはフォルダを指定してください。"
+        elif not os_access(root, write=require_write):
+            errors["storage_root"] = "保存先のルートフォルダにアクセスできません。"
+    except OSError:
+        errors["storage_root"] = "保存先のルートフォルダにアクセスできません。"
+    if errors.get("storage_root"):
+        return errors
+    for kind in required:
+        if kind not in STORAGE_DIRECTORY_NAMES:
+            raise KeyError(f"Unknown storage directory kind: {kind}")
+        path = settings.storage_dir(kind)
+        label = STORAGE_DIRECTORY_LABELS[kind]
+        try:
+            if not path.exists():
+                errors[kind] = f"{label} ({STORAGE_DIRECTORY_NAMES[kind]}) が見つかりません。"
+            elif not path.is_dir():
+                errors[kind] = f"{label} ({STORAGE_DIRECTORY_NAMES[kind]}) にはフォルダを指定してください。"
+            elif not os_access(path, write=require_write):
+                errors[kind] = f"{label} ({STORAGE_DIRECTORY_NAMES[kind]}) にアクセスできません。"
+        except OSError:
+            errors[kind] = f"{label} ({STORAGE_DIRECTORY_NAMES[kind]}) にアクセスできません。"
     return errors
+
+
+def os_access(path: Path, *, write: bool = False) -> bool:
+    """Check directory access without creating or touching child paths."""
+    mode = os.R_OK | (os.W_OK if write else 0)
+    return bool(os.access(path, mode))
 
 
 class SettingsManager:
     def __init__(self, base_dir: Path) -> None:
         self.base_dir = base_dir
-        self.path = base_dir / "settings.ini"
+        self.path = base_dir / SETTINGS_INI_FILENAME
 
     def load(self) -> AppSettings:
         parser = ConfigParser()
         if not self.path.exists():
             return AppSettings()
         parser.read(self.path, encoding="utf-8")
-        section = parser["database"] if parser.has_section("database") else {}
+        # ``[database]`` was the old section name.  Retain it as a source for
+        # personal settings only; path keys are discarded by from_mapping.
+        section = (
+            parser["settings"]
+            if parser.has_section("settings")
+            else parser["database"]
+            if parser.has_section("database")
+            else {}
+        )
         return AppSettings.from_mapping(section)
 
     def save(self, settings: AppSettings) -> None:
         parser = ConfigParser()
-        parser["database"] = {
+        parser["settings"] = {
             key: str(value) for key, value in settings.to_dict().items()
         }
-        self.base_dir.mkdir(parents=True, exist_ok=True)
+        # The executable directory is expected to exist.  Do not create a
+        # storage directory (or any other application data directory) as a
+        # side-effect of saving personal settings.
         with self.path.open("w", encoding="utf-8") as file:
             parser.write(file)
+
+
+class StorageManager:
+    """Read the sole storage location from ``<base_dir>/storage.ini``."""
+
+    def __init__(self, base_dir: Path) -> None:
+        self.base_dir = base_dir
+        self.path = base_dir / STORAGE_INI_FILENAME
+
+    def load(self) -> str:
+        if not self.path.exists():
+            raise StorageConfigError(
+                "storage.ini が見つかりません。",
+                code="storage_config_missing",
+                target=STORAGE_INI_FILENAME,
+            )
+        parser = ConfigParser()
+        try:
+            with self.path.open("r", encoding="utf-8") as file:
+                parser.read_file(file)
+        except (OSError, UnicodeError, ConfigParserError) as exc:
+            raise StorageConfigError(
+                "storage.ini を読み込めませんでした。",
+                code="storage_config_malformed",
+                target=STORAGE_INI_FILENAME,
+            ) from exc
+        if not parser.has_section("storage"):
+            raise StorageConfigError(
+                "storage.ini に [storage] セクションがありません。",
+                code="storage_config_malformed",
+                target=STORAGE_INI_FILENAME,
+            )
+        try:
+            root_path = parser.get("storage", "root_path", fallback="").strip()
+        except ConfigParserError as exc:
+            raise StorageConfigError(
+                "storage.ini の [storage] root_path を読み込めませんでした。",
+                code="storage_config_malformed",
+                target="root_path",
+            ) from exc
+        if not root_path:
+            raise StorageConfigError(
+                "storage.ini の [storage] root_path が未設定です。",
+                code="storage_config_malformed",
+                target="root_path",
+            )
+        try:
+            root = Path(root_path)
+        except (OSError, ValueError) as exc:
+            raise StorageConfigError(
+                "storage.ini の root_path が不正です。",
+                code="storage_config_malformed",
+                target="root_path",
+            ) from exc
+        try:
+            if not root.exists():
+                raise StorageConfigError(
+                    "保存先のルートフォルダが見つかりません。",
+                    code="storage_root_missing",
+                    target="root_path",
+                )
+            if not root.is_dir():
+                raise StorageConfigError(
+                    "保存先のルートパスにはフォルダを指定してください。",
+                    code="storage_root_invalid",
+                    target="root_path",
+                )
+            if not os_access(root):
+                raise StorageConfigError(
+                    "保存先のルートフォルダにアクセスできません。",
+                    code="storage_root_inaccessible",
+                    target="root_path",
+                )
+        except OSError as exc:
+            raise StorageConfigError(
+                "保存先のルートフォルダにアクセスできません。",
+                code="storage_root_inaccessible",
+                target="root_path",
+            ) from exc
+        return str(root)
+
+
+def load_storage_settings(base_dir: Path) -> AppSettings:
+    """Load personal settings plus the external storage root.
+
+    This helper is convenient for API/bootstrap callers.  It intentionally
+    raises StorageConfigError so the initial screen can present a repair path
+    instead of silently falling back to a local directory.
+    """
+    settings = SettingsManager(base_dir).load()
+    settings.root_path = StorageManager(base_dir).load()
+    return settings

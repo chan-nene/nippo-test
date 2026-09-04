@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import stat
 import tempfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -14,7 +15,8 @@ from zoneinfo import ZoneInfo
 import polars as pl
 
 from app.calendar_policy import DEFAULT_MISSING_COMMENT_START_DATE
-from app.config import AppSettings, validate_settings_paths
+from app.config import AppSettings, validate_storage_directories
+from app.config import StorageConfigError
 from app.security import (
     COMMON_MASTER_COLUMNS,
     LEGACY_COMMON_MASTER_COLUMNS,
@@ -51,6 +53,14 @@ class CommonMasterConflictError(RuntimeError):
     """The common CSV changed after it was loaded in the admin screen."""
 
 
+class CsvFileLockedError(PermissionError):
+    """A target CSV could not be replaced because another process owns it."""
+
+
+class CsvReadonlyError(OSError):
+    """The final read-only protection flag could not be applied."""
+
+
 class DailyReportRepository:
     def __init__(self, settings: AppSettings, base_dir: Path) -> None:
         self.settings = settings
@@ -72,12 +82,42 @@ class DailyReportRepository:
         return datetime.now(JST).date()
 
     def validate_paths(self) -> None:
-        errors = validate_settings_paths(self.settings)
+        # Common data is needed to determine employment type and permission
+        # scope.  Report directories are validated after that common data has
+        # been read, so a temporary employee never probes the regular folder.
+        errors = validate_storage_directories(
+            self.settings, required_kinds={"common"}
+        )
         if errors:
-            raise ValueError(" / ".join(errors.values()))
+            target, message = next(iter(errors.items()))
+            raise StorageConfigError(
+                message,
+                code="storage_directory_unavailable",
+                target=target,
+            )
+
+    def validate_report_directory(self, employment_type: str) -> None:
+        kind = (
+            "temporary_reports"
+            if str(employment_type).strip() == "temporary"
+            else "regular_reports"
+        )
+        errors = validate_storage_directories(
+            self.settings, required_kinds={kind}
+        )
+        if errors:
+            target, message = next(iter(errors.items()))
+            raise StorageConfigError(
+                message,
+                code="storage_directory_unavailable",
+                target=target,
+            )
+
+    def storage_dir(self, kind: str) -> Path:
+        return self.settings.storage_dir(kind)
 
     def load_common(self) -> dict[str, list[dict[str, Any]]]:
-        common_dir = Path(self.settings.common_dir)
+        common_dir = self.storage_dir("common")
         users, teams, assignments, schema_mode = self._load_organization_masters(
             common_dir
         )
@@ -90,7 +130,7 @@ class DailyReportRepository:
         }
 
     def load_common_masters(self) -> dict[str, list[dict[str, Any]]]:
-        common_dir = Path(self.settings.common_dir)
+        common_dir = self.storage_dir("common")
         users, teams, assignments, schema_mode = self._load_organization_masters(
             common_dir
         )
@@ -339,7 +379,7 @@ class DailyReportRepository:
         return dates
 
     def get_common_master_revisions(self) -> dict[str, str]:
-        common_dir = Path(self.settings.common_dir)
+        common_dir = self.storage_dir("common")
         return {
             master: self._common_master_revision(common_dir / f"{master}.csv")
             for master in COMMON_MASTER_COLUMNS
@@ -349,7 +389,7 @@ class DailyReportRepository:
         if master not in COMMON_MASTER_COLUMNS:
             raise ValueError("管理の種類が不正です。")
         return self._common_master_revision(
-            Path(self.settings.common_dir) / f"{master}.csv"
+            self.storage_dir("common") / f"{master}.csv"
         )
 
     def save_common_master(
@@ -370,7 +410,7 @@ class DailyReportRepository:
             if normalized
             else self._empty_df(columns)
         )
-        target_path = Path(self.settings.common_dir) / f"{master}.csv"
+        target_path = self.storage_dir("common") / f"{master}.csv"
         if (
             expected_revision
             and self._common_master_revision(target_path) != expected_revision
@@ -386,7 +426,7 @@ class DailyReportRepository:
         users: list[dict[str, str]],
         expected_revisions: dict[str, str],
     ) -> dict[str, str]:
-        common_dir = Path(self.settings.common_dir)
+        common_dir = self.storage_dir("common")
         targets = {
             "user_master": common_dir / "user_master.csv",
         }
@@ -415,7 +455,7 @@ class DailyReportRepository:
         if legacy_call:
             expected_revisions = dict(comment_assignments)
             comment_assignments = []
-        common_dir = Path(self.settings.common_dir)
+        common_dir = self.storage_dir("common")
         targets = {
             "team_master": common_dir / "team_master.csv",
             "user_master": common_dir / "user_master.csv",
@@ -539,7 +579,7 @@ class DailyReportRepository:
         common = self.load_common()
         scope = self.resolve_view_scope(common, employee_id)
         target_employee_ids = scope["target_employee_ids"]
-        users_df = self._load_all_user_rows(target_employee_ids)
+        users_df = self._load_all_user_rows(target_employee_ids, common)
         comments_df = self._load_all_comment_rows(target_employee_ids)
         return self.build_view_data_from_cache(
             employee_id,
@@ -589,6 +629,8 @@ class DailyReportRepository:
         end_date: str | None = None,
         period_preset: str | None = None,
         load_warning_count: int = 0,
+        failed_report_employee_ids: set[str] | None = None,
+        failed_comment_superior_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         if period_preset == "previousWorkday":
             previous_working_date = self._previous_working_date(common["calendar"])
@@ -600,21 +642,47 @@ class DailyReportRepository:
             if self._calendar_row_is_holiday(row)
             and (calendar_date := self._to_date(row.get("date"))) is not None
         }
+        failed_report_ids = {
+            str(item).strip()
+            for item in (failed_report_employee_ids or set())
+            if str(item).strip()
+        }
+        failed_comment_ids = {
+            str(item).strip()
+            for item in (failed_comment_superior_ids or set())
+            if str(item).strip()
+        }
         scope = self.resolve_view_scope(common, employee_id)
         user_master = scope["user_master"]
         current_user = scope["current_user"]
         my_display = current_user.get("display_name") or employee_id
-        can_input_own_report = self._user_can_input_own_report(current_user)
+        can_input_own_report = (
+            self._user_can_input_own_report(current_user)
+            and employee_id not in failed_report_ids
+        )
         is_temporary_user = scope["is_temporary_user"]
         assigned_subordinate_ids = scope["assigned_subordinate_ids"]
-        viewable_members = scope["viewable_members"]
-        target_employee_ids = scope["target_employee_ids"]
+        viewable_members = [
+            member
+            for member in scope["viewable_members"]
+            if str(member.get("employee_id", "")) not in failed_report_ids
+        ]
+        target_employee_ids = [
+            str(member.get("employee_id", ""))
+            for member in viewable_members
+            if member.get("employee_id")
+        ]
         missing_comment_summary = self._build_missing_comment_summary(
             users_df,
             comments_df,
             common,
             employee_id,
-            list(assigned_subordinate_ids),
+            [
+                target_id
+                for target_id in assigned_subordinate_ids
+                if target_id not in failed_report_ids
+            ],
+            failed_comment_superior_ids=failed_comment_ids,
         )
         rows, default_start, default_end = self._build_rows(
             users_df,
@@ -626,6 +694,7 @@ class DailyReportRepository:
             start_date,
             end_date,
             missing_comment_summary,
+            failed_comment_superior_ids=failed_comment_ids,
         )
         for member in viewable_members:
             member["pending_review_count"] = missing_comment_summary.get(
@@ -1511,7 +1580,24 @@ class DailyReportRepository:
         common: dict[str, list[dict[str, Any]]],
         employee_id: str,
         target_employee_ids: list[str],
+        *,
+        failed_comment_superior_ids: set[str] | None = None,
     ) -> dict[str, Any]:
+        if employee_id in (failed_comment_superior_ids or set()):
+            today = self.today_jst()
+            return {
+                "start_date": (
+                    self.settings.missing_comment_start_date
+                    or DEFAULT_MISSING_COMMENT_START_DATE.isoformat()
+                ),
+                "end_date": (
+                    today.isoformat()
+                    if self.settings.include_today_in_missing_comments
+                    else (today - timedelta(days=1)).isoformat()
+                ),
+                "dates": [],
+                "member_counts": {},
+            }
         if self._uses_new_organization_schema(common) and self._is_director(
             common, employee_id
         ):
@@ -1703,10 +1789,26 @@ class DailyReportRepository:
             if not updates:
                 continue
             try:
-                partition_path, partition_frame = writer(employee_id, updates)
+                if name == "user":
+                    partition_path, partition_frame = writer(
+                        employee_id, updates, common=common
+                    )
+                else:
+                    partition_path, partition_frame = writer(employee_id, updates)
                 result[name]["saved"] = True
                 result[name]["_cache_path"] = str(partition_path)
                 result[name]["_cache_frame"] = partition_frame
+            except CsvFileLockedError as exc:
+                logger.exception("CSV is locked while saving %s updates", name)
+                result[name]["error"] = str(exc)
+                result[name]["error_code"] = "csv_locked"
+            except CsvReadonlyError as exc:
+                logger.exception(
+                    "Failed to restore CSV read-only attribute after saving %s",
+                    name,
+                )
+                result[name]["error"] = str(exc)
+                result[name]["error_code"] = "csv_readonly"
             except Exception:
                 logger.exception("Failed to save %s updates", name)
                 result[name]["error"] = "保存先への書き込みに失敗しました。"
@@ -1857,22 +1959,63 @@ class DailyReportRepository:
         )
 
     def load_calendar_master(self) -> list[dict[str, Any]]:
-        return self._load_calendar(Path(self.settings.common_dir))
+        return self._load_calendar(self.storage_dir("common"))
 
-    def _load_all_user_rows(self, allowed_employee_ids: list[str]) -> pl.DataFrame:
+    def _load_all_user_rows(
+        self,
+        allowed_employee_ids: list[str],
+        common: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> pl.DataFrame:
         rows: list[dict[str, Any]] = []
-        users_dir = Path(self.settings.users_dir)
-        files = [
-            safe_employee_csv_path(users_dir, employee_id)
-            for employee_id in dict.fromkeys(allowed_employee_ids)
-            if employee_id
-        ]
-        for file in files:
+        common = common or self.load_common()
+        user_master = {
+            str(row.get("employee_id", "")).strip(): row
+            for row in common.get("user_master", [])
+        }
+        files: list[tuple[str, Path]] = []
+        for employee_id in dict.fromkeys(allowed_employee_ids):
+            if not employee_id:
+                continue
+            user = user_master.get(str(employee_id), {})
+            employment_type = str(user.get("employment_type", "regular")).strip()
+            kind = (
+                "temporary_reports"
+                if employment_type == "temporary"
+                else "regular_reports"
+            )
+            directory = self.storage_dir(kind)
+            # Do not auto-create report folders.  A missing folder is a failed
+            # target and is handled by the cache/API as a partial load.
+            if not directory.exists():
+                self._record_load_warning(
+                    directory,
+                    FileNotFoundError(f"{kind} directory is missing"),
+                )
+                continue
+            if not directory.is_dir():
+                self._record_load_warning(
+                    directory,
+                    NotADirectoryError(f"{kind} path is not a directory"),
+                )
+                continue
+            if not os.access(directory, os.R_OK):
+                self._record_load_warning(
+                    directory,
+                    PermissionError(f"{kind} directory is not readable"),
+                )
+                continue
+            try:
+                file = safe_employee_csv_path(directory, str(employee_id))
+            except ValueError as exc:
+                self._record_load_warning(Path(directory) / str(employee_id), exc)
+                continue
+            files.append((str(employee_id), file))
+        for employee_id, file in files:
             if not file.exists():
                 continue
             try:
                 rows.extend(
-                    self.load_report_partition(file, file.stem).to_dicts()
+                    self.load_report_partition(file, employee_id).to_dicts()
                 )
             except Exception as exc:
                 self._record_load_warning(file, exc)
@@ -1889,8 +2032,27 @@ class DailyReportRepository:
         self, allowed_employee_ids: list[str] | None = None
     ) -> pl.DataFrame:
         rows: list[dict[str, Any]] = []
-        comments_dir = Path(self.settings.comments_dir)
-        files = list(comments_dir.glob("*.csv")) if comments_dir.exists() else []
+        comments_dir = self.storage_dir("comments")
+        if not comments_dir.exists():
+            self._record_load_warning(
+                comments_dir,
+                FileNotFoundError("comments directory is missing"),
+            )
+            files: list[Path] = []
+        elif not comments_dir.is_dir():
+            self._record_load_warning(
+                comments_dir,
+                NotADirectoryError("comments path is not a directory"),
+            )
+            files = []
+        elif not os.access(comments_dir, os.R_OK):
+            self._record_load_warning(
+                comments_dir,
+                PermissionError("comments directory is not readable"),
+            )
+            files = []
+        else:
+            files = list(comments_dir.glob("*.csv"))
         allowed_ids = set(allowed_employee_ids or [])
         for file in files:
             try:
@@ -1924,7 +2086,14 @@ class DailyReportRepository:
         start_date: str | None = None,
         end_date: str | None = None,
         missing_comment_summary: dict[str, Any] | None = None,
+        *,
+        failed_comment_superior_ids: set[str] | None = None,
     ) -> tuple[list[dict[str, Any]], date | None, date | None]:
+        failed_comment_ids = {
+            str(item).strip()
+            for item in (failed_comment_superior_ids or set())
+            if str(item).strip()
+        }
         user_master = {row.get("employee_id", ""): row for row in common["user_master"]}
         holiday_dates = {
             str(row.get("date", ""))
@@ -2036,8 +2205,10 @@ class DailyReportRepository:
                     else None
                 )
                 is_weekly_target = bool(weekly_target == d)
+                comment_load_failed = superior_id in failed_comment_ids
                 can_edit = (
                     applies
+                    and not comment_load_failed
                     and target_employee_id in assigned_subordinate_ids
                     and superior_id == employee_id
                 )
@@ -2050,19 +2221,29 @@ class DailyReportRepository:
                         or superior_id,
                         "comment": (
                             comment_map.get((superior_id, target_employee_id, d), "")
-                            if applies
+                            if applies and not comment_load_failed
                             else ""
                         ),
-                        "reply": replies.get(superior_id, "") if applies else "",
+                        "reply": (
+                            replies.get(superior_id, "")
+                            if applies and not comment_load_failed
+                            else ""
+                        ),
                         "editable": can_edit,
                         "applies": applies,
+                        "available": not comment_load_failed,
+                        "load_failed": comment_load_failed,
                         "comment_mode": "weekly" if superior_is_director else "daily",
                         "is_weekly_target": is_weekly_target,
                         "rank": superior_ranks.get(superior_id, 9999),
                     }
                 )
             is_holiday = date_text in holiday_dates
-            my_comment = comment_map.get((employee_id, target_employee_id, d), "")
+            my_comment = (
+                comment_map.get((employee_id, target_employee_id, d), "")
+                if employee_id not in failed_comment_ids
+                else ""
+            )
             if current_user_is_director:
                 calculation_start = self._to_date(
                     director_member_start_dates.get(target_employee_id)
@@ -2082,6 +2263,7 @@ class DailyReportRepository:
                     and d <= today
                     and (d < today or self.settings.include_today_in_missing_comments)
                     and not str(my_comment).strip()
+                    and employee_id not in failed_comment_ids
                 )
             return {
                 "employee_id": target_employee_id,
@@ -2145,10 +2327,39 @@ class DailyReportRepository:
         except Exception:
             return {}
 
+    def _report_directory_for_employee(
+        self,
+        employee_id: str,
+        common: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> Path:
+        common = common or self.load_common()
+        user = next(
+            (
+                row
+                for row in common.get("user_master", [])
+                if str(row.get("employee_id", "")).strip() == employee_id
+            ),
+            {},
+        )
+        kind = (
+            "temporary_reports"
+            if self._is_temporary_user(user)
+            else "regular_reports"
+        )
+        return self.storage_dir(kind)
+
     def _upsert_user_rows(
-        self, employee_id: str, updates: list[dict[str, Any]]
+        self,
+        employee_id: str,
+        updates: list[dict[str, Any]],
+        *,
+        common: dict[str, list[dict[str, Any]]] | None = None,
     ) -> tuple[Path, pl.DataFrame]:
-        user_path = safe_employee_csv_path(self.settings.users_dir, employee_id)
+        user_path = safe_employee_csv_path(
+            self._report_directory_for_employee(employee_id, common), employee_id
+        )
+        if not user_path.parent.is_dir():
+            raise FileNotFoundError(f"日報フォルダが見つかりません: {user_path.parent}")
         rows = self._read_csv_or_empty(user_path, USER_COLUMNS).to_dicts()
         existing = self._dedupe_rows(rows, ["employee_id", "date"])
         rows_by_date = {
@@ -2204,7 +2415,10 @@ class DailyReportRepository:
     def _upsert_comment_rows(
         self, employee_id: str, updates: list[dict[str, Any]]
     ) -> tuple[Path, pl.DataFrame]:
-        comment_path = safe_employee_csv_path(self.settings.comments_dir, employee_id)
+        comments_dir = self.storage_dir("comments")
+        if not comments_dir.is_dir():
+            raise FileNotFoundError(f"上司コメントフォルダが見つかりません: {comments_dir}")
+        comment_path = safe_employee_csv_path(comments_dir, employee_id)
         rows = self._read_csv_or_empty(comment_path, COMMENT_COLUMNS).to_dicts()
         existing = self._dedupe_rows(
             rows, ["superior_employee_id", "subordinate_employee_id", "date"]
@@ -2245,6 +2459,33 @@ class DailyReportRepository:
         """Write a CSV completely, then replace the destination in one operation."""
         self._write_csv_frames_atomically([(df, target_path)], backup_group)
 
+    @staticmethod
+    def _set_csv_readonly(path: Path, readonly: bool) -> None:
+        """Toggle the Windows read-only attribute using the portable mode API."""
+        mode = path.stat().st_mode
+        write_bits = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+        if readonly:
+            os.chmod(path, mode & ~write_bits)
+        else:
+            os.chmod(path, mode | stat.S_IWUSR)
+
+    @staticmethod
+    def _classify_csv_write_error(
+        exc: Exception, target_path: Path, operation: str
+    ) -> Exception:
+        """Turn sharing violations into the explicit CSV-lock error.
+
+        ACL denials remain ordinary PermissionError instances.  On Windows a
+        sharing violation is reported as WinError 32/33; an unclassified
+        PermissionError must not be presented as an Excel/file-lock error.
+        """
+        winerror = getattr(exc, "winerror", None)
+        if isinstance(exc, PermissionError) and winerror in {32, 33}:
+            return CsvFileLockedError(
+                "CSVが使用中です。Excelなどで開いている場合は閉じてから、もう一度保存してください。"
+            )
+        return exc
+
     def _write_csv_frames_atomically(
         self,
         frames: list[tuple[pl.DataFrame, Path]],
@@ -2253,9 +2494,17 @@ class DailyReportRepository:
         staged: dict[Path, Path | None] = {}
         originals: dict[Path, Path | None] = {}
         replaced: list[Path] = []
+        target_paths = list(dict.fromkeys(target_path for _, target_path in frames))
+        write_error: Exception | None = None
+        readonly_error: Exception | None = None
         try:
             for df, target_path in frames:
-                target_path.parent.mkdir(parents=True, exist_ok=True)
+                # Fixed storage subfolders are deployment-managed.  Never
+                # create them implicitly during a save.
+                if not target_path.parent.is_dir():
+                    raise FileNotFoundError(
+                        f"CSV保存先フォルダが見つかりません: {target_path.parent}"
+                    )
                 with tempfile.NamedTemporaryFile(
                     mode="wb",
                     prefix=f".{target_path.stem}.",
@@ -2274,6 +2523,12 @@ class DailyReportRepository:
             for _, target_path in frames:
                 originals[target_path] = None
                 if target_path.exists():
+                    try:
+                        self._set_csv_readonly(target_path, False)
+                    except Exception as exc:
+                        raise self._classify_csv_write_error(
+                            exc, target_path, "unlock"
+                        ) from exc
                     with tempfile.NamedTemporaryFile(
                         mode="wb",
                         prefix=f".{target_path.stem}.",
@@ -2291,10 +2546,16 @@ class DailyReportRepository:
                 stage_path = staged[target_path]
                 if stage_path is None:
                     raise RuntimeError("保存対象の一時CSVがありません。")
-                os.replace(stage_path, target_path)
+                try:
+                    os.replace(stage_path, target_path)
+                except Exception as exc:
+                    raise self._classify_csv_write_error(
+                        exc, target_path, "replace"
+                    ) from exc
                 staged[target_path] = None
                 replaced.append(target_path)
-        except Exception:
+        except Exception as exc:
+            write_error = exc
             for target_path in reversed(replaced):
                 original_path = originals.get(target_path)
                 try:
@@ -2305,15 +2566,41 @@ class DailyReportRepository:
                         originals[target_path] = None
                 except Exception:
                     logger.critical(
-                        "Failed to roll back a common CSV transaction: %s",
+                        "Failed to roll back a CSV transaction: %s",
                         target_path,
                         exc_info=True,
                     )
             raise
         finally:
+            # Read-only is a safety net, not an ACL.  Apply it after both a
+            # successful replacement and a rollback, and never hide the
+            # original write/lock failure.
+            for target_path in target_paths:
+                try:
+                    if target_path.is_file():
+                        self._set_csv_readonly(target_path, True)
+                except Exception as exc:
+                    logger.error(
+                        "Failed to restore CSV read-only attribute: %s",
+                        target_path,
+                        exc_info=True,
+                    )
+                    if write_error is None and readonly_error is None:
+                        readonly_error = exc
             for path in (*staged.values(), *originals.values()):
                 if path is not None:
-                    path.unlink(missing_ok=True)
+                    try:
+                        path.unlink(missing_ok=True)
+                    except Exception:
+                        logger.warning(
+                            "Failed to remove CSV transaction temporary file: %s",
+                            path,
+                            exc_info=True,
+                        )
+            if write_error is None and readonly_error is not None:
+                raise CsvReadonlyError(
+                    "CSVを読み取り専用に設定できませんでした。"
+                ) from readonly_error
 
     def _backup_csv(self, target_path: Path, backup_group: str) -> None:
         backup_dir = self.base_dir / "cache" / "csv_backups" / backup_group

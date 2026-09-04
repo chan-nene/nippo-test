@@ -13,9 +13,6 @@ let settingsLoading = false;
 function fillSettings(settings) {
   savedSettings = { ...(settings || {}) };
   settingsLoaded = true;
-  $("usersDir").value = settings.users_dir || "";
-  $("commentsDir").value = settings.comments_dir || "";
-  $("commonDir").value = settings.common_dir || "";
   const startOffset = Number(settings.default_start_offset_days ?? -2);
   const endOffset = Number(settings.default_end_offset_days ?? 0);
   $("defaultStartOffsetDays").value = String(
@@ -128,6 +125,15 @@ async function loadSettings({
     return false;
   }
   if (!result?.ok || !result.settings) {
+    if (result?.storage_error) {
+      setSettingsContentVisible(false);
+      showScreenLoadError(
+        "settings",
+        result.message || SETTINGS_LOAD_ERROR_MESSAGE,
+        "error",
+      );
+      return false;
+    }
     setSettingsLoadFailure({ manual, hasDisplay });
     return false;
   }
@@ -171,9 +177,6 @@ function setFieldError(errorId, message, inputIds = []) {
 }
 
 const settingsErrorTargets = {
-  users_dir: { errorId: "usersDirError", inputId: "usersDir" },
-  comments_dir: { errorId: "commentsDirError", inputId: "commentsDir" },
-  common_dir: { errorId: "commonDirError", inputId: "commonDir" },
 };
 
 function clearSettingsErrors() {
@@ -197,17 +200,7 @@ function showSettingsErrors(fieldErrors) {
 }
 
 function validateSettingsInputs() {
-  const errors = {};
-  if (!$("usersDir").value.trim()) {
-    errors.users_dir = "ユーザー日報フォルダを入力してください。";
-  }
-  if (!$("commentsDir").value.trim()) {
-    errors.comments_dir = "上司コメントフォルダを入力してください。";
-  }
-  if (!$("commonDir").value.trim()) {
-    errors.common_dir = "管理フォルダを入力してください。";
-  }
-  return errors;
+  return {};
 }
 
 function getSettingsPayload() {
@@ -222,9 +215,6 @@ function getSettingsPayload() {
       : ""
     : missingCommentStartInput?.value || "";
   return {
-    users_dir: $("usersDir").value,
-    comments_dir: $("commentsDir").value,
-    common_dir: $("commonDir").value,
     default_start_offset_days: -Number($("defaultStartOffsetDays").value),
     default_end_offset_days: Number($("defaultEndOffsetDays").value),
     missing_comment_start_date: missingCommentStartDate,

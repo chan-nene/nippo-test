@@ -146,7 +146,7 @@ def main() -> None:
         app_url = html_path.as_uri()
         configure_webview_security(webview.settings)
         window = webview.create_window(
-            "nippo",
+            "NIPPO",
             app_url,
             js_api=api,
             width=1280,

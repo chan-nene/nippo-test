@@ -1516,7 +1516,6 @@ window.addEventListener("pywebviewready", async () => {
   let initial;
   try {
     initial = await window.pywebview.api.get_initial_state();
-    imeDiagnosticState.enabled = initial.ime_diagnostics_enabled === true;
   } catch (error) {
     console.error("初期状態の取得に失敗しました。", error);
     showScreenLoadError(

@@ -4,7 +4,6 @@ import getpass
 import json
 import logging
 import os
-import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
@@ -20,7 +19,6 @@ from app.config import (
     to_int,
 )
 from app.data_cache import DailyReportDataCache
-from app.ime_diagnostics import ImeDiagnosticRecorder
 from app.repository import (
     CommonMasterConflictError,
     CsvFileLockedError,
@@ -32,7 +30,6 @@ from app.security import (
     RequestValidationError,
     validate_administration_save_request,
     validate_common_master_save_request,
-    validate_ime_diagnostic_request,
     validate_load_request,
     validate_save_request,
     validate_settings_request,
@@ -66,9 +63,6 @@ class DailyReportApi:
         self._employee_id = self._get_employee_id()
         self._has_unsaved_changes = False
         self._close_window_callback: Callable[[], None] | None = None
-        self._ime_diagnostic_recorder = (
-            None if getattr(sys, "frozen", False) else ImeDiagnosticRecorder(base_dir)
-        )
         self._data_cache = DailyReportDataCache(base_dir)
 
     @property
@@ -93,23 +87,6 @@ class DailyReportApi:
         callback()
         return {"ok": True}
 
-    def record_ime_diagnostics(self, payload: Any) -> dict[str, Any]:
-        if getattr(sys, "frozen", False):
-            return {"ok": True, "recorded": 0}
-        try:
-            validated = validate_ime_diagnostic_request(payload)
-            recorder = getattr(self, "_ime_diagnostic_recorder", None)
-            if recorder is None:
-                recorder = ImeDiagnosticRecorder(self._base_dir)
-                self._ime_diagnostic_recorder = recorder
-            recorded = recorder.append(validated["client"], validated["events"])
-            return {"ok": True, "recorded": recorded}
-        except RequestValidationError as exc:
-            return self._invalid_request(exc)
-        except Exception:
-            logger.exception("Failed to write IME diagnostics")
-            return {"ok": False, "message": "IME診断ログの保存に失敗しました。"}
-
     def get_initial_state(self) -> dict[str, Any]:
         employee_registered: bool | None = None
         is_admin = False
@@ -132,7 +109,6 @@ class DailyReportApi:
         if employee_registered is False:
             is_admin = False
         return {
-            "ime_diagnostics_enabled": not getattr(sys, "frozen", False),
             "employee_id": self._employee_id,
             "is_admin": is_admin,
             "calendar_min_fiscal_year": CALENDAR_MIN_FISCAL_YEAR,

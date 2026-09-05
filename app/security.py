@@ -16,7 +16,6 @@ MAX_REPLIES_PER_REPORT = 100
 MAX_TEXT_LENGTH = 20_000
 MAX_EMPLOYEE_ID_LENGTH = 128
 MAX_PATH_LENGTH = 4_096
-MAX_IME_DIAGNOSTIC_EVENTS = 200
 MAX_COMMON_MASTER_ROWS = 20_000
 MAX_COMMON_FIELD_LENGTH = 20_000
 MEMBER_FILTER_LEVELS = frozenset(
@@ -62,32 +61,6 @@ TEAM_TYPES = frozenset({"department", "section"})
 AFFILIATION_TYPES = frozenset({"director", "organization", "unassigned"})
 COMMENT_TARGET_TYPES = frozenset({"none", "organization", "custom", "departments"})
 
-IME_DIAGNOSTIC_EVENT_NAMES = frozenset(
-    {
-        "editor_open",
-        "focus",
-        "blur",
-        "composition_start",
-        "composition_update",
-        "composition_end",
-        "before_input",
-        "input_deferred",
-        "input_applied",
-        "chrome_sync",
-        "native_unsaved_sync",
-        "keydown_ignored",
-        "keydown_handled",
-        "editor_finish",
-        "buffer_dropped",
-    }
-)
-IME_DIAGNOSTIC_EDITOR_KINDS = frozenset({"", "report", "reply", "comment"})
-IME_DIAGNOSTIC_KEYS = frozenset(
-    {"", "Enter", "Escape", "Tab", "Process", "Unidentified", "IME"}
-)
-IME_DIAGNOSTIC_REASONS = frozenset(
-    {"", "initial", "input", "composition_end", "finish", "enter", "tab", "escape"}
-)
 
 PERIOD_PRESETS = frozenset(
     {
@@ -855,120 +828,6 @@ def validate_ui_state_request(payload: Any) -> Mapping[str, Any]:
         ):
             raise RequestValidationError("列幅の値が不正です。")
     return source
-
-
-def validate_ime_diagnostic_request(payload: Any) -> dict[str, Any]:
-    source = require_request_mapping(payload, "IME診断ログ")
-    _reject_unknown_keys(source, {"client", "events"})
-
-    client_source = require_request_mapping(source.get("client", {}), "実行環境")
-    _reject_unknown_keys(client_source, {"user_agent", "language"})
-    client = {
-        "user_agent": _bounded_string(
-            client_source.get("user_agent", ""), "ブラウザー情報", 512
-        ),
-        "language": _bounded_string(
-            client_source.get("language", ""), "言語情報", 32
-        ),
-    }
-
-    event_values = source.get("events")
-    if not isinstance(event_values, list) or not event_values:
-        raise RequestValidationError("IME診断イベントの形式が不正です。")
-    if len(event_values) > MAX_IME_DIAGNOSTIC_EVENTS:
-        raise RequestValidationError("IME診断イベントの件数が多すぎます。")
-    return {
-        "client": client,
-        "events": [
-            _validate_ime_diagnostic_event(value, index)
-            for index, value in enumerate(event_values)
-        ],
-    }
-
-
-def _validate_ime_diagnostic_event(value: Any, index: int) -> dict[str, Any]:
-    source = require_request_mapping(value, f"IME診断イベント{index + 1}件目")
-    allowed_keys = {
-        "sequence",
-        "elapsed_ms",
-        "name",
-        "editor_id",
-        "composition_id",
-        "editor_kind",
-        "input_type",
-        "key",
-        "reason",
-        "composing",
-        "event_composing",
-        "focused",
-        "connected",
-        "deferred",
-        "default_prevented",
-        "value_length",
-        "data_length",
-        "selection_start",
-        "selection_end",
-        "height_px",
-        "dropped_count",
-    }
-    _reject_unknown_keys(source, allowed_keys)
-    name = source.get("name")
-    if not isinstance(name, str) or name not in IME_DIAGNOSTIC_EVENT_NAMES:
-        raise RequestValidationError("IME診断イベント名が不正です。")
-
-    event: dict[str, Any] = {
-        "sequence": _strict_int(source.get("sequence"), 1, 10_000_000, "連番"),
-        "elapsed_ms": _strict_int(
-            source.get("elapsed_ms"), 0, 2_147_483_647, "経過時間"
-        ),
-        "name": name,
-    }
-    for key, minimum, maximum, label in (
-        ("editor_id", 0, 1_000_000, "エディタ番号"),
-        ("composition_id", 0, 1_000_000, "変換番号"),
-        ("value_length", 0, MAX_TEXT_LENGTH, "入力文字数"),
-        ("data_length", 0, MAX_TEXT_LENGTH, "イベント文字数"),
-        ("selection_start", -1, MAX_TEXT_LENGTH, "選択開始位置"),
-        ("selection_end", -1, MAX_TEXT_LENGTH, "選択終了位置"),
-        ("height_px", 0, 100_000, "入力欄の高さ"),
-        ("dropped_count", 0, 100_000, "破棄イベント数"),
-    ):
-        if key in source:
-            event[key] = _strict_int(source[key], minimum, maximum, label)
-    for key, label in (
-        ("composing", "変換状態"),
-        ("event_composing", "イベント変換状態"),
-        ("focused", "フォーカス状態"),
-        ("connected", "DOM接続状態"),
-        ("deferred", "保留状態"),
-        ("default_prevented", "既定動作状態"),
-    ):
-        if key in source:
-            if not isinstance(source[key], bool):
-                raise RequestValidationError(f"{label}が不正です。")
-            event[key] = source[key]
-
-    editor_kind = source.get("editor_kind", "")
-    key_name = source.get("key", "")
-    reason = source.get("reason", "")
-    if editor_kind not in IME_DIAGNOSTIC_EDITOR_KINDS:
-        raise RequestValidationError("エディタ種別が不正です。")
-    if key_name not in IME_DIAGNOSTIC_KEYS:
-        raise RequestValidationError("キー情報が不正です。")
-    if reason not in IME_DIAGNOSTIC_REASONS:
-        raise RequestValidationError("IME診断理由が不正です。")
-    input_type = _bounded_string(source.get("input_type", ""), "入力種別", 64)
-    if input_type and not re.fullmatch(r"[A-Za-z0-9_-]+", input_type):
-        raise RequestValidationError("入力種別が不正です。")
-    event.update(
-        {
-            "editor_kind": editor_kind,
-            "input_type": input_type,
-            "key": key_name,
-            "reason": reason,
-        }
-    )
-    return event
 
 
 def _validate_update_list(value: Any, label: str, validator: Any) -> list[dict[str, Any]]:

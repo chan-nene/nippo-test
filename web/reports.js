@@ -1,18 +1,5 @@
 // Daily report and supervisor report screens.
 const imeEditorStates = new WeakMap();
-const imeDiagnosticState = {
-  enabled: false,
-  startedAt: performance.now(),
-  nextSequence: 1,
-  nextEditorId: 1,
-  events: [],
-  droppedCount: 0,
-  flushTimer: null,
-  flushQueue: Promise.resolve(),
-};
-const IME_DIAGNOSTIC_FLUSH_DELAY_MS = 1500;
-const IME_DIAGNOSTIC_BATCH_SIZE = 200;
-const IME_DIAGNOSTIC_MAX_BUFFERED_EVENTS = 1000;
 
 const TABLE_COLUMN_WIDTH_PROFILES = Object.freeze({
   compact: { user: 112, date: 70, name: 170, detail: 300, comment: 117 },
@@ -120,8 +107,6 @@ function setTableColumnWidth(columnId, columnKind, width) {
 
 function createImeEditorState(textarea) {
   const editorState = {
-    editorId: imeDiagnosticState.nextEditorId++,
-    compositionId: 0,
     composing: false,
     pendingInput: false,
     hasAppliedInput: false,
@@ -142,120 +127,7 @@ function isImeCompositionActive(textarea, event = null) {
   );
 }
 
-function getImeDiagnosticKey(event) {
-  if (!event) return "";
-  if (["Enter", "Escape", "Tab", "Process", "Unidentified"].includes(event.key)) {
-    return event.key;
-  }
-  return event.isComposing || event.keyCode === 229 ? "IME" : "";
-}
-
-function queueImeDiagnostic(name, textarea = null, event = null, extra = {}) {
-  if (!imeDiagnosticState.enabled) return;
-  const editorState = textarea ? getImeEditorState(textarea) : null;
-  const selectionStart = Number.isInteger(textarea?.selectionStart)
-    ? textarea.selectionStart
-    : -1;
-  const selectionEnd = Number.isInteger(textarea?.selectionEnd)
-    ? textarea.selectionEnd
-    : -1;
-  const record = {
-    sequence: imeDiagnosticState.nextSequence++,
-    elapsed_ms: Math.max(
-      0,
-      Math.round(performance.now() - imeDiagnosticState.startedAt),
-    ),
-    name,
-    editor_id: editorState?.editorId || 0,
-    composition_id: editorState?.compositionId || 0,
-    editor_kind: textarea?.dataset.kind || "",
-    input_type: typeof event?.inputType === "string" ? event.inputType : "",
-    key: getImeDiagnosticKey(event),
-    reason: extra.reason || "",
-    composing: Boolean(editorState?.composing),
-    event_composing: Boolean(event?.isComposing),
-    focused: Boolean(textarea && document.activeElement === textarea),
-    connected: Boolean(textarea?.isConnected),
-    deferred: Boolean(extra.deferred),
-    default_prevented: Boolean(event?.defaultPrevented),
-    value_length: textarea?.value.length || 0,
-    data_length: typeof event?.data === "string" ? event.data.length : 0,
-    selection_start: selectionStart,
-    selection_end: selectionEnd,
-  };
-  if (Number.isInteger(extra.heightPx)) record.height_px = extra.heightPx;
-  if (Number.isInteger(extra.droppedCount)) {
-    record.dropped_count = extra.droppedCount;
-  }
-  if (
-    imeDiagnosticState.events.length >= IME_DIAGNOSTIC_MAX_BUFFERED_EVENTS
-  ) {
-    imeDiagnosticState.events.shift();
-    imeDiagnosticState.droppedCount += 1;
-  }
-  imeDiagnosticState.events.push(record);
-  if (name !== "editor_open" && name !== "focus") {
-    scheduleImeDiagnosticFlush();
-  }
-}
-
-function scheduleImeDiagnosticFlush(delay = IME_DIAGNOSTIC_FLUSH_DELAY_MS) {
-  if (!imeDiagnosticState.enabled) return;
-  if (imeDiagnosticState.flushTimer) {
-    clearTimeout(imeDiagnosticState.flushTimer);
-  }
-  imeDiagnosticState.flushTimer = setTimeout(() => {
-    imeDiagnosticState.flushTimer = null;
-    flushImeDiagnostics();
-  }, delay);
-}
-
-function flushImeDiagnostics({ force = false } = {}) {
-  if (!imeDiagnosticState.enabled) return imeDiagnosticState.flushQueue;
-  if (imeDiagnosticState.flushTimer) {
-    clearTimeout(imeDiagnosticState.flushTimer);
-    imeDiagnosticState.flushTimer = null;
-  }
-  const textarea = currentEditingElement?.querySelector("textarea");
-  if (!force && textarea && isImeCompositionActive(textarea)) {
-    scheduleImeDiagnosticFlush();
-    return imeDiagnosticState.flushQueue;
-  }
-
-  if (imeDiagnosticState.droppedCount > 0) {
-    const droppedCount = imeDiagnosticState.droppedCount;
-    imeDiagnosticState.droppedCount = 0;
-    queueImeDiagnostic("buffer_dropped", null, null, { droppedCount });
-    if (imeDiagnosticState.flushTimer) {
-      clearTimeout(imeDiagnosticState.flushTimer);
-      imeDiagnosticState.flushTimer = null;
-    }
-  }
-  if (!imeDiagnosticState.events.length) return imeDiagnosticState.flushQueue;
-
-  const recorder = window.pywebview?.api?.record_ime_diagnostics;
-  const events = imeDiagnosticState.events.splice(0);
-  if (typeof recorder !== "function") return imeDiagnosticState.flushQueue;
-  const client = {
-    user_agent: String(navigator.userAgent || "").slice(0, 512),
-    language: String(navigator.language || "").slice(0, 32),
-  };
-  imeDiagnosticState.flushQueue = imeDiagnosticState.flushQueue
-    .catch(() => undefined)
-    .then(async () => {
-      for (let index = 0; index < events.length; index += IME_DIAGNOSTIC_BATCH_SIZE) {
-        const batch = events.slice(index, index + IME_DIAGNOSTIC_BATCH_SIZE);
-        try {
-          await recorder({ client, events: batch });
-        } catch {
-          // Diagnostics must never interfere with editing.
-        }
-      }
-    });
-  return imeDiagnosticState.flushQueue;
-}
-
-function applyCellEditorInput(textarea, reason, event = null) {
+function applyCellEditorInput(textarea) {
   const editorState = getImeEditorState(textarea);
   if (!editorState) return;
   if (
@@ -268,42 +140,27 @@ function applyCellEditorInput(textarea, reason, event = null) {
   editorState.pendingInput = false;
   editorState.hasAppliedInput = true;
   editorState.lastAppliedValue = textarea.value;
-  const heightPx = autoResizeTextarea(textarea);
-  queueImeDiagnostic("input_applied", textarea, event, { reason, heightPx });
+  autoResizeTextarea(textarea);
   onCellInput({ target: textarea });
 }
 
 function installImeProtectedEditor(textarea) {
   const editorState = createImeEditorState(textarea);
 
-  textarea.addEventListener("compositionstart", (event) => {
-    editorState.compositionId += 1;
+  textarea.addEventListener("compositionstart", () => {
     editorState.composing = true;
-    queueImeDiagnostic("composition_start", textarea, event);
   });
-  textarea.addEventListener("compositionupdate", (event) => {
-    queueImeDiagnostic("composition_update", textarea, event);
-  });
-  textarea.addEventListener("compositionend", (event) => {
+  textarea.addEventListener("compositionend", () => {
     editorState.composing = false;
-    queueImeDiagnostic("composition_end", textarea, event);
     queueMicrotask(() => {
       if (textarea.isConnected && editorState.pendingInput) {
-        applyCellEditorInput(textarea, "composition_end", event);
+        applyCellEditorInput(textarea);
       }
-    });
-  });
-  textarea.addEventListener("beforeinput", (event) => {
-    queueImeDiagnostic("before_input", textarea, event, {
-      deferred: isImeCompositionActive(textarea, event),
     });
   });
   textarea.addEventListener("input", (event) => {
     if (isImeCompositionActive(textarea, event)) {
       editorState.pendingInput = true;
-      queueImeDiagnostic("input_deferred", textarea, event, {
-        deferred: true,
-      });
       return;
     }
     const wasDeferred = editorState.pendingInput;
@@ -315,17 +172,7 @@ function installImeProtectedEditor(textarea) {
       return;
     }
     editorState.pendingInput = true;
-    applyCellEditorInput(
-      textarea,
-      wasDeferred ? "composition_end" : "input",
-      event,
-    );
-  });
-  textarea.addEventListener("focus", (event) => {
-    queueImeDiagnostic("focus", textarea, event);
-  });
-  textarea.addEventListener("blur", (event) => {
-    queueImeDiagnostic("blur", textarea, event);
+    applyCellEditorInput(textarea);
   });
 }
 
@@ -467,8 +314,6 @@ function getDirtyCounts() {
 }
 
 function syncChrome() {
-  const textarea = currentEditingElement?.querySelector("textarea");
-  if (textarea) queueImeDiagnostic("chrome_sync", textarea);
   const model = getChromeModel();
   renderActionButtons(model.actions);
   const settingsSaveButton = $("saveSettingsButton");
@@ -488,8 +333,7 @@ function syncNativeUnsavedState(hasUnsavedChanges) {
   lastNativeUnsavedState = hasUnsavedChanges;
   const setter = window.pywebview?.api?.set_unsaved_changes;
   if (typeof setter !== "function") return;
-  const textarea = currentEditingElement?.querySelector("textarea");
-  if (textarea) queueImeDiagnostic("native_unsaved_sync", textarea);
+
   Promise.resolve(setter(hasUnsavedChanges)).catch(() => {
     lastNativeUnsavedState = null;
   });
@@ -2539,24 +2383,15 @@ function startEditingTarget(target, { preventScroll = false } = {}) {
   );
   textarea.addEventListener("keydown", (keyEvent) => {
     if (isImeCompositionActive(textarea, keyEvent)) {
-      queueImeDiagnostic("keydown_ignored", textarea, keyEvent, {
-        deferred: true,
-      });
       return;
     }
     if (keyEvent.key === "Escape") {
       keyEvent.preventDefault();
-      queueImeDiagnostic("keydown_handled", textarea, keyEvent, {
-        reason: "escape",
-      });
       cancelEditing();
       return;
     }
     if (keyEvent.key === "Tab") {
       keyEvent.preventDefault();
-      queueImeDiagnostic("keydown_handled", textarea, keyEvent, {
-        reason: "tab",
-      });
       moveEditingFocus(keyEvent.shiftKey ? -1 : 1);
       return;
     }
@@ -2564,11 +2399,7 @@ function startEditingTarget(target, { preventScroll = false } = {}) {
 
   target.innerHTML = "";
   target.appendChild(textarea);
-  const initialHeight = autoResizeTextarea(textarea);
-  queueImeDiagnostic("editor_open", textarea, null, {
-    reason: "initial",
-    heightPx: initialHeight,
-  });
+  autoResizeTextarea(textarea);
   textarea.focus({ preventScroll });
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 }
@@ -2605,7 +2436,6 @@ function cancelEditing() {
   currentEditingElement = null;
   editingSnapshot = null;
   syncChrome();
-  scheduleImeDiagnosticFlush();
 }
 
 function moveEditingFocus(direction) {
@@ -2676,12 +2506,9 @@ function finishEditing() {
     if (editorState && (editorState.pendingInput || wasComposing)) {
       editorState.composing = false;
       editorState.pendingInput = true;
-      applyCellEditorInput(textarea, "finish");
+      applyCellEditorInput(textarea);
     }
-    queueImeDiagnostic("editor_finish", textarea, null, {
-      reason: "finish",
-      deferred: wasComposing,
-    });
+
     const normalized = normalizeCellValue(textarea.value);
     if (isEmpty(normalized) && !editingElement.classList.contains("empty-icon-hidden")) {
       editingElement.innerHTML = renderEmptyEditableIcon();
@@ -2725,7 +2552,6 @@ function finishEditing() {
   }
   currentEditingElement = null;
   editingSnapshot = null;
-  scheduleImeDiagnosticFlush();
 }
 
 function rowHasReportData(row) {

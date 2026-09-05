@@ -13,6 +13,9 @@ test_data/
 web/vendor/flat*
 web/vendor/Sortable*
 web/vendor/tabulator*
+tools/
+.agents/
+package.json
 
 # Python-generated files
 __pycache__/

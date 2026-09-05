@@ -68,16 +68,6 @@ def build_closing_handler(
     return on_closing
 
 
-def show_already_running_message() -> None:
-    message = "このユーザーの日報アプリは既に起動しています。"
-    if os.name == "nt":
-        import ctypes
-
-        ctypes.windll.user32.MessageBoxW(None, message, "日報", 0x30)
-        return
-    print(message)
-
-
 def configure_webview_security(settings: Any) -> None:
     # A target="_blank" navigation must never be handed to the OS browser.
     # pywebview will redirect it into this WebView, where the native guard cancels it.
@@ -147,15 +137,13 @@ def _canonical_file_url_path(value: Any) -> str | None:
 # アプリケーションのメイン処理
 def main() -> None:
     base_dir = get_base_dir()
-    # ここから読む
-    api = DailyReportApi(base_dir)
-    instance_lock = SingleInstanceLock(base_dir / "cache" / "locks", api.employee_id)
+    instance_lock = SingleInstanceLock(base_dir / "cache" / "locks")
     if not instance_lock.acquire():
-        show_already_running_message()
         return
-    html_path = get_asset_dir(base_dir) / "index.html"
-    app_url = html_path.as_uri()
     try:
+        api = DailyReportApi(base_dir)
+        html_path = get_asset_dir(base_dir) / "index.html"
+        app_url = html_path.as_uri()
         configure_webview_security(webview.settings)
         window = webview.create_window(
             "NIPPO",
@@ -213,7 +201,7 @@ def main() -> None:
         # before_load runs after the trusted document is loaded but before the
         # JavaScript bridge (and therefore untrusted CSV content) is exposed.
         window.events.before_load += install_navigation_guard
-        webview.start(debug=True)
+        webview.start(debug=not getattr(sys, "frozen", False))
     finally:
         instance_lock.release()
 

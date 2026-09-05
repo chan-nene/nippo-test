@@ -4,6 +4,7 @@ import getpass
 import json
 import logging
 import os
+import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
@@ -65,7 +66,9 @@ class DailyReportApi:
         self._employee_id = self._get_employee_id()
         self._has_unsaved_changes = False
         self._close_window_callback: Callable[[], None] | None = None
-        self._ime_diagnostic_recorder = ImeDiagnosticRecorder(base_dir)
+        self._ime_diagnostic_recorder = (
+            None if getattr(sys, "frozen", False) else ImeDiagnosticRecorder(base_dir)
+        )
         self._data_cache = DailyReportDataCache(base_dir)
 
     @property
@@ -91,6 +94,8 @@ class DailyReportApi:
         return {"ok": True}
 
     def record_ime_diagnostics(self, payload: Any) -> dict[str, Any]:
+        if getattr(sys, "frozen", False):
+            return {"ok": True, "recorded": 0}
         try:
             validated = validate_ime_diagnostic_request(payload)
             recorder = getattr(self, "_ime_diagnostic_recorder", None)
@@ -127,6 +132,7 @@ class DailyReportApi:
         if employee_registered is False:
             is_admin = False
         return {
+            "ime_diagnostics_enabled": not getattr(sys, "frozen", False),
             "employee_id": self._employee_id,
             "is_admin": is_admin,
             "calendar_min_fiscal_year": CALENDAR_MIN_FISCAL_YEAR,
@@ -330,34 +336,14 @@ class DailyReportApi:
                 )
                 snapshot = cache_access.snapshot
                 data = snapshot.common
-                migration_required = dict(snapshot.migration_required)
                 revisions = dict(snapshot.common_revisions)
             else:
                 data = repo.load_common_masters()
                 revisions = repo.get_common_master_revisions()
-                migration_required = {
-                    "user_master": repo.legacy_rank_migration_required,
-                    "team_master": repo.commenter_assignment_migration_required,
-                    "organization_schema": repo.organization_schema_migration_required,
-                    "comment_assignment": repo.commenter_assignment_migration_required,
-                    "calendar": repo.calendar_migration_required,
-                }
-            schema_mode = str(
-                ((data.get("organization_schema") or [{}])[0]).get("mode", "new")
-            )
-            migration_preview = (
-                repo._build_organization_migration_preview(
-                    data.get("user_master", []), data.get("team_master", [])
-                )
-                if schema_mode == "legacy"
-                else {}
-            )
             return {
                 "ok": True,
                 "data": data,
                 "revisions": revisions,
-                "migration_required": migration_required,
-                "migration_preview": migration_preview,
                 **(
                     {
                         "cache_status": cache_access.status,
@@ -448,12 +434,9 @@ class DailyReportApi:
             if access_denied:
                 return access_denied
             if isinstance(payload, dict) and "teams" in payload:
-                validated = validate_administration_save_request(payload)
-                if len(validated) == 4:
-                    teams, users, comment_assignments, revisions = validated
-                else:
-                    teams, users, revisions = validated
-                    comment_assignments = None
+                teams, users, comment_assignments, revisions = (
+                    validate_administration_save_request(payload)
+                )
             else:
                 users, revisions = validate_user_administration_save_request(payload)
                 teams = None
@@ -471,8 +454,8 @@ class DailyReportApi:
                 repo.save_administration(
                     teams,
                     users,
-                    comment_assignments if comment_assignments is not None else revisions,
-                    revisions if comment_assignments is not None else None,
+                    comment_assignments,
+                    revisions,
                 )
                 if teams is not None
                 else repo.save_user_administration(users, revisions)
@@ -735,19 +718,18 @@ class DailyReportApi:
             }
 
             organization_id = str(
-                current_user.get("organization_id")
-                or current_user.get("small_team_id", "")
+                current_user.get("organization_id", "")
             ).strip()
             current_team = repo._team_path(common, organization_id)
             path_levels = [
-                str(team.get("team_type") or team.get("team_level") or "")
+                str(team.get("team_type", ""))
                 for team in current_team
             ]
             affiliation_type = str(
                 current_user.get("affiliation_type", "")
             ).strip()
             if affiliation_type != "director" and any(
-                level in {"section", "medium"} for level in path_levels
+                level == "section" for level in path_levels
             ):
                 allowed_levels = ["section", "member"]
             else:

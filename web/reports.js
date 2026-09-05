@@ -1,6 +1,7 @@
 // Daily report and supervisor report screens.
 const imeEditorStates = new WeakMap();
 const imeDiagnosticState = {
+  enabled: false,
   startedAt: performance.now(),
   nextSequence: 1,
   nextEditorId: 1,
@@ -150,6 +151,7 @@ function getImeDiagnosticKey(event) {
 }
 
 function queueImeDiagnostic(name, textarea = null, event = null, extra = {}) {
+  if (!imeDiagnosticState.enabled) return;
   const editorState = textarea ? getImeEditorState(textarea) : null;
   const selectionStart = Number.isInteger(textarea?.selectionStart)
     ? textarea.selectionStart
@@ -198,6 +200,7 @@ function queueImeDiagnostic(name, textarea = null, event = null, extra = {}) {
 }
 
 function scheduleImeDiagnosticFlush(delay = IME_DIAGNOSTIC_FLUSH_DELAY_MS) {
+  if (!imeDiagnosticState.enabled) return;
   if (imeDiagnosticState.flushTimer) {
     clearTimeout(imeDiagnosticState.flushTimer);
   }
@@ -208,6 +211,7 @@ function scheduleImeDiagnosticFlush(delay = IME_DIAGNOSTIC_FLUSH_DELAY_MS) {
 }
 
 function flushImeDiagnostics({ force = false } = {}) {
+  if (!imeDiagnosticState.enabled) return imeDiagnosticState.flushQueue;
   if (imeDiagnosticState.flushTimer) {
     clearTimeout(imeDiagnosticState.flushTimer);
     imeDiagnosticState.flushTimer = null;
@@ -348,7 +352,7 @@ function getAvailableTeamFilterScopes() {
     if (!isMemberFilterLevelEnabled(level)) return;
     members.forEach((member) => {
       (Array.isArray(member?.team_path) ? member.team_path : []).forEach((team) => {
-        const teamLevel = team?.team_type || team?.team_level;
+        const teamLevel = team?.team_type;
         const teamId = String(team?.team_id || "");
         if (teamLevel !== level || !teamId || seenTeamIds.has(teamId)) return;
         seenTeamIds.add(teamId);
@@ -1168,7 +1172,7 @@ async function loadData({
               relations:
                 row.employee_id === result.data.employee_id &&
                 state.canInputOwnReport
-                  ? ["self", "same_small_team"]
+                  ? ["self", "same_organization"]
                   : result.data.is_superior
                     ? ["assigned_subordinate"]
                     : [],
@@ -2834,7 +2838,7 @@ function getFilteredRows() {
             teamScope && memberMatchesTeamEntry(member, teamScope.team),
           );
         }
-        if (state.memberScope === "team") return relations.includes("same_small_team");
+        if (state.memberScope === "team") return relations.includes("same_organization");
         if (state.memberScope === "subordinates") {
           return relations.includes("assigned_subordinate");
         }

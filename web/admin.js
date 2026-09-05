@@ -258,7 +258,6 @@
   const drafts = new Map();
   const collapsedTeamIds = new Set();
   const expandedOrganizationIds = new Set();
-  let organizationMigrationState = null;
   let selectedOrganizationSpecial = "";
   let userEditorModalState = null;
   let teamCreateValidationErrors = {};
@@ -296,12 +295,11 @@
   const valuesOnly = (draft) => draft.entries.map((entry) => entry.values);
   // 行データをJSON化して比較用スナップショットを作る。編集前後の差分判定に使う。
   const snapshot = (rows) => JSON.stringify(rows);
-  // 下書きの値差分または移行要否を判定する。見た目の未保存バッジと保存可否の基準を一つにする。
+  // 下書きの値差分を判定する。見た目の未保存バッジと保存可否の基準を一つにする。
   const isDraftDirty = (draft) =>
     Boolean(draft) &&
-    (Boolean(draft.migrationRequired) ||
-      snapshot(valuesOnly(draft)) !== draft.originalSnapshot);
-  // 下書きの行データだけを編集前スナップショットと比較する。移行フラグによる汚れは含めない。
+    (snapshot(valuesOnly(draft)) !== draft.originalSnapshot);
+  // 下書きの行データだけを編集前スナップショットと比較する。
   const hasDraftRowChanges = (draft) =>
     Boolean(draft) && snapshot(valuesOnly(draft)) !== draft.originalSnapshot;
   // 選択中エディターに関係する下書きの行変更を判定する。組織編集ではユーザー・組織・コメント担当を一体として扱う。
@@ -348,88 +346,6 @@
     return entry;
   }
 
-  // 旧組織形式から移行候補の課・係・ユーザー・コメント設定を組み立てる。曖昧なチームや未解決所属は別情報として残す。
-  function buildLegacyOrganizationCandidates(data, preview) {
-    const legacyTeams = Array.isArray(data.team_master) ? data.team_master : [];
-    const convertibleIds = new Set();
-    const departments = legacyTeams
-      .filter((team) => team.team_level === "large" && !team.parent_team_id)
-      .map((team) => {
-        convertibleIds.add(String(team.team_id || ""));
-        return {
-          team_id: String(team.team_id || ""),
-          team_name: String(team.team_name || ""),
-          team_type: "department",
-          parent_team_id: "",
-          sort_order: String(team.sort_order || ""),
-        };
-      });
-    const departmentIds = new Set(departments.map((team) => team.team_id));
-    const sections = legacyTeams
-      .filter(
-        (team) =>
-          team.team_level === "medium" &&
-          departmentIds.has(String(team.parent_team_id || "")),
-      )
-      .map((team) => {
-        convertibleIds.add(String(team.team_id || ""));
-        return {
-          team_id: String(team.team_id || ""),
-          team_name: String(team.team_name || ""),
-          team_type: "section",
-          parent_team_id: String(team.parent_team_id || ""),
-          sort_order: String(team.sort_order || ""),
-        };
-      });
-    const users = (Array.isArray(data.user_master) ? data.user_master : []).map(
-      (user) => {
-        const organizationId = String(user.small_team_id || "");
-        return {
-          employee_id: String(user.employee_id || ""),
-          display_name: String(user.display_name || ""),
-          can_input_own_report: String(user.can_input_own_report ?? "1"),
-          employment_type: String(user.employment_type || "regular"),
-          is_admin: String(user.is_admin || "0"),
-          affiliation_type: convertibleIds.has(organizationId)
-            ? "organization"
-            : "unassigned",
-          organization_id: convertibleIds.has(organizationId) ? organizationId : "",
-          member_order: String(user.display_order || ""),
-        };
-      },
-    );
-    return {
-      rows: {
-        user_master: users,
-        team_master: [...departments, ...sections],
-        comment_assignment: users.map((user) => ({
-          commenter_employee_id: user.employee_id,
-          target_type: "none",
-          target_organization_ids: "",
-          target_employee_ids: "",
-        })),
-        calendar: Array.isArray(data.calendar) ? data.calendar : [],
-      },
-      ambiguousTeamIds: Array.isArray(preview.ambiguous_team_ids)
-        ? preview.ambiguous_team_ids
-        : [],
-      unresolvedEmployeeIds: users
-        .filter((user) => !user.organization_id)
-        .map((user) => user.employee_id),
-      legacyAssignments: legacyTeams
-        .filter(
-          (team) =>
-            String(team.commenter_employee_ids || "").trim() ||
-            String(team.target_employee_ids || "").trim(),
-        )
-        .map((team) => ({
-          teamName: String(team.team_name || team.team_id || "名称未設定"),
-          commenters: String(team.commenter_employee_ids || "") || "なし",
-          scope: String(team.commenter_scope || team.team_level || "不明"),
-          targets: String(team.target_employee_ids || "") || "組織範囲",
-        })),
-    };
-  }
 
   // 全ユーザーに対応するコメント担当行を補完し、存在しないユーザーの行を除去する。保存する3マスター間の対応関係を保つ。
   function ensureAssignmentRows() {
@@ -803,16 +719,6 @@
       void moveUserToAffiliation(addMember.value, addMember.dataset.destination);
       return;
     }
-    const assignment = event.target.closest("[data-team-assignment-select]");
-    if (assignment) {
-      setTeamAssignment(
-        assignment.dataset.assignmentKind,
-        assignment.dataset.teamId,
-        assignment.value,
-        true,
-      );
-      return;
-    }
     updateSelectedRow(event);
   }
 
@@ -850,32 +756,6 @@
       moveOrganizationMember(
         organizationMemberMove.dataset.employeeId,
         organizationMemberMove.dataset.organizationMemberMove,
-      );
-      return;
-    }
-    const memberMove = event.target.closest("[data-member-move]");
-    if (memberMove) {
-      moveSelectedMember(
-        memberMove.dataset.memberId,
-        memberMove.dataset.memberMove,
-      );
-      return;
-    }
-    const commenterMove = event.target.closest("[data-commenter-move]");
-    if (commenterMove) {
-      moveSelectedCommenter(
-        commenterMove.dataset.employeeId,
-        commenterMove.dataset.commenterMove,
-      );
-      return;
-    }
-    const assignmentRemove = event.target.closest("[data-team-assignment-remove]");
-    if (assignmentRemove) {
-      setTeamAssignment(
-        assignmentRemove.dataset.assignmentKind,
-        assignmentRemove.dataset.teamId,
-        assignmentRemove.dataset.employeeId,
-        false,
       );
       return;
     }
@@ -947,7 +827,6 @@
       return existing;
     });
     draft.selectedId = "";
-    draft.migrationRequired = false;
   }
 
   // タブ/行移動前に、指定範囲の下書きとモーダルを保存済み状態へ戻す。
@@ -961,7 +840,6 @@
     }
     keys.forEach(restoreDraftToBaseline);
     if (keySet.has("user_master") || keySet.has("team_master")) {
-      organizationMigrationState = null;
       selectedOrganizationSpecial = "";
     }
     if (keySet.has("team_master")) {
@@ -999,7 +877,6 @@
     if (userEditorModalState) closeUserEditorModal(false);
     if (teamEditorModalState) closeTeamEditorModal(false);
     drafts.clear();
-    organizationMigrationState = null;
     collapsedTeamIds.clear();
     expandedOrganizationIds.clear();
     selectedOrganizationDepartmentId = "";
@@ -1071,12 +948,7 @@
     collapsedTeamIds.clear();
     expandedOrganizationIds.clear();
     selectedOrganizationDepartmentId = "";
-    const schemaMode = result.data?.organization_schema?.[0]?.mode || "new";
-    organizationMigrationState =
-      schemaMode === "legacy"
-        ? buildLegacyOrganizationCandidates(result.data || {}, result.migration_preview || {})
-        : null;
-    const organizationRows = organizationMigrationState?.rows || result.data || {};
+    const organizationRows = result.data || {};
     MASTER_DEFINITIONS.forEach((definition) => {
       const rows = Array.isArray(organizationRows?.[definition.key])
         ? organizationRows[definition.key]
@@ -1094,10 +966,6 @@
         entries,
         originalSnapshot,
         revision: String(result.revisions?.[definition.key] || ""),
-        migrationRequired: Boolean(
-          result.migration_required?.[definition.key] ||
-            (organizationMigrationState && definition.key !== "calendar"),
-        ),
         selectedId: "",
       });
     });
@@ -1202,7 +1070,6 @@
       entries,
       originalSnapshot: snapshot(entries.map((entry) => entry.values)),
       revision: "",
-      migrationRequired: false,
       selectedId: "",
     });
     activeFiscalYear = Math.max(minimumFiscalYear, fiscalYearForDate(new Date()));
@@ -1318,7 +1185,6 @@
         }
         if (userDirty || teamDirty || assignmentDirty) {
           userDraft.originalSnapshot = snapshot(valuesOnly(userDraft));
-          userDraft.migrationRequired = false;
           userDraft.revision = String(
             result.revisions?.user_master || userDraft.revision,
           );
@@ -1328,7 +1194,6 @@
         }
         if (userDirty || teamDirty || assignmentDirty) {
           teamDraft.originalSnapshot = snapshot(valuesOnly(teamDraft));
-          teamDraft.migrationRequired = false;
           teamDraft.revision = String(
             result.revisions?.team_master || teamDraft.revision,
           );
@@ -1336,14 +1201,12 @@
             entry.isNew = false;
           });
           assignmentDraft.originalSnapshot = snapshot(valuesOnly(assignmentDraft));
-          assignmentDraft.migrationRequired = false;
           assignmentDraft.revision = String(
             result.revisions?.comment_assignment || assignmentDraft.revision,
           );
           assignmentDraft.entries.forEach((entry) => {
             entry.isNew = false;
           });
-          organizationMigrationState = null;
         }
       }
 
@@ -1373,7 +1236,6 @@
           return false;
         }
         calendarDraft.originalSnapshot = snapshot(valuesOnly(calendarDraft));
-        calendarDraft.migrationRequired = false;
         calendarDraft.revision = String(
           result.revision || calendarDraft.revision,
         );
@@ -2597,14 +2459,7 @@
       return;
     }
     clearEditorFieldError(input.dataset.column);
-    if (
-      input.dataset.column === "small_team_id" &&
-      previousValue !== nextValue
-    ) {
-      setUserTeamAssignment(entry, nextValue);
-    } else {
-      entry.values[input.dataset.column] = nextValue;
-    }
+    entry.values[input.dataset.column] = nextValue;
     if (
       activeMaster === "user_master" &&
       input.dataset.column === "employee_id" &&
@@ -2619,14 +2474,8 @@
         resetCommentAssignment(valueFor(entry, "employee_id"));
       }
     }
-    if (input.dataset.column === "team_level") {
-      entry.values.parent_team_id = "";
-    }
     if (input.dataset.column === "team_type") {
       entry.values.parent_team_id = nextValue === "department" ? "" : entry.values.parent_team_id;
-    }
-    if (input.dataset.column === "commenter_scope" && nextValue !== "custom") {
-      entry.values.target_employee_ids = "";
     }
     if (
       activeMaster === "team_master" &&
@@ -2648,9 +2497,7 @@
       ((input.dataset.column === "employee_id" && entry.isNew) ||
         input.dataset.column === "employment_type" ||
         input.dataset.column === "team_type" ||
-        input.dataset.column === "team_level" ||
-        input.dataset.column === "parent_team_id" ||
-        input.dataset.column === "commenter_scope")
+        input.dataset.column === "parent_team_id")
     ) {
       renderInspector();
     }
@@ -2838,7 +2685,6 @@
     const draft = getDraft();
     if (activeMaster === "team_master") {
       renderTeamTree(draft);
-      renderOrganizationMigrationNotice();
       return;
     }
     if (activeMaster === "calendar") {
@@ -2846,7 +2692,6 @@
       return;
     }
     renderUserList(draft);
-    renderOrganizationMigrationNotice();
   }
 
   // Tabulatorが一覧コンテナへ付与したクラスと内部DOMを、他マスターへ移る前に戻す。
@@ -2856,38 +2701,6 @@
     userTable = null;
   }
 
-  // 旧形式の組織移行で解決が必要な件数と旧担当設定を一覧上部に通知する。
-  function renderOrganizationMigrationNotice() {
-    if (!organizationMigrationState || activeMaster === "calendar") return;
-    const notice = document.createElement("section");
-    notice.className = "organization-migration-notice";
-    notice.setAttribute("role", "status");
-    const title = document.createElement("strong");
-    title.textContent = "旧組織データの移行確認が必要です";
-    const description = document.createElement("p");
-    const unresolved = organizationMigrationState.unresolvedEmployeeIds.length;
-    const ambiguous = organizationMigrationState.ambiguousTeamIds.length;
-    description.textContent =
-      "課・係の候補だけを編集用に展開しました。コメント担当は全員「なし」です。" +
-      (ambiguous || unresolved
-        ? ` 旧チーム${ambiguous}件、所属未確定ユーザー${unresolved}人を解消してから保存してください。`
-        : " 所属とコメント担当を確認し、保存すると新形式へ確定します。");
-    notice.append(title, description);
-    if (organizationMigrationState.legacyAssignments.length) {
-      const details = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.textContent = `旧コメント担当設定を参照（${organizationMigrationState.legacyAssignments.length}件）`;
-      const list = document.createElement("ul");
-      organizationMigrationState.legacyAssignments.forEach((assignment) => {
-        const item = document.createElement("li");
-        item.textContent = `${assignment.teamName}: 担当 ${assignment.commenters} / 範囲 ${assignment.scope} / 個別対象 ${assignment.targets}`;
-        list.append(item);
-      });
-      details.append(summary, list);
-      notice.append(details);
-    }
-    byId("adminTableWrap").prepend(notice);
-  }
 
   // ユーザー下書きを検索・表示順で並べ、操作ボタン付きのアクセシブルな一覧テーブルを生成する。
   function renderUserList(draft) {
@@ -3713,9 +3526,6 @@
     return {
       department: "課",
       section: "係",
-      large: "課",
-      medium: "係",
-      small: "旧チーム",
     }[level] || level || "—";
   }
 
@@ -3728,21 +3538,6 @@
     return valueFor(entry, "team_name") || teamId;
   }
 
-  // チームのセミコロン区切りコメント担当IDを正規化済みの配列へ分解する。
-  function teamCommenterIds(entry) {
-    return valueFor(entry, "commenter_employee_ids")
-      .split(";")
-      .map((employeeId) => employeeId.trim())
-      .filter(Boolean);
-  }
-
-  // 指定ユーザーがコメント担当になっているチームIDを表示順で返す。
-  function commenterTeamIdsForUser(employeeId) {
-    return (drafts.get("team_master")?.entries || [])
-      .filter((team) => teamCommenterIds(team).includes(employeeId))
-      .sort(compareTeamPathOrder)
-      .map((team) => valueFor(team, "team_id"));
-  }
 
   // 指定チームから子孫をたどり、循環を避けながら配下チームIDの集合を作る。
   function descendantTeamIds(rootIds) {
@@ -3764,16 +3559,6 @@
     return covered;
   }
 
-  // 上司の担当範囲に属するユーザー数を数え、本人は部下数から除外する。
-  function countSubordinates(supervisor) {
-    const covered = descendantTeamIds(
-      commenterTeamIdsForUser(valueFor(supervisor, "employee_id")),
-    );
-    return (drafts.get("user_master")?.entries || []).filter(
-      (entry) =>
-        entry.id !== supervisor.id && covered.has(valueFor(entry, "small_team_id")),
-    ).length;
-  }
 
   // ---------------------------------------------------------------------------
   // インスペクターと割り当てのレンダリング
@@ -3882,136 +3667,6 @@
     ) || compareUserEntries(left, right);
   }
 
-  // 指定組織とその配下に直接所属するユーザーを集め、組織パスと表示順で並べる。
-  function teamMemberEntries(teamId) {
-    const scopeIds = descendantTeamIds([teamId]);
-    return userEntriesForAssignment()
-      .filter((entry) => scopeIds.has(valueFor(entry, "small_team_id")))
-      .sort(compareTeamScopedUsers);
-  }
-
-  // 組織のコメント担当IDをユーザー下書きへ解決し、存在する担当者だけを返す。
-  function teamCommenterEntries(teamId) {
-    const usersById = new Map(
-      userEntriesForAssignment().map((entry) => [valueFor(entry, "employee_id"), entry]),
-    );
-    return teamCommenterIds(teamEntryFor(teamId))
-      .map((employeeId) => usersById.get(employeeId))
-      .filter(Boolean);
-  }
-
-  // 組織に保存された個別コメント対象IDをセミコロン区切りから配列へ変換する。
-  function teamTargetIds(team) {
-    return valueFor(team, "target_employee_ids")
-      .split(";").map((id) => id.trim()).filter(Boolean);
-  }
-
-  // 組織の個別対象IDをユーザー行へ解決し、存在する対象だけを返す。
-  function teamTargetEntries(teamId) {
-    const usersById = new Map(
-      userEntriesForAssignment().map((entry) => [valueFor(entry, "employee_id"), entry]),
-    );
-    return teamTargetIds(teamEntryFor(teamId))
-      .map((employeeId) => usersById.get(employeeId)).filter(Boolean);
-  }
-
-  // 指定組織のコメント担当者について、上下移動ボタンを有効にできる位置か判定する。
-  function commenterMoveAvailability(teamId, employeeId) {
-    const commenterIds = teamCommenterIds(teamEntryFor(teamId));
-    const index = commenterIds.indexOf(employeeId);
-    return {
-      up: index > 0,
-      down: index >= 0 && index < commenterIds.length - 1,
-    };
-  }
-
-  // 指定組織と配下に所属するユーザー数を返し、組織カードの件数表示に使う。
-  function teamMemberCountFor(teamId) {
-    return teamMemberEntries(teamId).length;
-  }
-
-  // 同じ所属先のユーザー列における対象者の位置を調べ、上下移動の可否を返す。
-  function memberMoveAvailability(entry) {
-    const teamId = valueFor(entry, "small_team_id");
-    const siblings = userEntriesForAssignment()
-      .filter((candidate) => valueFor(candidate, "small_team_id") === teamId)
-      .sort(compareUserEntries);
-    const index = siblings.findIndex((candidate) => candidate.id === entry.id);
-    return {
-      up: index > 0,
-      down: index >= 0 && index < siblings.length - 1,
-    };
-  }
-
-  // 同じ所属先のユーザー表示順を再採番する。移動中の対象を除外できるため、移動元・移動先の順序を壊さず更新できる。
-  function normalizeMemberDisplayOrders(teamId, excludedEntryId = "") {
-    if (!teamId) return [];
-    const siblings = userEntriesForAssignment()
-      .filter(
-        (entry) =>
-          valueFor(entry, "small_team_id") === teamId &&
-          entry.id !== excludedEntryId,
-      )
-      .sort(compareUserEntries);
-    siblings.forEach((entry, index) => {
-      entry.values.display_order = String((index + 1) * 10);
-    });
-    return siblings;
-  }
-
-  // ユーザーの所属組織を変更し、移動前後の兄弟ユーザーの表示順を再調整する。所属なしへの移動も空IDで表す。
-  function setUserTeamAssignment(entry, nextTeamId) {
-    const previousTeamId = valueFor(entry, "small_team_id");
-    const normalizedTeamId = String(nextTeamId || "");
-    if (previousTeamId === normalizedTeamId) return;
-    entry.values.small_team_id = normalizedTeamId;
-    entry.values.display_order = "";
-    normalizeMemberDisplayOrders(previousTeamId);
-    if (normalizedTeamId) {
-      const siblings = normalizeMemberDisplayOrders(normalizedTeamId, entry.id);
-      entry.values.display_order = String((siblings.length + 1) * 10);
-    }
-  }
-
-  // 指定組織が所属先として選択可能か、課・係の割り当て候補表で確認する。
-  function isAssignableTeam(teamId) {
-    return teamAssignmentChoices().some(([choiceId]) => choiceId === teamId);
-  }
-
-  // 所属・コメント担当・カスタム対象のいずれかを追加または解除する。不正な組織、カスタム範囲外、許可されない所属は変更せず、更新後に関連画面を同期する。
-  function setTeamAssignment(kind, teamId, employeeId, assigned) {
-    const user = userEntriesForAssignment().find(
-      (entry) => valueFor(entry, "employee_id") === employeeId,
-    );
-    if (!user || !teamId || !employeeId) return;
-    if (kind === "member") {
-      if (assigned && !isAssignableTeam(teamId)) return;
-      if (assigned) setUserTeamAssignment(user, teamId);
-      else if (valueFor(user, "small_team_id") === teamId) {
-        setUserTeamAssignment(user, "");
-      }
-    } else if (kind === "target") {
-      const team = teamEntryFor(teamId);
-      if (!team || valueFor(team, "commenter_scope") !== "custom") return;
-      const ids = teamTargetIds(team);
-      const index = ids.indexOf(employeeId);
-      if (assigned && index < 0) ids.push(employeeId);
-      if (!assigned && index >= 0) ids.splice(index, 1);
-      team.values.target_employee_ids = ids.join(";");
-    } else {
-      const team = teamEntryFor(teamId);
-      if (!team) return;
-      const commenterIds = teamCommenterIds(team);
-      const index = commenterIds.indexOf(employeeId);
-      if (assigned && index < 0) commenterIds.push(employeeId);
-      if (!assigned && index >= 0) commenterIds.splice(index, 1);
-      team.values.commenter_employee_ids = commenterIds.join(";");
-    }
-    renderMasterNav();
-    renderTable();
-    renderInspector();
-    syncAdminChrome();
-  }
 
   // 指定した階層と親を持つ子組織追加ボタンを生成する。
   function createChildTeamButton(level, parentTeamId, text) {
@@ -4024,91 +3679,6 @@
     return button;
   }
 
-  // チームの名称・コメント範囲・親課/親係の編集フィールドを階層に応じて組み立てる。現行の課・係構造に合わせて選択肢を制限する。
-  function createTeamEditorFields(entry) {
-    const level = valueFor(entry, "team_level");
-    const nameField = createInspectorField(
-      { key: "team_name", label: teamLevelLabel(level), type: "text" },
-      valueFor(entry, "team_name"),
-      { required: true, hideKey: true },
-    );
-    const scopeField = createInspectorField(
-      { key: "commenter_scope", label: "コメント対象", type: "commenter_scope" },
-      valueFor(entry, "commenter_scope") || "custom",
-      { required: true, hideKey: true },
-    );
-    if (level === "large") {
-      return [nameField, scopeField];
-    }
-
-    const entryId = valueFor(entry, "team_id");
-    const parentId = valueFor(entry, "parent_team_id");
-    const parent = teamEntryFor(parentId);
-    const selectedSectionId =
-      valueFor(parent, "team_level") === "medium"
-        ? valueFor(parent, "parent_team_id")
-        : valueFor(parent, "team_level") === "large"
-          ? parentId
-          : "";
-    const sectionChoices = [["", "課を選択してください"], ...teamParentChoices(["large"], entryId)];
-    const sectionField = createTeamPlacementSelect(
-      "課",
-      sectionChoices,
-      selectedSectionId,
-      { required: true },
-    );
-    if (level === "medium") return [sectionField, nameField, scopeField];
-
-    const unitChoices = selectedSectionId
-      ? [
-          ["", "係を選択してください"],
-          ...teamChildrenChoices(selectedSectionId, "medium", entryId),
-        ]
-      : [["", "先に課を選択してください"]];
-    const selectedUnitId = valueFor(parent, "team_level") === "medium" ? parentId : selectedSectionId;
-    const unitField = createTeamPlacementSelect(
-      "係",
-      unitChoices,
-      selectedUnitId,
-      { required: true, disabled: !selectedSectionId },
-    );
-    return [sectionField, unitField, nameField, scopeField];
-  }
-
-  // 組織の親を選ぶselectフィールドを生成する。必須・無効・補足説明などの表示制約を共通化する。
-  function createTeamPlacementSelect(labelText, choices, value, options = {}) {
-    const label = document.createElement("label");
-    label.className = "inspector-field team-placement-field";
-    const heading = document.createElement("span");
-    heading.className = "inspector-field-label";
-    const visibleLabel = document.createElement("span");
-    visibleLabel.textContent = labelText;
-    heading.append(visibleLabel);
-    if (options.optional) {
-      const optional = document.createElement("small");
-      optional.textContent = "任意";
-      heading.append(optional);
-    }
-    const select = document.createElement("select");
-    select.dataset.column = "parent_team_id";
-    select.disabled = Boolean(options.disabled);
-    select.required = Boolean(options.required);
-    choices.forEach(([optionValue, text]) => {
-      const option = document.createElement("option");
-      option.value = optionValue;
-      option.textContent = text;
-      select.append(option);
-    });
-    select.value = value;
-    label.append(heading, select);
-    if (options.hint) {
-      const hint = document.createElement("small");
-      hint.className = "inspector-field-hint";
-      hint.textContent = options.hint;
-      label.append(hint);
-    }
-    return label;
-  }
 
   // 組織IDから対応するチーム下書き行を検索する。見つからない場合はundefinedを返す。
   function teamEntryFor(teamId) {
@@ -4117,15 +3687,6 @@
     );
   }
 
-  // 指定した親・階層に属する子組織を除外ID以外で集め、表示順の選択肢へ変換する。
-  function teamChildrenChoices(parentTeamId, level, excludedTeamId) {
-    return (drafts.get("team_master")?.entries || [])
-      .filter((entry) => valueFor(entry, "parent_team_id") === parentTeamId)
-      .filter((entry) => valueFor(entry, "team_level") === level)
-      .filter((entry) => valueFor(entry, "team_id") !== excludedTeamId)
-      .sort(compareTeamEntries)
-      .map((entry) => [valueFor(entry, "team_id"), valueFor(entry, "team_name")]);
-  }
 
   // 組織行から親をたどり、循環を避けながらパンくず形式の名称を作る。
   function teamPathLabel(entry) {
@@ -4146,51 +3707,6 @@
     return names.join(" ＞ ");
   }
 
-  // 指定ユーザーを同じ所属内で上下に移動し、全兄弟の表示順を10刻みで振り直して画面へ反映する。
-  function moveSelectedMember(employeeId, direction) {
-    const userDraft = drafts.get("user_master");
-    const selected = userDraft?.entries.find(
-      (entry) => valueFor(entry, "employee_id") === employeeId,
-    );
-    if (!selected || !["up", "down"].includes(direction)) return;
-    const teamId = valueFor(selected, "small_team_id");
-    if (!teamId) return;
-    const siblings = userEntriesForAssignment()
-      .filter((entry) => valueFor(entry, "small_team_id") === teamId)
-      .sort(compareUserEntries);
-    const index = siblings.findIndex((entry) => entry.id === selected.id);
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (index < 0 || targetIndex < 0 || targetIndex >= siblings.length) return;
-    [siblings[index], siblings[targetIndex]] = [
-      siblings[targetIndex],
-      siblings[index],
-    ];
-    siblings.forEach((entry, siblingIndex) => {
-      entry.values.display_order = String((siblingIndex + 1) * 10);
-    });
-    renderTable();
-    renderInspector();
-    syncAdminChrome();
-  }
-
-  // 選択中チームのコメント担当順を上下入れ替え、ID列を更新して担当表示を再描画する。
-  function moveSelectedCommenter(employeeId, direction) {
-    const teamDraft = drafts.get("team_master");
-    const team = teamDraft?.entries.find((entry) => entry.id === teamDraft.selectedId);
-    if (!team || !employeeId || !["up", "down"].includes(direction)) return;
-    const commenterIds = teamCommenterIds(team);
-    const index = commenterIds.indexOf(employeeId);
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (index < 0 || targetIndex < 0 || targetIndex >= commenterIds.length) return;
-    [commenterIds[index], commenterIds[targetIndex]] = [
-      commenterIds[targetIndex],
-      commenterIds[index],
-    ];
-    team.values.commenter_employee_ids = commenterIds.join(";");
-    renderTable();
-    renderInspector();
-    syncAdminChrome();
-  }
 
   // 選択中チームを同じ親の兄弟間で上下移動し、sort_orderを再採番する。
   function moveSelectedTeam(direction) {
@@ -5074,14 +4590,10 @@
       [
         "boolean",
         "active",
-        "team_level",
         "team_type",
-        "small_team",
         "organization",
         "affiliation_type",
-        "parent_team",
         "parent_department",
-        "commenter_scope",
       ].includes(column.type)
     ) {
       input = document.createElement("select");
@@ -5090,9 +4602,6 @@
         choices = [["0", "稼働日"], ["1", "休日"]];
       } else if (column.type === "active") {
         choices = [["1", "有効"], ["0", "廃止"]];
-      } else if (column.type === "team_level") {
-        choices = [["large", "課"], ["medium", "係"]];
-        if (value === "small") choices.push(["small", "旧チーム（既存）"]);
       } else if (column.type === "team_type") {
         choices = [["department", "課"], ["section", "係"]];
       } else if (column.type === "affiliation_type") {
@@ -5101,26 +4610,10 @@
           ["organization", "課・係"],
           ["director", "部長"],
         ];
-      } else if (column.type === "commenter_scope") {
-        choices = [["large", "課"], ["medium", "係"], ["custom", "カスタム"]];
-      } else if (column.type === "small_team") {
-        choices = [["", "所属なし"], ...teamAssignmentChoices()];
       } else if (column.type === "organization") {
         choices = [["", "所属を選択"], ...teamAssignmentChoices()];
       } else if (column.type === "parent_department") {
         choices = [["", "親課を選択"], ...teamChoices("department")];
-      } else {
-        const selected = getDraft()?.entries.find(
-          (entry) => entry.id === getDraft()?.selectedId,
-        );
-        const level = valueFor(selected, "team_level");
-        const parentLevels =
-          level === "medium" ? ["large"] : level === "small" ? ["large", "medium"] : [];
-        choices = [["", parentLevels.length ? "親なし（最上位）" : "親チームなし"]];
-        if (parentLevels.length) {
-          choices.push(...teamParentChoices(parentLevels, valueFor(selected, "team_id")));
-        }
-        options.disabled = options.disabled || !parentLevels.length;
       }
       choices.forEach(([optionValue, text]) => {
         const option = document.createElement("option");
@@ -5139,9 +4632,6 @@
       }
     }
     input.dataset.column = column.key;
-    if (column.type === "commenter_scope") {
-      input.setAttribute("aria-label", "コメント対象範囲");
-    }
     if (input.type !== "checkbox") input.value = value;
     input.required = Boolean(options.required);
     input.disabled = Boolean(options.disabled);
@@ -5166,8 +4656,7 @@
   function teamChoices(level) {
     return (drafts.get("team_master")?.entries || [])
       .filter((entry) =>
-        valueFor(entry, "team_type") === level ||
-        valueFor(entry, "team_level") === level,
+        valueFor(entry, "team_type") === level,
       )
       .sort((left, right) => {
         const leftOrder = Number(valueFor(left, "sort_order") || 999999);
@@ -5219,8 +4708,7 @@
   function teamParentChoices(levels, excludedTeamId) {
     return (drafts.get("team_master")?.entries || [])
       .filter((entry) =>
-        levels.includes(valueFor(entry, "team_type")) ||
-        levels.includes(valueFor(entry, "team_level")),
+        levels.includes(valueFor(entry, "team_type")),
       )
       .filter((entry) => valueFor(entry, "team_id") !== excludedTeamId)
       .sort(compareTeamEntries)

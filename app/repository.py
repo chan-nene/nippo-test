@@ -19,7 +19,6 @@ from app.config import AppSettings, validate_storage_directories
 from app.config import StorageConfigError
 from app.security import (
     COMMON_MASTER_COLUMNS,
-    LEGACY_COMMON_MASTER_COLUMNS,
     USER_MASTER_DEFAULTS,
     safe_employee_csv_path,
     validate_employee_id,
@@ -67,11 +66,6 @@ class DailyReportRepository:
         self.base_dir = base_dir
         self.load_warnings: list[dict[str, str]] = []
         self.backup_limit = DEFAULT_BACKUP_LIMIT
-        self.legacy_rank_migration_required = False
-        self.commenter_assignment_migration_required = False
-        self.organization_schema_migration_required = False
-        self.organization_migration_preview: dict[str, Any] = {}
-        self.calendar_migration_required = False
 
     @staticmethod
     def now_jst() -> datetime:
@@ -142,109 +136,28 @@ class DailyReportRepository:
             "organization_schema": [{"mode": schema_mode}],
         }
 
-    def _load_organization_masters(
-        self, common_dir: Path
-    ) -> tuple[
-        list[dict[str, Any]],
-        list[dict[str, Any]],
-        list[dict[str, Any]],
-        str,
+    def _load_organization_masters(self, common_dir: Path) -> tuple[
+        list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], str
     ]:
-        user_path = common_dir / "user_master.csv"
-        team_path = common_dir / "team_master.csv"
-        assignment_path = common_dir / "comment_assignment.csv"
-        try:
-            user_source = self._read_csv_frame(user_path)
-        except Exception as exc:
-            self._record_load_warning(user_path, exc)
-            user_source = self._empty_df(list(COMMON_MASTER_COLUMNS["user_master"]))
-        if team_path.exists():
+        frames: dict[str, pl.DataFrame] = {}
+        for master in ("user_master", "team_master", "comment_assignment"):
+            path = common_dir / f"{master}.csv"
+            columns = list(COMMON_MASTER_COLUMNS[master])
             try:
-                team_source = self._read_csv_frame(team_path)
+                source = self._read_csv_frame(path)
+                if set(source.columns) != set(columns):
+                    raise ValueError(f"{master}のCSV列が現行形式と一致しません。")
+                frames[master] = source
             except Exception as exc:
-                self._record_load_warning(team_path, exc)
-                team_source = self._empty_df(
-                    list(COMMON_MASTER_COLUMNS["team_master"])
-                )
-        else:
-            team_source = self._empty_df(list(COMMON_MASTER_COLUMNS["team_master"]))
-
-        new_user_columns = set(COMMON_MASTER_COLUMNS["user_master"])
-        new_team_columns = set(COMMON_MASTER_COLUMNS["team_master"])
-        is_new_schema = new_user_columns.issubset(user_source.columns) and (
-            new_team_columns.issubset(team_source.columns)
-            or (team_source.is_empty() and set(team_source.columns) == new_team_columns)
+                self._record_load_warning(path, exc)
+                frames[master] = self._empty_df(columns)
+        return (
+            self._normalize_user_rows(frames["user_master"]),
+            frames["team_master"].to_dicts(),
+            frames["comment_assignment"].to_dicts(),
+            "new",
         )
-        if is_new_schema:
-            users = self._normalize_user_rows(user_source)
-            teams = self._ensure_columns(
-                team_source, list(COMMON_MASTER_COLUMNS["team_master"])
-            ).to_dicts()
-            if assignment_path.exists():
-                try:
-                    assignment_source = self._read_csv_frame(assignment_path)
-                except Exception as exc:
-                    self._record_load_warning(assignment_path, exc)
-                    assignment_source = self._empty_df(
-                        list(COMMON_MASTER_COLUMNS["comment_assignment"])
-                    )
-                assignments = self._ensure_columns(
-                    assignment_source,
-                    list(COMMON_MASTER_COLUMNS["comment_assignment"]),
-                ).to_dicts()
-                self.commenter_assignment_migration_required = not set(
-                    COMMON_MASTER_COLUMNS["comment_assignment"]
-                ).issubset(assignment_source.columns)
-            else:
-                assignments = []
-                self.commenter_assignment_migration_required = True
-            return users, teams, assignments, "new"
 
-        self.organization_schema_migration_required = True
-        raw_users = user_source.to_dicts()
-        users = self._normalize_legacy_user_rows(user_source)
-        teams = self._ensure_columns(
-            team_source, list(LEGACY_COMMON_MASTER_COLUMNS["team_master"])
-        ).to_dicts()
-        has_commenter_scope = "commenter_scope" in team_source.columns
-        for team in teams:
-            if not has_commenter_scope:
-                level = str(team.get("team_level", ""))
-                team["commenter_scope"] = level if level in {"large", "medium"} else "custom"
-                if level == "small":
-                    team["target_employee_ids"] = ";".join(
-                        str(user.get("employee_id", ""))
-                        for user in users
-                        if str(user.get("small_team_id", "")).strip() == str(team.get("team_id", "")).strip()
-                    )
-            if "target_employee_ids" not in team:
-                team["target_employee_ids"] = ""
-
-        deprecated_user_columns = {"superior_rank", "managed_team_ids"}
-        self.legacy_rank_migration_required = bool(
-            deprecated_user_columns.intersection(user_source.columns)
-        )
-        if "commenter_employee_ids" not in team_source.columns:
-            self.commenter_assignment_migration_required = True
-            self._migrate_commenter_assignments(common_dir, raw_users, teams)
-        self.organization_migration_preview = self._build_organization_migration_preview(
-            users, teams
-        )
-        return users, teams, [], "legacy"
-
-    def _load_user_master(self, common_dir: Path) -> list[dict[str, Any]]:
-        path = common_dir / "user_master.csv"
-        columns = list(COMMON_MASTER_COLUMNS["user_master"])
-        if not path.exists():
-            self._record_load_warning(path, FileNotFoundError("ファイルがありません"))
-            return []
-        try:
-            source = self._read_csv_frame(path)
-        except Exception as exc:
-            self._record_load_warning(path, exc)
-            return []
-
-        return self._normalize_user_rows(source)
 
     def _normalize_user_rows(self, source: pl.DataFrame) -> list[dict[str, Any]]:
         columns = list(COMMON_MASTER_COLUMNS["user_master"])
@@ -262,96 +175,6 @@ class DailyReportRepository:
                 row["is_admin"] = "0"
         return rows
 
-    def _normalize_legacy_user_rows(
-        self, source: pl.DataFrame
-    ) -> list[dict[str, Any]]:
-        columns = list(LEGACY_COMMON_MASTER_COLUMNS["user_master"])
-        rows = self._ensure_columns(source, columns).to_dicts()
-        for row in rows:
-            for column, default in USER_MASTER_DEFAULTS.items():
-                if not str(row.get(column, "")).strip():
-                    row[column] = default
-            if row.get("employment_type") == "temporary":
-                row["is_admin"] = "0"
-        return rows
-
-    @staticmethod
-    def _build_organization_migration_preview(
-        users: list[dict[str, Any]], teams: list[dict[str, Any]]
-    ) -> dict[str, Any]:
-        team_ids = {str(row.get("team_id", "")) for row in teams}
-        return {
-            "department_candidates": [
-                str(row.get("team_id", ""))
-                for row in teams
-                if str(row.get("team_level", "")) == "large"
-            ],
-            "section_candidates": [
-                str(row.get("team_id", ""))
-                for row in teams
-                if str(row.get("team_level", "")) == "medium"
-                and str(row.get("parent_team_id", "")) in team_ids
-            ],
-            "ambiguous_team_ids": [
-                str(row.get("team_id", ""))
-                for row in teams
-                if str(row.get("team_level", "")) == "small"
-            ],
-            "unresolved_employee_ids": [
-                str(row.get("employee_id", ""))
-                for row in users
-                if not str(row.get("small_team_id", "")).strip()
-                or str(row.get("small_team_id", "")) not in team_ids
-            ],
-        }
-
-    def _migrate_commenter_assignments(
-        self,
-        common_dir: Path,
-        raw_users: list[dict[str, Any]],
-        teams: list[dict[str, Any]],
-    ) -> None:
-        legacy_path = common_dir / "superior_master.csv"
-        legacy_rows = self._read_csv(legacy_path) if legacy_path.exists() else []
-        legacy_ranks = {
-            str(row.get("employee_id", "")): str(row.get("rank", ""))
-            for row in legacy_rows
-            if row.get("employee_id")
-        }
-
-        def order_key(row: dict[str, Any]) -> tuple[int, int, str]:
-            employee_id = str(row.get("employee_id", ""))
-            raw_rank = str(row.get("superior_rank", "")).strip()
-            if not raw_rank:
-                raw_rank = legacy_ranks.get(employee_id, "")
-            rank = int(raw_rank) if raw_rank.isdigit() else 9999
-            raw_display_order = str(row.get("display_order", "")).strip()
-            display_order = (
-                int(raw_display_order) if raw_display_order.isdigit() else 999999
-            )
-            return rank, display_order, employee_id
-
-        team_commenters: dict[str, list[str]] = {
-            str(row.get("team_id", "")): [] for row in teams
-        }
-        for user in sorted(raw_users, key=order_key):
-            employee_id = str(user.get("employee_id", "")).strip()
-            if not employee_id:
-                continue
-            managed_ids = {
-                team_id.strip()
-                for team_id in str(user.get("managed_team_ids", "")).split(";")
-                if team_id.strip()
-            }
-            for team_id in managed_ids:
-                commenters = team_commenters.get(team_id)
-                if commenters is not None and employee_id not in commenters:
-                    commenters.append(employee_id)
-        for team in teams:
-            team_id = str(team.get("team_id", ""))
-            team["commenter_employee_ids"] = ";".join(
-                team_commenters.get(team_id, [])
-            )
 
     def _load_calendar(self, common_dir: Path) -> list[dict[str, Any]]:
         path = common_dir / "calendar.csv"
@@ -364,13 +187,12 @@ class DailyReportRepository:
             self._record_load_warning(path, exc)
             return []
 
-        self.calendar_migration_required = source.columns != ["date"]
-        has_legacy_flag = "is_holiday" in source.columns
+        if source.columns != ["date"]:
+            self._record_load_warning(path, ValueError("calendarのCSV列が現行形式と一致しません。"))
+            return []
         dates: list[dict[str, Any]] = []
         seen: set[str] = set()
         for row in source.to_dicts():
-            if has_legacy_flag and str(row.get("is_holiday", "0")).strip() != "1":
-                continue
             date_text = str(row.get("date", "")).strip()
             if not date_text or date_text in seen:
                 continue
@@ -448,20 +270,15 @@ class DailyReportRepository:
         self,
         teams: list[dict[str, str]],
         users: list[dict[str, str]],
-        comment_assignments: list[dict[str, str]] | dict[str, str],
-        expected_revisions: dict[str, str] | None = None,
+        comment_assignments: list[dict[str, str]],
+        expected_revisions: dict[str, str],
     ) -> dict[str, str]:
-        legacy_call = expected_revisions is None
-        if legacy_call:
-            expected_revisions = dict(comment_assignments)
-            comment_assignments = []
         common_dir = self.storage_dir("common")
         targets = {
             "team_master": common_dir / "team_master.csv",
             "user_master": common_dir / "user_master.csv",
         }
-        if not legacy_call:
-            targets["comment_assignment"] = common_dir / "comment_assignment.csv"
+        targets["comment_assignment"] = common_dir / "comment_assignment.csv"
         for master, target_path in targets.items():
             expected = expected_revisions.get(master, "")
             if expected and self._common_master_revision(target_path) != expected:
@@ -473,13 +290,10 @@ class DailyReportRepository:
             ("team_master", teams),
             ("user_master", users),
         ]
-        if not legacy_call:
-            master_rows.append(("comment_assignment", list(comment_assignments)))
+        master_rows.append(("comment_assignment", list(comment_assignments)))
         frames = [
             (
-                self._legacy_common_master_frame(master, rows)
-                if legacy_call
-                else self._common_master_frame(master, rows),
+                self._common_master_frame(master, rows),
                 targets[master],
             )
             for master, rows in master_rows
@@ -509,19 +323,6 @@ class DailyReportRepository:
             else self._empty_df(columns)
         )
 
-    def _legacy_common_master_frame(
-        self, master: str, rows: list[dict[str, str]]
-    ) -> pl.DataFrame:
-        columns = list(LEGACY_COMMON_MASTER_COLUMNS[master])
-        normalized = [
-            {column: str(row.get(column, "")) for column in columns}
-            for row in rows
-        ]
-        return (
-            pl.DataFrame(normalized, schema=columns, orient="row")
-            if normalized
-            else self._empty_df(columns)
-        )
 
     @staticmethod
     def _common_master_revision(path: Path) -> str:
@@ -711,7 +512,6 @@ class DailyReportRepository:
                 common,
                 str(
                     user_master.get(employee_id, {}).get("organization_id")
-                    or user_master.get(employee_id, {}).get("small_team_id", "")
                 ),
             ),
             "viewable_members": viewable_members,
@@ -725,111 +525,6 @@ class DailyReportRepository:
         }
 
     def _build_viewable_members(
-        self,
-        common: dict[str, list[dict[str, Any]]],
-        employee_id: str,
-        assigned_subordinate_ids: set[str],
-    ) -> list[dict[str, Any]]:
-        if self._uses_new_organization_schema(common):
-            return self._build_new_viewable_members(
-                common, employee_id, assigned_subordinate_ids
-            )
-        users = {
-            str(row.get("employee_id", "")): row
-            for row in common["user_master"]
-            if row.get("employee_id")
-        }
-        current_user = users.get(employee_id, {})
-        can_input_own_report = self._user_can_input_own_report(current_user)
-        if self._is_temporary_user(current_user):
-            target_ids = {employee_id} if can_input_own_report else set()
-            same_team_ids: set[str] = set()
-            assigned_subordinate_ids = set()
-        else:
-            small_team_id = str(current_user.get("small_team_id", "")).strip()
-            same_team_ids = {
-                target_id
-                for target_id, row in users.items()
-                if target_id != employee_id or can_input_own_report
-                if small_team_id
-                and str(row.get("small_team_id", "")).strip() == small_team_id
-            }
-            target_ids = {*same_team_ids, *assigned_subordinate_ids}
-            if can_input_own_report:
-                target_ids.add(employee_id)
-
-        def display_order(row: dict[str, Any]) -> int:
-            try:
-                return int(row.get("display_order") or 999999)
-            except (TypeError, ValueError):
-                return 999999
-
-        teams_by_id = {
-            str(row.get("team_id", "")): row
-            for row in common.get("team_master", [])
-            if row.get("team_id")
-        }
-
-        def team_order(row: dict[str, Any]) -> tuple[tuple[int, str, str], ...]:
-            team_id = str(row.get("small_team_id", "")).strip()
-            orders: list[tuple[int, str, str]] = []
-            visited: set[str] = set()
-            while team_id and team_id not in visited:
-                visited.add(team_id)
-                team = teams_by_id.get(team_id)
-                if team is None:
-                    break
-                try:
-                    order = int(team.get("sort_order") or 999999)
-                except (TypeError, ValueError):
-                    order = 999999
-                orders.insert(
-                    0,
-                    (
-                        order,
-                        str(team.get("team_name") or ""),
-                        team_id,
-                    ),
-                )
-                team_id = str(team.get("parent_team_id", "")).strip()
-            return tuple(orders or [(999999, "", "")])
-
-        members: list[dict[str, Any]] = []
-        for target_id in target_ids:
-            row = users.get(target_id, {})
-            relations = []
-            if target_id == employee_id:
-                relations.append("self")
-            if target_id in same_team_ids:
-                relations.append("same_small_team")
-            if target_id in assigned_subordinate_ids:
-                relations.append("assigned_subordinate")
-            members.append(
-                {
-                    "employee_id": target_id,
-                    "display_name": str(row.get("display_name") or target_id),
-                    "small_team_id": str(row.get("small_team_id", "")),
-                    "team_path": self._team_path(
-                        common, str(row.get("small_team_id", ""))
-                    ),
-                    "relations": relations,
-                    "can_view_report": True,
-                    "can_comment": target_id in assigned_subordinate_ids,
-                    "display_order": display_order(row),
-                }
-            )
-
-        members.sort(
-            key=lambda member: (
-                team_order(users.get(member["employee_id"], {})),
-                member["display_order"],
-                member["display_name"],
-                member["employee_id"],
-            )
-        )
-        return members
-
-    def _build_new_viewable_members(
         self,
         common: dict[str, list[dict[str, Any]]],
         employee_id: str,
@@ -878,7 +573,7 @@ class DailyReportRepository:
             if target_id == employee_id:
                 relations.append("self")
             if target_id in same_organization_ids:
-                relations.extend(("same_organization", "same_small_team"))
+                relations.append("same_organization")
             if target_id in assigned_subordinate_ids:
                 relations.append("assigned_subordinate")
             path = self._team_path(common, organization_id)
@@ -904,9 +599,9 @@ class DailyReportRepository:
 
     @staticmethod
     def _team_path(
-        common: dict[str, list[dict[str, Any]]], small_team_id: str
+        common: dict[str, list[dict[str, Any]]], organization_id: str
     ) -> list[dict[str, str]]:
-        if not small_team_id:
+        if not organization_id:
             return []
         teams = {
             str(row.get("team_id", "")): row
@@ -919,7 +614,7 @@ class DailyReportRepository:
             if row.get("employee_id")
         }
         path: list[dict[str, str]] = []
-        team_id = small_team_id
+        team_id = organization_id
         visited: set[str] = set()
         while team_id and team_id not in visited:
             visited.add(team_id)
@@ -931,13 +626,6 @@ class DailyReportRepository:
                     "team_id": team_id,
                     "team_name": str(row.get("team_name") or team_id),
                     "team_type": str(row.get("team_type", "")),
-                    "team_level": str(
-                        row.get("team_level")
-                        or {
-                            "department": "department",
-                            "section": "section",
-                        }.get(str(row.get("team_type", "")), "")
-                    ),
                 }
             )
             team_id = str(row.get("parent_team_id", ""))
@@ -975,22 +663,8 @@ class DailyReportRepository:
 
     @staticmethod
     def _calendar_row_is_holiday(row: dict[str, Any]) -> bool:
-        return "is_holiday" not in row or str(row.get("is_holiday", "0")) == "1"
+        return bool(row.get("date"))
 
-    @staticmethod
-    def _uses_new_organization_schema(
-        common: dict[str, list[dict[str, Any]]]
-    ) -> bool:
-        schema_rows = common.get("organization_schema", [])
-        if schema_rows:
-            return str(schema_rows[0].get("mode", "")) == "new"
-        users = common.get("user_master", [])
-        teams = common.get("team_master", [])
-        return (
-            (not users or all("affiliation_type" in row for row in users))
-            and (not teams or all("team_type" in row for row in teams))
-            and "comment_assignment" in common
-        )
 
     @staticmethod
     def _numeric_order(value: Any) -> int:
@@ -1005,15 +679,6 @@ class DailyReportRepository:
             for row in common.get("user_master", [])
             if row.get("employee_id")
         }
-        if not self._uses_new_organization_schema(common):
-            return sorted(
-                users,
-                key=lambda employee_id: (
-                    self._numeric_order(users[employee_id].get("display_order")),
-                    str(users[employee_id].get("display_name", "")),
-                    employee_id,
-                ),
-            )
         teams = {
             str(row.get("team_id", "")): row
             for row in common.get("team_master", [])
@@ -1084,8 +749,7 @@ class DailyReportRepository:
                     key=member_key,
                 )
             )
-        # Invalid legacy-like rows are never saved, but keeping them stable here
-        # makes a partially edited migration screen deterministic.
+        # Keep users with unresolved organization references in a stable order.
         ordered.extend(
             str(row.get("employee_id", ""))
             for row in sorted(
@@ -1231,282 +895,28 @@ class DailyReportRepository:
         return None
 
     def _get_my_rank(self, common: dict[str, Any], employee_id: str) -> int:
-        if self._uses_new_organization_schema(common):
-            try:
-                return self._global_user_order(common).index(employee_id)
-            except ValueError:
-                return -1
-        return self._superior_rank_map(common).get(employee_id, -1)
+        try:
+            return self._global_user_order(common).index(employee_id)
+        except ValueError:
+            return -1
 
-    def _superior_rank_map(self, common: dict[str, Any]) -> dict[str, int]:
-        if self._uses_new_organization_schema(common):
-            return {
-                employee_id: index
-                for index, employee_id in enumerate(self._global_user_order(common))
-            }
-        ordered_ids: list[str] = []
-        teams = sorted(
-            common.get("team_master", []),
-            key=lambda row: (
-                int(str(row.get("sort_order", "")))
-                if str(row.get("sort_order", "")).isdigit()
-                else 999999,
-                str(row.get("team_id", "")),
-            ),
-        )
-        for team in teams:
-            for employee_id in self._team_commenter_ids(team):
-                if employee_id not in ordered_ids:
-                    ordered_ids.append(employee_id)
-        if ordered_ids:
-            return {employee_id: index for index, employee_id in enumerate(ordered_ids)}
-
-        # Transitional support for pre-migration data supplied by tests or callers.
-        ranks: dict[str, int] = {}
-        for row in common.get("user_master", []):
-            employee_id = str(row.get("employee_id", ""))
-            raw_rank = row.get("superior_rank", "")
-            if not employee_id or raw_rank in {"", None}:
-                continue
-            try:
-                ranks[employee_id] = int(raw_rank)
-            except (TypeError, ValueError):
-                ranks[employee_id] = 9999
-
-        # Tests and transitional callers may still provide the former structure.
-        if ranks:
-            return ranks
-        for row in common.get("superior_master", []):
-            employee_id = str(row.get("employee_id", ""))
-            if not employee_id:
-                continue
-            try:
-                ranks[employee_id] = int(row.get("rank") or 9999)
-            except (TypeError, ValueError):
-                ranks[employee_id] = 9999
-        return ranks
-
-    @staticmethod
-    def _managed_team_ids(row: dict[str, Any]) -> set[str]:
-        return {
-            team_id.strip()
-            for team_id in str(row.get("managed_team_ids", "")).split(";")
-            if team_id.strip()
-        }
-
-    @staticmethod
-    def _team_commenter_ids(row: dict[str, Any]) -> list[str]:
-        return list(
-            dict.fromkeys(
-                employee_id.strip()
-                for employee_id in str(
-                    row.get("commenter_employee_ids", "")
-                ).split(";")
-                if employee_id.strip()
-            )
-        )
-
-    @staticmethod
-    def _team_target_ids(row: dict[str, Any]) -> set[str]:
-        return {
-            employee_id.strip()
-            for employee_id in str(row.get("target_employee_ids", "")).split(";")
-            if employee_id.strip()
-        }
-
-    @classmethod
-    def _team_scope_applies(
-        cls, team: dict[str, Any], target_employee_id: str,
-        users: dict[str, dict[str, Any]], teams: dict[str, dict[str, Any]],
-    ) -> bool:
-        scope = str(team.get("commenter_scope", "custom")).strip() or "custom"
-        target = users.get(target_employee_id, {})
-        target_team_id = str(target.get("small_team_id", "")).strip()
-        path: list[dict[str, Any]] = []
-        visited: set[str] = set()
-        while target_team_id and target_team_id not in visited:
-            visited.add(target_team_id)
-            current = teams.get(target_team_id)
-            if not current: break
-            path.append(current)
-            target_team_id = str(current.get("parent_team_id", "")).strip()
-        if scope == "custom":
-            return (
-                "commenter_scope" not in team
-                or bool(team.get("_legacy_commenter_scope"))
-                or target_employee_id in cls._team_target_ids(team)
-            )
-        team_id = str(team.get("team_id", ""))
-        team_level = str(team.get("team_level", ""))
-        path_ids = {str(item.get("team_id")) for item in path}
-        def ancestor_id(start_id: str, wanted_level: str) -> str:
-            seen: set[str] = set()
-            current_id = start_id
-            while current_id and current_id not in seen:
-                seen.add(current_id)
-                current = teams.get(current_id, {})
-                if str(current.get("team_level")) == wanted_level:
-                    return current_id
-                current_id = str(current.get("parent_team_id", ""))
-            return ""
-        if scope == "large":
-            large_id = ancestor_id(team_id, "large")
-            return bool(large_id and large_id in path_ids)
-        if team_level == "large":
-            return any(
-                str(item.get("team_level")) == "medium"
-                and str(item.get("parent_team_id")) == team_id
-                for item in path
-            )
-        medium_id = ancestor_id(team_id, "medium")
-        return bool(medium_id and medium_id in path_ids)
-
-    def _commenter_team_ids(
-        self, common: dict[str, list[dict[str, Any]]], employee_id: str
-    ) -> set[str]:
-        managed_ids = {
-            str(team.get("team_id", "")).strip()
-            for team in common.get("team_master", [])
-            if employee_id in self._team_commenter_ids(team)
-        }
-        if managed_ids:
-            return managed_ids
-        # Transitional support for old in-memory fixtures until their CSV is saved.
-        supervisor = next(
-            (
-                row
-                for row in common.get("user_master", [])
-                if str(row.get("employee_id", "")) == employee_id
-            ),
-            {},
-        )
-        return self._managed_team_ids(supervisor)
-
-    def _commenter_ids_for_target(
-        self,
-        common: dict[str, list[dict[str, Any]]],
-        target_employee_id: str,
-    ) -> list[str]:
-        if self._uses_new_organization_schema(common):
-            return self._resolved_comment_assignments(common)[1].get(
-                target_employee_id, []
-            )
-        user = next(
-            (
-                row
-                for row in common.get("user_master", [])
-                if str(row.get("employee_id", "")) == target_employee_id
-            ),
-            {},
-        )
-        teams = {
-            str(row.get("team_id", "")): row
-            for row in common.get("team_master", [])
-            if row.get("team_id")
-        }
-        users = {
-            str(row.get("employee_id", "")): row
-            for row in common.get("user_master", [])
-            if row.get("employee_id")
-        }
-        team_id = str(user.get("small_team_id", "")).strip()
-        ordered_ids: list[str] = []
-        visited: set[str] = set()
-        while team_id and team_id not in visited:
-            visited.add(team_id)
-            team = teams.get(team_id)
-            if team is None:
-                break
-            for employee_id in self._team_commenter_ids(team):
-                if not self._team_scope_applies(team, target_employee_id, users, teams):
-                    continue
-                if employee_id not in ordered_ids:
-                    ordered_ids.append(employee_id)
-            team_id = str(team.get("parent_team_id", "")).strip()
-        return ordered_ids
 
     def _commenter_ids_for_targets(
         self,
         common: dict[str, list[dict[str, Any]]],
         target_employee_ids: list[str],
     ) -> list[str]:
-        if self._uses_new_organization_schema(common):
-            target_commenters = self._resolved_comment_assignments(common)[1]
-            relevant = {
-                commenter_id
-                for target_id in target_employee_ids
-                for commenter_id in target_commenters.get(target_id, [])
-            }
-            return [
-                employee_id
-                for employee_id in self._global_user_order(common)
-                if employee_id in relevant
-            ]
-        users = {
-            str(row.get("employee_id", "")): row
-            for row in common.get("user_master", [])
-            if row.get("employee_id")
+        target_commenters = self._resolved_comment_assignments(common)[1]
+        relevant = {
+            commenter_id
+            for target_id in target_employee_ids
+            for commenter_id in target_commenters.get(target_id, [])
         }
-        teams = {
-            str(row.get("team_id", "")): row
-            for row in common.get("team_master", [])
-            if row.get("team_id")
-        }
-        relevant_team_ids: set[str] = set()
-        for target_employee_id in target_employee_ids:
-            team_id = str(
-                users.get(target_employee_id, {}).get("small_team_id", "")
-            ).strip()
-            visited: set[str] = set()
-            while team_id and team_id not in visited:
-                visited.add(team_id)
-                team = teams.get(team_id)
-                if team is None:
-                    break
-                relevant_team_ids.add(team_id)
-                team_id = str(team.get("parent_team_id", "")).strip()
-
-        def hierarchy_key(team: dict[str, Any]) -> tuple[tuple[int, str, str], ...]:
-            path: list[tuple[int, str, str]] = []
-            team_id = str(team.get("team_id", ""))
-            visited: set[str] = set()
-            while team_id and team_id not in visited:
-                visited.add(team_id)
-                current = teams.get(team_id)
-                if current is None:
-                    break
-                raw_order = str(current.get("sort_order", ""))
-                order = int(raw_order) if raw_order.isdigit() else 999999
-                path.insert(
-                    0,
-                    (
-                        order,
-                        str(current.get("team_name", "")),
-                        team_id,
-                    ),
-                )
-                team_id = str(current.get("parent_team_id", "")).strip()
-            return tuple(path)
-
-        ordered_ids: list[str] = []
-        has_explicit_scope = any("commenter_scope" in team for team in teams.values())
-        candidate_team_ids = set(teams) if has_explicit_scope else relevant_team_ids
-        for level in ("small", "medium", "large"):
-            level_teams = sorted(
-                (
-                    teams[team_id]
-                    for team_id in candidate_team_ids
-                    if str(teams[team_id].get("team_level", "")) == level
-                ),
-                key=hierarchy_key,
-            )
-            for team in level_teams:
-                for employee_id in self._team_commenter_ids(team):
-                    if not any(self._team_scope_applies(team, target_id, users, teams) for target_id in target_employee_ids):
-                        continue
-                    if employee_id not in ordered_ids:
-                        ordered_ids.append(employee_id)
-        return ordered_ids
+        return [
+            employee_id
+            for employee_id in self._global_user_order(common)
+            if employee_id in relevant
+        ]
 
     @staticmethod
     def _user_can_input_own_report(row: dict[str, Any]) -> bool:
@@ -1524,54 +934,9 @@ class DailyReportRepository:
     def _assigned_subordinate_ids(
         self, common: dict[str, list[dict[str, Any]]], employee_id: str
     ) -> set[str]:
-        if self._uses_new_organization_schema(common):
-            return set(
-                self._resolved_comment_assignments(common)[0].get(employee_id, set())
-            )
-        users = {
-            str(row.get("employee_id", "")): row
-            for row in common.get("user_master", [])
-            if row.get("employee_id")
-        }
-        managed_ids = self._commenter_team_ids(common, employee_id)
-        if not managed_ids:
-            return set()
-        children: dict[str, set[str]] = {}
-        for team in common.get("team_master", []):
-            parent_id = str(team.get("parent_team_id", "")).strip()
-            team_id = str(team.get("team_id", "")).strip()
-            if team_id:
-                children.setdefault(parent_id, set()).add(team_id)
-        covered_ids = set(managed_ids)
-        pending = list(managed_ids)
-        while pending:
-            team_id = pending.pop()
-            for child_id in children.get(team_id, set()):
-                if child_id not in covered_ids:
-                    covered_ids.add(child_id)
-                    pending.append(child_id)
-        managed_teams = [
-            team for team in common.get("team_master", [])
-            if str(team.get("team_id", "")).strip() in managed_ids
-        ]
-        has_explicit_scope = any("commenter_scope" in team for team in managed_teams)
-        teams_by_id = {
-            str(team.get("team_id", "")): team
-            for team in common.get("team_master", []) if team.get("team_id")
-        }
-        return {
-            target_id
-            for target_id, row in users.items()
-            if target_id != employee_id
-            and (has_explicit_scope or str(row.get("small_team_id", "")).strip() in covered_ids)
-            and any(
-                self._team_scope_applies(
-                    team, target_id, users, teams_by_id,
-                )
-                for team in common.get("team_master", [])
-                if str(team.get("team_id", "")).strip() in managed_ids
-            )
-        }
+        return set(
+            self._resolved_comment_assignments(common)[0].get(employee_id, set())
+        )
 
     def _build_missing_comment_summary(
         self,
@@ -1598,7 +963,7 @@ class DailyReportRepository:
                 "dates": [],
                 "member_counts": {},
             }
-        if self._uses_new_organization_schema(common) and self._is_director(
+        if self._is_director(
             common, employee_id
         ):
             return self._build_director_missing_comment_summary(
@@ -2100,32 +1465,10 @@ class DailyReportRepository:
             for row in common["calendar"]
             if self._calendar_row_is_holiday(row) and row.get("date")
         }
-        new_schema = self._uses_new_organization_schema(common)
-        target_commenters = (
-            self._resolved_comment_assignments(common)[1] if new_schema else {}
-        )
+        target_commenters = self._resolved_comment_assignments(common)[1]
         superior_ids = self._commenter_ids_for_targets(
             common, target_employee_ids
         )
-        if not superior_ids and not new_schema:
-            legacy_ranks = self._superior_rank_map(common)
-            superior_ids = sorted(
-                legacy_ranks,
-                key=lambda item: legacy_ranks.get(item, 9999),
-            )
-        if comments_df.height and not new_schema:
-            historical_ids = sorted(
-                {
-                    str(row.get("superior_employee_id", ""))
-                    for row in comments_df.to_dicts()
-                    if row.get("superior_employee_id")
-                }
-            )
-            superior_ids.extend(
-                employee_id
-                for employee_id in historical_ids
-                if employee_id not in superior_ids
-            )
         superior_ranks = {
             superior_id: index for index, superior_id in enumerate(superior_ids)
         }
@@ -2191,11 +1534,7 @@ class DailyReportRepository:
                 source_row.get("replies", "[]") if source_row else "[]"
             )
             comment_cells = []
-            assigned_commenters = (
-                set(target_commenters.get(target_employee_id, []))
-                if new_schema
-                else set(superior_ids)
-            )
+            assigned_commenters = set(target_commenters.get(target_employee_id, []))
             for superior_id in superior_ids:
                 applies = superior_id in assigned_commenters
                 superior_is_director = superior_id in director_ids

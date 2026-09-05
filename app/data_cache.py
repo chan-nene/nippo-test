@@ -35,7 +35,6 @@ class CacheSnapshot:
     comment_partitions: dict[str, pl.DataFrame]
     file_manifest: dict[str, FileFingerprint]
     target_employee_ids: tuple[str, ...]
-    migration_required: dict[str, bool]
     generation: int
     built_at: datetime
     warnings: tuple[dict[str, str], ...]
@@ -306,12 +305,11 @@ class DailyReportDataCache:
     def get_admin_common(
         self, settings: AppSettings, employee_id: str
     ) -> tuple[
-        dict[str, list[dict[str, Any]]], dict[str, bool], dict[str, str]
+        dict[str, list[dict[str, Any]]], dict[str, str]
     ]:
         snapshot = self.ensure_loaded(settings, employee_id).snapshot
         return (
             snapshot.common,
-            dict(snapshot.migration_required),
             dict(snapshot.common_revisions),
         )
 
@@ -410,7 +408,6 @@ class DailyReportDataCache:
         csv_read_started = perf_counter()
         common = repository.load_common()
         common_revisions = repository.get_common_master_revisions()
-        migration_required = self._migration_flags(repository)
         scope = repository.resolve_view_scope(common, employee_id)
         target_ids = tuple(scope["target_employee_ids"])
         target_set = set(target_ids)
@@ -568,7 +565,6 @@ class DailyReportDataCache:
             comment_partitions=comment_partitions,
             file_manifest=manifest,
             target_employee_ids=target_ids,
-            migration_required=migration_required,
             generation=self._next_generation(),
             built_at=datetime.now(),
             warnings=tuple(warnings),
@@ -618,7 +614,6 @@ class DailyReportDataCache:
         common = snapshot.common
         common_revisions = dict(snapshot.common_revisions)
         target_ids = tuple(snapshot.target_employee_ids)
-        migration_required = dict(snapshot.migration_required)
         warnings = snapshot.warnings
         report_load_failures = [dict(item) for item in snapshot.report_load_failures]
         comment_load_failures = [dict(item) for item in snapshot.comment_load_failures]
@@ -651,7 +646,6 @@ class DailyReportDataCache:
             previous_comments = dict(comments)
             previous_manifest = dict(manifest)
             previous_target_ids = target_ids
-            previous_migration_required = dict(migration_required)
             previous_warnings = warnings
             previous_failed_count = failed_count
             previous_changed_state = changed_state
@@ -663,7 +657,6 @@ class DailyReportDataCache:
                 )
                 if organization_changed:
                     candidate_common = repository.load_common()
-                    candidate_migration_required = self._migration_flags(repository)
                     csv_read_count += sum(
                         1 for path in common_paths.values() if path.exists()
                     )
@@ -681,7 +674,6 @@ class DailyReportDataCache:
                         candidate_scope["target_employee_ids"]
                     )
                     common = candidate_common
-                    migration_required = candidate_migration_required
                     if candidate_targets != target_ids:
                         reports, comments, manifest, scope_warnings, reads = (
                             self._reconcile_scope(
@@ -711,9 +703,6 @@ class DailyReportDataCache:
                             )
                         )
                     common = {**common, "calendar": calendar}
-                    migration_required["calendar"] = (
-                        repository.calendar_migration_required
-                    )
                     changed_state = True
 
                 for key in common_keys:
@@ -747,7 +736,6 @@ class DailyReportDataCache:
                 comments = previous_comments
                 manifest = previous_manifest
                 target_ids = previous_target_ids
-                migration_required = previous_migration_required
                 warnings = previous_warnings
                 failed_count = previous_failed_count + len(common_changed_keys)
                 changed_state = previous_changed_state
@@ -1004,7 +992,6 @@ class DailyReportDataCache:
                 comment_partitions=comments,
                 file_manifest=manifest,
                 target_employee_ids=target_ids,
-                migration_required=migration_required,
                 warnings=warnings,
                 report_load_failures=tuple(report_load_failures),
                 comment_load_failures=tuple(comment_load_failures),
@@ -1163,15 +1150,6 @@ class DailyReportDataCache:
             "calendar": root / "calendar.csv",
         }
 
-    @staticmethod
-    def _migration_flags(repository: DailyReportRepository) -> dict[str, bool]:
-        return {
-            "user_master": repository.legacy_rank_migration_required,
-            "team_master": repository.commenter_assignment_migration_required,
-            "organization_schema": repository.organization_schema_migration_required,
-            "comment_assignment": repository.commenter_assignment_migration_required,
-            "calendar": repository.calendar_migration_required,
-        }
 
     @staticmethod
     def _report_paths(

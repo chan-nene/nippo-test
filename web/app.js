@@ -13,8 +13,7 @@ function normalizeMemberFilterLevels(value, fallback = []) {
           .replaceAll(";", ",")
           .split(",")
           .map((item) => item.trim());
-    const aliases = { large: "department", medium: "section", small: "section" };
-    return values.map((item) => aliases[item] || item);
+    return values;
   };
   const fallbackLevels = MEMBER_FILTER_LEVELS.filter((level) =>
     parseLevels(fallback).includes(level),
@@ -1517,6 +1516,7 @@ window.addEventListener("pywebviewready", async () => {
   let initial;
   try {
     initial = await window.pywebview.api.get_initial_state();
+    imeDiagnosticState.enabled = initial.ime_diagnostics_enabled === true;
   } catch (error) {
     console.error("初期状態の取得に失敗しました。", error);
     showScreenLoadError(

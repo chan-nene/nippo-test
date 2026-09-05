@@ -20,7 +20,7 @@ MAX_IME_DIAGNOSTIC_EVENTS = 200
 MAX_COMMON_MASTER_ROWS = 20_000
 MAX_COMMON_FIELD_LENGTH = 20_000
 MEMBER_FILTER_LEVELS = frozenset(
-    {"department", "section", "member", "large", "medium", "small"}
+    {"department", "section", "member"}
 )
 
 
@@ -51,31 +51,6 @@ COMMON_MASTER_COLUMNS = {
     "calendar": ("date",),
 }
 
-# Read-only compatibility for pre-redesign CSVs.  New saves never use these
-# columns; ambiguous three-level organizations must be resolved by an admin.
-LEGACY_COMMON_MASTER_COLUMNS = {
-    "user_master": (
-        "employee_id",
-        "display_name",
-        "can_input_own_report",
-        "employment_type",
-        "is_admin",
-        "small_team_id",
-        "display_order",
-    ),
-    "team_master": (
-        "team_id",
-        "team_name",
-        "team_level",
-        "parent_team_id",
-        "sort_order",
-        "is_active",
-        "commenter_employee_ids",
-        "commenter_scope",
-        "target_employee_ids",
-    ),
-}
-
 USER_MASTER_DEFAULTS = {
     "can_input_own_report": "1",
     "employment_type": "regular",
@@ -86,10 +61,6 @@ USER_EMPLOYMENT_TYPES = frozenset({"regular", "temporary"})
 TEAM_TYPES = frozenset({"department", "section"})
 AFFILIATION_TYPES = frozenset({"director", "organization", "unassigned"})
 COMMENT_TARGET_TYPES = frozenset({"none", "organization", "custom", "departments"})
-
-# Accepted only by the read/validation compatibility path.
-TEAM_LEVELS = frozenset({"large", "medium", "small"})
-COMMENTER_SCOPES = frozenset({"large", "medium", "custom"})
 
 IME_DIAGNOSTIC_EVENT_NAMES = frozenset(
     {
@@ -236,24 +207,6 @@ def validate_common_master_save_request(
         raise RequestValidationError("管理の行データが不正です。")
     if len(row_values) > MAX_COMMON_MASTER_ROWS:
         raise RequestValidationError("管理の件数が多すぎます。")
-    if master in LEGACY_COMMON_MASTER_COLUMNS and any(
-        isinstance(row, Mapping)
-        and (
-            "team_level" in row
-            if master == "team_master"
-            else "small_team_id" in row or "display_order" in row
-        )
-        for row in row_values
-    ):
-        legacy_rows = _validate_legacy_master_rows(
-            row_values, master, source.get("revision", "")
-        )
-        if master == "team_master":
-            _validate_legacy_team_hierarchy(legacy_rows)
-        if master == "user_master":
-            _require_regular_administrator(legacy_rows)
-        return master, legacy_rows, _validate_revision(source.get("revision", ""))
-
     columns = COMMON_MASTER_COLUMNS[master]
     rows: list[dict[str, str]] = []
     for index, value in enumerate(row_values):
@@ -294,14 +247,6 @@ def validate_administration_save_request(
     payload: Any,
 ) -> tuple[Any, ...]:
     source = require_request_mapping(payload, "組織・ユーザー管理")
-    team_values = source.get("teams")
-    is_new_format = "comment_assignments" in source or (
-        isinstance(team_values, list)
-        and any(isinstance(row, Mapping) and "team_type" in row for row in team_values)
-    )
-    if not is_new_format:
-        return _validate_legacy_administration_save_request(source)
-
     _reject_unknown_keys(source, {"teams", "users", "comment_assignments", "revisions"})
     revisions_source = require_request_mapping(
         source.get("revisions", {}), "データの版"
@@ -355,12 +300,7 @@ def validate_user_team_references(
     teams: list[dict[str, str]],
     assignments: list[dict[str, str]] | None = None,
 ) -> None:
-    if any("affiliation_type" in row for row in users) or any(
-        "team_type" in row for row in teams
-    ):
-        _validate_new_administration_references(users, teams, assignments or [])
-        return
-    _validate_legacy_user_team_references(users, teams)
+    _validate_new_administration_references(users, teams, assignments or [])
 
 
 def _validate_new_administration_references(
@@ -434,111 +374,12 @@ def validate_user_administration_save_request(
     )
 
 
-def _validate_legacy_administration_save_request(
-    source: Mapping[str, Any],
-) -> tuple[list[dict[str, str]], list[dict[str, str]], dict[str, str]]:
-    _reject_unknown_keys(source, {"teams", "users", "revisions"})
-    revisions_source = require_request_mapping(source.get("revisions", {}), "データの版")
-    _reject_unknown_keys(revisions_source, {"team_master", "user_master"})
-    teams = _validate_legacy_master_rows(
-        source.get("teams", []), "team_master", revisions_source.get("team_master", "")
-    )
-    users = _validate_legacy_master_rows(
-        source.get("users", []), "user_master", revisions_source.get("user_master", "")
-    )
-    _require_regular_administrator(users)
-    _validate_legacy_team_hierarchy(teams)
-    _validate_legacy_user_team_references(users, teams)
-    return teams, users, {
-        "team_master": _validate_revision(revisions_source.get("team_master", "")),
-        "user_master": _validate_revision(revisions_source.get("user_master", "")),
-    }
-
-
-def _validate_legacy_master_rows(
-    values: Any, master: str, revision: Any
-) -> list[dict[str, str]]:
-    if not isinstance(values, list) or len(values) > MAX_COMMON_MASTER_ROWS:
-        raise RequestValidationError("管理の行データが不正です。")
-    columns = LEGACY_COMMON_MASTER_COLUMNS[master]
-    rows: list[dict[str, str]] = []
-    for index, value in enumerate(values):
-        source = require_request_mapping(value, f"{index + 1}行目")
-        _reject_unknown_keys(source, set(columns))
-        row = {
-            column: _bounded_string(
-                source.get(column, ""), f"{index + 1}行目の{column}", MAX_COMMON_FIELD_LENGTH
-            ).strip()
-            for column in columns
-        }
-        if master == "user_master":
-            validate_employee_id(row["employee_id"], f"{index + 1}行目の社員ID")
-            if not row["display_name"]:
-                raise RequestValidationError(f"{index + 1}行目の表示名を入力してください。")
-            for column, default in USER_MASTER_DEFAULTS.items():
-                row[column] = row[column] or default
-            if row["can_input_own_report"] not in {"0", "1"}:
-                raise RequestValidationError(f"{index + 1}行目の日報入力フラグが不正です。")
-            if row["employment_type"] not in USER_EMPLOYMENT_TYPES:
-                raise RequestValidationError(f"{index + 1}行目の雇用区分が不正です。")
-            if row["is_admin"] not in {"0", "1"}:
-                raise RequestValidationError(f"{index + 1}行目の管理者フラグが不正です。")
-            if row["employment_type"] == "temporary" and row["is_admin"] == "1":
-                raise RequestValidationError(f"{index + 1}行目の派遣社員は管理者に設定できません。")
-            _validate_optional_order(row["display_order"], f"{index + 1}行目の表示順")
-        else:
-            if not row["team_id"] or not row["team_name"]:
-                raise RequestValidationError(f"{index + 1}行目のチームIDと名称を入力してください。")
-            if row["team_level"] not in TEAM_LEVELS:
-                raise RequestValidationError(f"{index + 1}行目のチーム階層が不正です。")
-            row["is_active"] = "1"
-            row["commenter_scope"] = row["commenter_scope"] or "custom"
-            if row["commenter_scope"] not in COMMENTER_SCOPES:
-                raise RequestValidationError(f"{index + 1}行目のコメント対象範囲が不正です。")
-            _validate_optional_order(row["sort_order"], f"{index + 1}行目の表示順")
-        rows.append(row)
-    key = "employee_id" if master == "user_master" else "team_id"
-    _reject_duplicate_values([row[key] for row in rows], "同じキーを持つ行が重複しています。")
-    _validate_revision(revision)
-    return rows
-
-
 def _require_regular_administrator(users: list[dict[str, str]]) -> None:
     if not any(
         row.get("employment_type") == "regular" and row.get("is_admin") == "1"
         for row in users
     ):
         raise RequestValidationError("少なくとも1人の正社員の管理者が必要です。")
-
-
-def _validate_legacy_user_team_references(
-    users: list[dict[str, str]], teams: list[dict[str, str]]
-) -> None:
-    teams_by_id = {row["team_id"]: row for row in teams}
-    users_by_id = {row["employee_id"]: row for row in users}
-    for index, user in enumerate(users):
-        team_id = user.get("small_team_id", "")
-        if team_id and team_id not in teams_by_id:
-            raise RequestValidationError(
-                f"{index + 1}人目の所属チームがチームマスターにありません。"
-            )
-    for index, team in enumerate(teams):
-        commenter_ids = _split_legacy_ids(team.get("commenter_employee_ids", ""))
-        if any(employee_id not in users_by_id for employee_id in commenter_ids):
-            raise RequestValidationError(
-                f"{index + 1}件目のコメント担当者がユーザーマスターにありません。"
-            )
-        if any(users_by_id[item]["employment_type"] == "temporary" for item in commenter_ids):
-            raise RequestValidationError(
-                f"{index + 1}件目のコメント担当者に派遣社員は設定できません。"
-            )
-        team["commenter_employee_ids"] = ";".join(dict.fromkeys(commenter_ids))
-        targets = _split_legacy_ids(team.get("target_employee_ids", ""))
-        if any(employee_id not in users_by_id for employee_id in targets):
-            raise RequestValidationError(
-                f"{index + 1}件目のコメント対象ユーザーがユーザーマスターにありません。"
-            )
-        team["target_employee_ids"] = ";".join(dict.fromkeys(targets))
 
 
 def _validate_common_master_row(
@@ -609,10 +450,6 @@ def _validate_common_master_row(
             raise RequestValidationError(
                 f"{label}の日付は{CALENDAR_MIN_DATE.isoformat()}以降にしてください。"
             )
-
-
-def _split_legacy_ids(value: str) -> list[str]:
-    return [item.strip() for item in value.split(";") if item.strip()]
 
 
 def _validate_identifier(value: str, label: str) -> str:
@@ -690,26 +527,6 @@ def _validate_team_hierarchy(rows: list[dict[str, str]]) -> None:
             raise RequestValidationError(
                 f"係「{team_name}」の親組織には課を指定してください。"
             )
-
-
-def _validate_legacy_team_hierarchy(rows: list[dict[str, str]]) -> None:
-    teams = {row["team_id"]: row for row in rows}
-    sibling_names: set[tuple[str, str]] = set()
-    for row in rows:
-        parent_id = row["parent_team_id"]
-        key = (parent_id, row["team_name"].casefold())
-        if key in sibling_names:
-            raise RequestValidationError("同じチーム名を同一階層へ複数登録できません。")
-        sibling_names.add(key)
-        level = row["team_level"]
-        if not parent_id:
-            if level != "large":
-                raise RequestValidationError("最上位以外のチームには親組織が必要です。")
-            continue
-        parent = teams.get(parent_id)
-        expected = {"medium": "large", "small": "medium"}.get(level)
-        if parent is None or parent.get("team_level") != expected:
-            raise RequestValidationError("親チーム階層が不正です。")
 
 
 def _validate_comment_assignment_references(

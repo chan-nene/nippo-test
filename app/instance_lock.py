@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-import hashlib
 import os
 from pathlib import Path
 from typing import BinaryIO
 
 
 class SingleInstanceLock:
-    """An OS-backed, per-user lock that is released even after an abnormal exit."""
+    """An OS-backed, per-installation lock that is released even after an abnormal exit."""
 
-    def __init__(self, lock_dir: Path, employee_id: str) -> None:
-        digest = hashlib.sha256(employee_id.encode("utf-8")).hexdigest()[:16]
-        self.path = lock_dir / f"daily-report-{digest}.lock"
+    def __init__(self, lock_dir: Path) -> None:
+        self.path = lock_dir / "daily-report.lock"
         self._file: BinaryIO | None = None
 
     def acquire(self) -> bool:
+        if self._file is not None:
+            return True
         self.path.parent.mkdir(parents=True, exist_ok=True)
         lock_file = self.path.open("a+b")
         lock_file.seek(0, os.SEEK_END)
@@ -53,11 +53,3 @@ class SingleInstanceLock:
         finally:
             self._file.close()
             self._file = None
-
-    def __enter__(self) -> "SingleInstanceLock":
-        if not self.acquire():
-            raise RuntimeError("既に起動しています")
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        self.release()

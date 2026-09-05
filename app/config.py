@@ -93,8 +93,7 @@ def normalize_member_filter_levels(
             values = [str(item).strip() for item in raw]
         else:
             values = [item.strip() for item in str(raw or "").replace(";", ",").split(",")]
-        aliases = {"large": "department", "medium": "section", "small": "section"}
-        return [aliases.get(item, item) for item in values]
+        return values
 
     fallback = [
         level for level in MEMBER_FILTER_LEVELS if level in parse_levels(default)
@@ -262,7 +261,9 @@ class SettingsManager:
     def load(self) -> AppSettings:
         parser = ConfigParser()
         if not self.path.exists():
-            return AppSettings()
+            settings = AppSettings()
+            self.save(settings)
+            return settings
         parser.read(self.path, encoding="utf-8")
         # ``[database]`` was the old section name.  Retain it as a source for
         # personal settings only; path keys are discarded by from_mapping.

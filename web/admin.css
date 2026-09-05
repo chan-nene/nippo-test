@@ -4078,44 +4078,11 @@ html body #adminPanel .organization-card-list .organization-card-sortable-ghost 
 }
 
 /* Organization/comment-assignment workbench (two-level organization model). */
-html body #adminPanel .organization-migration-notice {
-  display: grid;
-  gap: 4px;
-  border: 1px solid color-mix(in srgb, var(--warning, #a56b18) 42%, var(--org-rule));
-  border-radius: var(--org-radius-sm);
-  margin: 12px;
-  background: var(--warning-surface, #fff8e8);
-  color: var(--org-ink);
-  padding: 12px 14px;
-}
 
-html[data-theme="dark"] body #adminPanel .organization-migration-notice {
-  background: color-mix(in srgb, #a56b18 18%, var(--org-surface));
-}
 
-html body #adminPanel .organization-migration-notice p {
-  margin: 0;
-  color: var(--org-muted);
-  line-height: 1.55;
-}
 
-html body #adminPanel .organization-migration-notice details {
-  margin-top: 4px;
-}
 
-html body #adminPanel .organization-migration-notice summary {
-  width: fit-content;
-  cursor: pointer;
-  color: var(--org-ink-strong);
-  font-weight: 600;
-}
 
-html body #adminPanel .organization-migration-notice ul {
-  display: grid;
-  gap: 4px;
-  margin: 8px 0 0;
-  padding-left: 20px;
-}
 
 html body #adminPanel .organization-browser-v2 {
   min-width: 0;

@@ -54,6 +54,32 @@ html[data-color-palette="blue"][data-theme="dark"] body #reportPanel {
   --report-today-fg: #60a5fa;
 }
 
+html[data-color-palette="blue_white"][data-theme="light"] body #reportPanel {
+  --report-period-bg: #f8fafc;
+  --report-period-indicator: #ffffff;
+  --report-period-fg: #0f172a;
+  --report-period-muted: #334155;
+  --report-period-hover: #eff6ff;
+  --report-period-shadow: 0 1px 4px -1px rgb(15 23 42 / 20%);
+  --holiday-row-bg: #f4f4f5;
+  --holiday-row-hover-bg: #e9e9eb;
+  --report-today-bg: #dbeafe;
+  --report-today-fg: #1d4ed8;
+}
+
+/* White surfaces make the report header read best in the same near-black
+   tone as the rest of the primary hierarchy. */
+html[data-color-palette="blue_white"][data-theme="light"] body #tableWrap table th {
+  color: var(--text-strong);
+}
+
+/* Keep a stale blue_white + dark pair visually equivalent to the existing
+   blue dark profile until the frontend normalizes and saves it. */
+html[data-color-palette="blue_white"][data-theme="dark"] body #reportPanel {
+  --report-today-bg: rgb(59 130 246 / 15%);
+  --report-today-fg: #60a5fa;
+}
+
 html body {
   --report-empty-icon: #9b9b9b;
 }
@@ -1356,7 +1382,7 @@ html body #reportPanel table tbody tr + tr > :is(th, td) {
 }
 
 html body #reportPanel table tbody tr.member-group-start > :is(th, td) {
-  border-top: 2px solid var(--table-border-strong);
+  border-top: 1px solid var(--table-border);
 }
 
 html body #reportPanel table :is(th, td).date-col {

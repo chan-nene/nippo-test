@@ -13,10 +13,10 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260901-02" />
-    <link rel="stylesheet" href="./reports.css?v=20260904-01" />
+    <link rel="stylesheet" href="./styles.css?v=20260905-03" />
+    <link rel="stylesheet" href="./reports.css?v=20260905-04" />
     <link rel="stylesheet" href="./settings.css?v=20260904-01" />
-    <link rel="stylesheet" href="./admin.css?v=20260830-18" />
+    <link rel="stylesheet" href="./admin.css?v=20260905-02" />
     <link rel="stylesheet" href="./vendor/flatpickr.min.css?v=20260830-18" />
     <link rel="stylesheet" href="./vendor/tabulator.min.css?v=20260830-18" />
   </head>
@@ -33,11 +33,15 @@
             id="fontSizeButton"
             class="header-icon-button font-size-button"
             type="button"
-            aria-label="文字サイズを変更"
+            aria-label="表示調整（文字サイズ・列幅）"
+            title="表示調整（文字サイズ・列幅）"
             aria-haspopup="true"
             aria-expanded="false"
           >
-            Aa
+            <svg width="28" height="20" viewBox="0 0 28 20" fill="none" aria-hidden="true" focusable="false">
+              <text x="1" y="15" fill="currentColor" font-size="13">Aa</text>
+              <path d="m21 10 3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
           </button>
           <div
             id="fontSizeMenu"
@@ -510,6 +514,19 @@
                           <span></span><span></span><span></span>
                         </span>
                         <span>ブルー</span>
+                      </label>
+                      <label class="color-palette-option">
+                        <input
+                          id="colorPaletteBlueWhite"
+                          type="radio"
+                          name="colorPalette"
+                          value="blue_white"
+                          data-color-palette-option
+                        />
+                        <span class="color-palette-preview is-blue-white" aria-hidden="true">
+                          <span></span><span></span><span></span>
+                        </span>
+                        <span>ブルー（白背景）</span>
                       </label>
                     </div>
                   </div>

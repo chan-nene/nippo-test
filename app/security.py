@@ -8,6 +8,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from app.calendar_policy import CALENDAR_MIN_DATE
+from app.config import COLOR_PALETTES
 
 MAX_DATE_RANGE_DAYS = 366
 MAX_UPDATES_PER_TYPE = 1_000
@@ -962,10 +963,7 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
     if not isinstance(color_theme, str) or color_theme not in {"light", "dark"}:
         raise RequestValidationError("配色の指定が不正です。")
     color_palette = source.get("ui_color_palette", "default")
-    if not isinstance(color_palette, str) or color_palette not in {
-        "default",
-        "blue",
-    }:
+    if not isinstance(color_palette, str) or color_palette not in COLOR_PALETTES:
         raise RequestValidationError("カラーパレットの指定が不正です。")
     member_filter_levels = source.get(
         "ui_member_filter_levels", []
@@ -1020,10 +1018,7 @@ def validate_ui_state_request(payload: Any) -> Mapping[str, Any]:
     if not isinstance(color_theme, str) or color_theme not in {"light", "dark"}:
         raise RequestValidationError("配色の指定が不正です。")
     color_palette = source.get("ui_color_palette", "default")
-    if not isinstance(color_palette, str) or color_palette not in {
-        "default",
-        "blue",
-    }:
+    if not isinstance(color_palette, str) or color_palette not in COLOR_PALETTES:
         raise RequestValidationError("カラーパレットの指定が不正です。")
     column_widths = source.get("column_widths", {})
     if not isinstance(column_widths, Mapping) or len(column_widths) > 64:

@@ -9,7 +9,8 @@ from typing import Any
 
 
 COLOR_THEMES = frozenset({"light", "dark"})
-COLOR_PALETTES = frozenset({"default", "blue"})
+COLOR_PALETTES = frozenset({"default", "blue", "blue_white"})
+LIGHT_ONLY_COLOR_PALETTE = "blue_white"
 MEMBER_FILTER_LEVELS = ("department", "section", "member")
 DEFAULT_MEMBER_FILTER_LEVELS = ""
 
@@ -70,6 +71,29 @@ def normalize_color_palette(value: Any, default: str = "default") -> str:
     fallback = default if default in COLOR_PALETTES else "default"
     color_palette = str(value or "").strip().lower()
     return color_palette if color_palette in COLOR_PALETTES else fallback
+
+
+def normalize_color_appearance(
+    theme: Any,
+    palette: Any,
+    *,
+    theme_default: str = "dark",
+    palette_default: str = "default",
+) -> tuple[str, str]:
+    """Normalize the persisted theme/palette pair.
+
+    ``blue_white`` is deliberately light-only.  A stale or direct API
+    request that combines it with the dark theme falls back to the existing
+    blue palette so the saved pair always describes a supported appearance.
+    """
+    normalized_theme = normalize_color_theme(theme, theme_default)
+    normalized_palette = normalize_color_palette(palette, palette_default)
+    if (
+        normalized_palette == LIGHT_ONLY_COLOR_PALETTE
+        and normalized_theme == "dark"
+    ):
+        normalized_palette = "blue"
+    return normalized_theme, normalized_palette
 
 
 def normalize_member_filter_levels(
@@ -165,6 +189,14 @@ class AppSettings:
                 values[field.name] = (
                     "" if raw_value is None else str(raw_value).strip()
                 )
+        values["ui_color_theme"], values["ui_color_palette"] = (
+            normalize_color_appearance(
+                values["ui_color_theme"],
+                values["ui_color_palette"],
+                theme_default=defaults.ui_color_theme,
+                palette_default=defaults.ui_color_palette,
+            )
+        )
         return cls(**values)
 
     def to_dict(self) -> dict[str, Any]:

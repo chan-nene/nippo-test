@@ -10,12 +10,11 @@ from typing import Any, Callable
 
 from app.calendar_policy import CALENDAR_MIN_FISCAL_YEAR
 from app.config import (
-    StorageConfigError,
     SettingsManager,
+    StorageConfigError,
     StorageManager,
-    normalize_color_palette,
+    normalize_color_appearance,
     normalize_member_filter_levels,
-    normalize_color_theme,
     to_bool,
     to_int,
 )
@@ -32,15 +31,14 @@ from app.security import (
     RequestValidationError,
     validate_administration_save_request,
     validate_common_master_save_request,
-    validate_load_request,
     validate_ime_diagnostic_request,
+    validate_load_request,
     validate_save_request,
     validate_settings_request,
-    validate_user_team_references,
     validate_ui_state_request,
     validate_user_administration_save_request,
+    validate_user_team_references,
 )
-
 
 logger = logging.getLogger(__name__)
 UNREGISTERED_EMPLOYEE_MESSAGE = "このアプリは使用できません。管理者に連絡してください。"
@@ -186,6 +184,12 @@ class DailyReportApi:
     def save_settings(self, payload: Any) -> dict[str, Any]:
         try:
             payload = validate_settings_request(payload)
+            color_theme, color_palette = normalize_color_appearance(
+                payload.get("ui_color_theme"),
+                payload.get("ui_color_palette"),
+                theme_default=self._settings.ui_color_theme,
+                palette_default=self._settings.ui_color_palette,
+            )
             candidate = replace(
                 self._settings,
                 default_start_offset_days=to_int(
@@ -202,14 +206,8 @@ class DailyReportApi:
                     self._settings.include_today_in_missing_comments,
                 ),
                 comment_signature=str(payload.get("comment_signature", "")).strip(),
-                ui_color_theme=normalize_color_theme(
-                    payload.get("ui_color_theme"),
-                    self._settings.ui_color_theme,
-                ),
-                ui_color_palette=normalize_color_palette(
-                    payload.get("ui_color_palette"),
-                    self._settings.ui_color_palette,
-                ),
+                ui_color_theme=color_theme,
+                ui_color_palette=color_palette,
                 ui_member_filter_levels=normalize_member_filter_levels(
                     payload.get("ui_member_filter_levels"),
                     self._settings.ui_member_filter_levels,
@@ -236,6 +234,12 @@ class DailyReportApi:
     def save_ui_state(self, payload: Any) -> dict[str, Any]:
         try:
             payload = validate_ui_state_request(payload)
+            color_theme, color_palette = normalize_color_appearance(
+                payload.get("ui_color_theme"),
+                payload.get("ui_color_palette"),
+                theme_default=self._settings.ui_color_theme,
+                palette_default=self._settings.ui_color_palette,
+            )
             preset = str(payload.get("period_preset", "")).strip()
             if preset == "last7days":
                 preset = "default"
@@ -250,13 +254,8 @@ class DailyReportApi:
                 ui_start_date=str(payload.get("start_date", "")).strip(),
                 ui_end_date=str(payload.get("end_date", "")).strip(),
                 ui_font_size=self._validated_font_size(payload.get("font_size")),
-                ui_color_theme=normalize_color_theme(
-                    payload.get("ui_color_theme"), self._settings.ui_color_theme
-                ),
-                ui_color_palette=normalize_color_palette(
-                    payload.get("ui_color_palette"),
-                    self._settings.ui_color_palette,
-                ),
+                ui_color_theme=color_theme,
+                ui_color_palette=color_palette,
                 ui_column_widths=(
                     json.dumps(
                         payload["column_widths"],
@@ -969,7 +968,7 @@ class DailyReportApi:
                 root.attributes("-topmost", True)
                 debug_user = simpledialog.askstring(
                     "開発用ログイン",
-                    "テストユーザーIDを入力してください\n(user1, user2, user3, boss1, boss2)\n※キャンセル・空白でOSユーザー",
+                    "ユーザーIDを入力してください\n※キャンセル・空白でOSユーザー",
                     parent=root,
                 )
                 root.destroy()

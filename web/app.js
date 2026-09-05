@@ -83,6 +83,9 @@ const state = {
   cacheGeneration: 0,
 };
 
+const COLOR_PALETTES = Object.freeze(["default", "blue", "blue_white"]);
+const LIGHT_ONLY_COLOR_PALETTE = "blue_white";
+
 let currentEditingElement = null;
 let uiStateSaveQueue = Promise.resolve();
 let lastNativeUnsavedState = null;
@@ -123,7 +126,16 @@ function normalizeColorTheme(value) {
 }
 
 function normalizeColorPalette(value) {
-  return value === "blue" ? "blue" : "default";
+  return COLOR_PALETTES.includes(value) ? value : "default";
+}
+
+function normalizeColorAppearance(themeValue, paletteValue) {
+  const theme = normalizeColorTheme(themeValue);
+  let palette = normalizeColorPalette(paletteValue);
+  if (theme === "dark" && palette === LIGHT_ONLY_COLOR_PALETTE) {
+    palette = "blue";
+  }
+  return { theme, palette };
 }
 
 function normalizeAllowedMemberFilterLevels(value) {
@@ -208,11 +220,22 @@ function applyColorPalette(value) {
   syncColorPaletteControls(palette);
 }
 
+function applyColorAppearance(themeValue, paletteValue) {
+  const appearance = normalizeColorAppearance(themeValue, paletteValue);
+  applyColorTheme(appearance.theme);
+  applyColorPalette(appearance.palette);
+  return appearance;
+}
+
 function previewColorPalette(value) {
   const palette = normalizeColorPalette(value);
+  const requestedTheme = palette === LIGHT_ONLY_COLOR_PALETTE
+    ? "light"
+    : state.colorTheme;
+  const appearance = normalizeColorAppearance(requestedTheme, palette);
   suppressColorThemeTransitions();
-  applyColorPalette(palette);
-  window.markColorPalettePersisted?.(palette);
+  applyColorAppearance(appearance.theme, appearance.palette);
+  window.markColorPalettePersisted?.(appearance.palette);
   syncChrome();
   persistUiState();
 }
@@ -260,11 +283,12 @@ function syncColorThemeControls(theme = state.colorTheme) {
 }
 
 function setColorTheme(value, focus = true) {
-  const theme = normalizeColorTheme(value);
+  const appearance = normalizeColorAppearance(value, state.colorPalette);
   const settingsWereDirty =
     typeof isSettingsDirty === "function" && isSettingsDirty();
   suppressColorThemeTransitions();
-  applyColorTheme(theme);
+  applyColorAppearance(appearance.theme, appearance.palette);
+  window.markColorPalettePersisted?.(appearance.palette);
   if (!settingsWereDirty && typeof getSettingsDraftSnapshot === "function") {
     state.settingsSnapshot = getSettingsDraftSnapshot();
   }
@@ -272,7 +296,7 @@ function setColorTheme(value, focus = true) {
   persistUiState();
   if (focus) {
     getColorThemeOptions()
-      .find((option) => option.dataset.themeOption === theme)
+      .find((option) => option.dataset.themeOption === appearance.theme)
       ?.focus({ preventScroll: true });
   }
 }
@@ -558,8 +582,7 @@ function syncFlatpickrDateInput(inputId) {
 }
 
 function restoreUiState(settings) {
-  applyColorTheme(settings.ui_color_theme);
-  applyColorPalette(settings.ui_color_palette);
+  applyColorAppearance(settings.ui_color_theme, settings.ui_color_palette);
   state.memberFilterLevels = normalizeMemberFilterLevels(
     settings.ui_member_filter_levels,
   ).filter((level) =>

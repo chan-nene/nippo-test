@@ -4590,6 +4590,16 @@ html:not([data-theme="dark"]) body #adminPanel {
   --org-calendar-holiday-hover: #dedede;
 }
 
+html[data-color-palette="blue_white"][data-theme="light"] body #adminPanel {
+  --org-calendar-holiday: #dbeafe;
+  --org-calendar-holiday-hover: #bfdbfe;
+  --org-calendar-holiday-ink: #1e3a8a;
+}
+
+html[data-color-palette="blue_white"][data-theme="light"] body #adminPanel .admin-data-table th {
+  color: var(--text-strong);
+}
+
 html[data-theme="dark"] body #adminPanel {
   --org-calendar-holiday: #263241;
   --org-calendar-holiday-hover: #304054;

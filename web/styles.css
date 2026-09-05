@@ -264,6 +264,87 @@ html[data-color-palette="blue"][data-theme="dark"] {
   --filter-active-border: #2893cc;
 }
 
+/* Vivid Tailwind-like blue on a white canvas.  This profile is light-only;
+   the dark pairing below is a defensive fallback for stale persisted state. */
+html[data-color-palette="blue_white"][data-theme="light"] {
+  --app-bg: #ffffff;
+  --surface: #ffffff;
+  --surface-alt: #ffffff;
+  --surface-soft: #f8fafc;
+  --surface-hover: #eff6ff;
+  --surface-active: #dbeafe;
+  --context-soft: #dbeafe;
+  --context-border: #93c5fd;
+  --selection-soft: #dbeafe;
+  --control-track-bg: #f1f5f9;
+  --control-selected-bg: #ffffff;
+  --control-selected-border: #bfdbfe;
+  --panel-bg: #ffffff;
+  --input-bg: #ffffff;
+  --table-cell-bg: #ffffff;
+  --holiday-row-bg: #eff6ff;
+  --holiday-row-hover-bg: #dbeafe;
+  --table-header-bg: #ffffff;
+  --border: #e2e8f0;
+  --table-border: #e2e8f0;
+  --table-border-strong: #cbd5e1;
+  --border-strong: #cbd5e1;
+  --text: #1e293b;
+  --text-strong: #0f172a;
+  --text-muted: #475569;
+  --interactive-fill: #1e293b;
+  --interactive-fill-hover: #0f172a;
+  --interactive-ink: #1f2937;
+  --action-secondary-fg: #1f2937;
+  --action-secondary-hover-fg: #0f172a;
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --primary-ink: #1D4ED8;
+  --primary-soft: #DBEAFE;
+  --primary-border: #2563EB;
+  --primary-on: #FFFFFF;
+  --filter-idle-bg: #f1f5f9;
+  --filter-idle-hover-bg: #e2e8f0;
+  --filter-idle-fg: #334155;
+  --filter-idle-hover-fg: #1e293b;
+  --filter-active-bg: #2563EB;
+  --filter-active-hover-bg: #1D4ED8;
+  --filter-active-fg: #FFFFFF;
+  --filter-active-border: #2563EB;
+  --filter-disabled-fg: #94a3b8;
+  --editable-cell-hover: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  --dirty: #fef3c7;
+  --title-bar-bg: #ffffff;
+  --title-bar-border: #e2e8f0;
+  --sidebar-bg: #f8fafc;
+  --sidebar-bg-deep: #f8fafc;
+  --sidebar-text: #1f2937;
+  --sidebar-active-text: #1D4ED8;
+  --sidebar-muted: #475569;
+  --shadow-color: rgb(15 23 42 / 10%);
+  --shadow-color-strong: rgb(15 23 42 / 16%);
+  --shadow-popover: 0 10px 28px var(--shadow-color);
+}
+
+html[data-color-palette="blue_white"][data-theme="dark"] {
+  --primary: #2893cc;
+  --primary-hover: #3aa5d4;
+  --primary-ink: #60a5fa;
+  --primary-soft: rgb(59 130 246 / 15%);
+  --primary-border: #2893cc;
+  --primary-on: #ffffff;
+  --filter-active-bg: #2893cc;
+  --filter-active-hover-bg: #3aa5d4;
+  --filter-active-fg: #ffffff;
+  --filter-active-border: #2893cc;
+}
+
+/* The white-only profile needs a quiet rule to separate the title bar from
+   the white navigation/content canvas. */
+html[data-color-palette="blue_white"][data-theme="light"] body .title-bar {
+  border-bottom: 1px solid var(--title-bar-border);
+}
+
 html.is-color-theme-switching *,
 html.is-color-theme-switching *::before,
 html.is-color-theme-switching *::after {
@@ -950,6 +1031,12 @@ html body .font-size-button {
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.04em;
+}
+
+html body .font-size-button svg {
+  width: 28px;
+  height: 20px;
+  stroke: none;
 }
 
 html body .font-size-menu {

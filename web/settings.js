@@ -11,7 +11,15 @@ let settingsLoadSequence = 0;
 let settingsLoading = false;
 
 function fillSettings(settings, context = null) {
-  savedSettings = { ...(settings || {}) };
+  const appearance = normalizeColorAppearance(
+    settings.ui_color_theme,
+    settings.ui_color_palette,
+  );
+  savedSettings = {
+    ...(settings || {}),
+    ui_color_theme: appearance.theme,
+    ui_color_palette: appearance.palette,
+  };
   settingsLoaded = true;
   const startOffset = Number(settings.default_start_offset_days ?? -2);
   const endOffset = Number(settings.default_end_offset_days ?? 0);
@@ -25,7 +33,7 @@ function fillSettings(settings, context = null) {
     settings.include_today_in_missing_comments,
   );
   $("commentSignature").value = settings.comment_signature || "";
-  syncColorPaletteControls(normalizeColorPalette(settings.ui_color_palette));
+  syncColorPaletteControls(appearance.palette);
   const memberFilterLevels = normalizeMemberFilterLevels(
     settings.ui_member_filter_levels,
   );
@@ -307,8 +315,10 @@ async function saveSettings() {
     return false;
   }
 
-  applyColorTheme(result.settings.ui_color_theme);
-  applyColorPalette(result.settings.ui_color_palette);
+  applyColorAppearance(
+    result.settings.ui_color_theme,
+    result.settings.ui_color_palette,
+  );
   fillSettings(result.settings, result.settings_context || result);
   state.memberFilterLevels = normalizeMemberFilterLevels(
     result.settings.ui_member_filter_levels,

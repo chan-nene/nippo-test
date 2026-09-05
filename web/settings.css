@@ -301,6 +301,14 @@ html[data-theme="dark"] body .color-palette-preview.is-blue > span {
   background: #2893cc;
 }
 
+html body .color-palette-preview.is-blue-white > span {
+  background: #2563EB;
+}
+
+html[data-theme="dark"] body .color-palette-preview.is-blue-white > span {
+  background: #2893cc;
+}
+
 html body .appearance-mode-preview {
   position: relative;
   display: block;

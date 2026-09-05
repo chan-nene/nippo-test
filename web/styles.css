@@ -264,8 +264,8 @@ html[data-color-palette="blue"][data-theme="dark"] {
   --filter-active-border: #2893cc;
 }
 
-/* Vivid Tailwind-like blue on a white canvas.  This profile is light-only;
-   the dark pairing below is a defensive fallback for stale persisted state. */
+/* Vivid Tailwind-like blue with a white light surface and a deep-black dark
+   surface.  Both appearances remain part of the same palette. */
 html[data-color-palette="blue_white"][data-theme="light"] {
   --app-bg: #ffffff;
   --surface: #ffffff;
@@ -327,22 +327,71 @@ html[data-color-palette="blue_white"][data-theme="light"] {
 }
 
 html[data-color-palette="blue_white"][data-theme="dark"] {
-  --primary: #2893cc;
-  --primary-hover: #3aa5d4;
-  --primary-ink: #60a5fa;
-  --primary-soft: rgb(59 130 246 / 15%);
-  --primary-border: #2893cc;
-  --primary-on: #ffffff;
-  --filter-active-bg: #2893cc;
-  --filter-active-hover-bg: #3aa5d4;
-  --filter-active-fg: #ffffff;
-  --filter-active-border: #2893cc;
+  --app-bg: #000000;
+  --surface: #0b0b0b;
+  --surface-alt: #080808;
+  --surface-soft: #111111;
+  --surface-hover: #181818;
+  --surface-active: #1d3557;
+  --context-soft: #1d3557;
+  --context-border: #3b5f8a;
+  --selection-soft: #1d3557;
+  --control-track-bg: #121212;
+  --control-selected-bg: #0f0f0f;
+  --control-selected-border: #3d3d3d;
+  --panel-bg: #0b0b0b;
+  --input-bg: #101010;
+  --table-cell-bg: #0b0b0b;
+  --holiday-row-bg: #171717;
+  --holiday-row-hover-bg: #202020;
+  --table-header-bg: #141414;
+  --border: #2a2a2a;
+  --table-border: #2a2a2a;
+  --table-border-strong: #3d3d3d;
+  --border-strong: #525252;
+  --text: #cbd5e1;
+  --text-strong: #f8fafc;
+  --text-muted: #94a3b8;
+  --interactive-fill: #e2e8f0;
+  --interactive-fill-hover: #f8fafc;
+  --interactive-ink: #cbd5e1;
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+  --primary-ink: #93c5fd;
+  --primary-soft: rgb(96 165 250 / 16%);
+  --primary-border: #60a5fa;
+  --primary-on: #0b1220;
+  --filter-idle-bg: #141414;
+  --filter-idle-hover-bg: #1f1f1f;
+  --filter-idle-fg: #cbd5e1;
+  --filter-idle-hover-fg: #f8fafc;
+  --filter-active-bg: #60a5fa;
+  --filter-active-hover-bg: #93c5fd;
+  --filter-active-fg: #0b1220;
+  --filter-active-border: #60a5fa;
+  --filter-disabled-fg: #64748b;
+  --editable-cell-hover: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  --title-bar-bg: #1f2937;
+  --title-bar-border: #334155;
+  --sidebar-bg: #111827;
+  --sidebar-bg-deep: #0b1220;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active-text: #93c5fd;
+  --sidebar-muted: #94a3b8;
+  --shadow-color: rgb(0 0 0 / 45%);
+  --shadow-color-strong: rgb(0 0 0 / 60%);
+  --shadow-popover: 0 12px 34px rgb(0 0 0 / 55%);
 }
 
-/* The white-only profile needs a quiet rule to separate the title bar from
-   the white navigation/content canvas. */
+/* Keep the title bar distinct from the navigation/content canvas in the
+   light appearance of the blue_white palette. */
 html[data-color-palette="blue_white"][data-theme="light"] body .title-bar {
   border-bottom: 1px solid var(--title-bar-border);
+}
+
+/* The dark shell uses adjacent dark surfaces without a separator line. */
+html[data-theme="dark"] body .title-bar {
+  border-bottom: 0;
 }
 
 html.is-color-theme-switching *,

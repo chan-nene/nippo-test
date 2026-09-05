@@ -4596,13 +4596,20 @@ html[data-color-palette="blue_white"][data-theme="light"] body #adminPanel {
   --org-calendar-holiday-ink: #1e3a8a;
 }
 
-html[data-color-palette="blue_white"][data-theme="light"] body #adminPanel .admin-data-table th {
+html[data-color-palette="blue_white"][data-theme="light"] body #adminPanel .admin-data-table th,
+html[data-color-palette="blue_white"][data-theme="dark"] body #adminPanel .admin-data-table th {
   color: var(--text-strong);
 }
 
 html[data-theme="dark"] body #adminPanel {
   --org-calendar-holiday: #263241;
   --org-calendar-holiday-hover: #304054;
+}
+
+html[data-color-palette="blue_white"][data-theme="dark"] body #adminPanel {
+  --org-calendar-holiday: #1e3a5f;
+  --org-calendar-holiday-hover: #244b73;
+  --org-calendar-holiday-ink: #bfdbfe;
 }
 
 html body #adminPanel .fiscal-calendar-grid {

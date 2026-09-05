@@ -64,8 +64,8 @@ const state = {
   directorMissingDays: 0,
   commentSignature: "",
   settingsSnapshot: "",
-  colorTheme: "dark",
-  colorPalette: "default",
+  colorTheme: "light",
+  colorPalette: "blue_white",
   fontSize: "large",
   columnWidths: {},
   memberFilterLevels: [],
@@ -83,8 +83,7 @@ const state = {
   cacheGeneration: 0,
 };
 
-const COLOR_PALETTES = Object.freeze(["default", "blue", "blue_white"]);
-const LIGHT_ONLY_COLOR_PALETTE = "blue_white";
+const COLOR_PALETTES = Object.freeze(["blue_white", "blue", "default"]);
 
 let currentEditingElement = null;
 let uiStateSaveQueue = Promise.resolve();
@@ -122,19 +121,16 @@ const LEGACY_PERIOD_MODE_MAP = Object.freeze({
 const $ = (id) => document.getElementById(id);
 
 function normalizeColorTheme(value) {
-  return value === "light" ? "light" : "dark";
+  return value === "dark" ? "dark" : "light";
 }
 
 function normalizeColorPalette(value) {
-  return COLOR_PALETTES.includes(value) ? value : "default";
+  return COLOR_PALETTES.includes(value) ? value : "blue_white";
 }
 
 function normalizeColorAppearance(themeValue, paletteValue) {
   const theme = normalizeColorTheme(themeValue);
-  let palette = normalizeColorPalette(paletteValue);
-  if (theme === "dark" && palette === LIGHT_ONLY_COLOR_PALETTE) {
-    palette = "blue";
-  }
+  const palette = normalizeColorPalette(paletteValue);
   return { theme, palette };
 }
 
@@ -166,8 +162,8 @@ function applySettingsContext(source = {}) {
     ...context.allowed_member_filter_levels,
   ];
 
-  const notificationPanel = $("settingsNotificationPanel");
-  notificationPanel?.classList.toggle(
+  const commentSettings = $("commentFeatureSettings");
+  commentSettings?.classList.toggle(
     "hidden",
     !context.has_comment_targets,
   );
@@ -229,10 +225,7 @@ function applyColorAppearance(themeValue, paletteValue) {
 
 function previewColorPalette(value) {
   const palette = normalizeColorPalette(value);
-  const requestedTheme = palette === LIGHT_ONLY_COLOR_PALETTE
-    ? "light"
-    : state.colorTheme;
-  const appearance = normalizeColorAppearance(requestedTheme, palette);
+  const appearance = normalizeColorAppearance(state.colorTheme, palette);
   suppressColorThemeTransitions();
   applyColorAppearance(appearance.theme, appearance.palette);
   window.markColorPalettePersisted?.(appearance.palette);

@@ -56,11 +56,11 @@ html body .settings-section-body {
 
 html body .settings-section,
 html body #settingsPanel .settings-card > .actions {
-  max-width: 880px;
+  max-width: 646px;
 }
 
 html body .settings-signature-field {
-  max-width: 720px;
+  max-width: 646px;
 }
 
 html body .settings-field {
@@ -104,7 +104,7 @@ html body .settings-primary-control {
 html body .settings-section-actions {
   display: flex;
   min-width: 0;
-  max-width: 880px;
+  max-width: 646px;
   margin-top: 2px;
   padding-top: 4px;
   align-items: center;
@@ -224,7 +224,15 @@ html body .member-filter-option:has(input:focus-visible) {
   outline-offset: 0;
 }
 
-html body :is(.color-palette-options, .appearance-mode-options) {
+html body .color-palette-options {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(150px, 210px));
+  gap: 8px;
+  overflow-x: auto;
+}
+
+html body .appearance-mode-options {
   display: grid;
   min-width: 0;
   grid-template-columns: repeat(2, minmax(150px, 210px));
@@ -306,7 +314,7 @@ html body .color-palette-preview.is-blue-white > span {
 }
 
 html[data-theme="dark"] body .color-palette-preview.is-blue-white > span {
-  background: #2893cc;
+  background: #60a5fa;
 }
 
 html body .appearance-mode-preview {
@@ -345,7 +353,7 @@ html body .appearance-mode-preview.is-dark > span {
 }
 
 @media (max-width: 760px) {
-  html body :is(.color-palette-options, .appearance-mode-options) {
+  html body .appearance-mode-options {
     grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -10,7 +10,6 @@ from typing import Any
 
 COLOR_THEMES = frozenset({"light", "dark"})
 COLOR_PALETTES = frozenset({"default", "blue", "blue_white"})
-LIGHT_ONLY_COLOR_PALETTE = "blue_white"
 MEMBER_FILTER_LEVELS = ("department", "section", "member")
 DEFAULT_MEMBER_FILTER_LEVELS = ""
 
@@ -61,14 +60,14 @@ def to_bool(value: Any, default: bool) -> bool:
     return default
 
 
-def normalize_color_theme(value: Any, default: str = "dark") -> str:
-    fallback = default if default in COLOR_THEMES else "dark"
+def normalize_color_theme(value: Any, default: str = "light") -> str:
+    fallback = default if default in COLOR_THEMES else "light"
     color_theme = str(value or "").strip().lower()
     return color_theme if color_theme in COLOR_THEMES else fallback
 
 
-def normalize_color_palette(value: Any, default: str = "default") -> str:
-    fallback = default if default in COLOR_PALETTES else "default"
+def normalize_color_palette(value: Any, default: str = "blue_white") -> str:
+    fallback = default if default in COLOR_PALETTES else "blue_white"
     color_palette = str(value or "").strip().lower()
     return color_palette if color_palette in COLOR_PALETTES else fallback
 
@@ -77,22 +76,12 @@ def normalize_color_appearance(
     theme: Any,
     palette: Any,
     *,
-    theme_default: str = "dark",
-    palette_default: str = "default",
+    theme_default: str = "light",
+    palette_default: str = "blue_white",
 ) -> tuple[str, str]:
-    """Normalize the persisted theme/palette pair.
-
-    ``blue_white`` is deliberately light-only.  A stale or direct API
-    request that combines it with the dark theme falls back to the existing
-    blue palette so the saved pair always describes a supported appearance.
-    """
+    """Normalize the persisted theme/palette pair."""
     normalized_theme = normalize_color_theme(theme, theme_default)
     normalized_palette = normalize_color_palette(palette, palette_default)
-    if (
-        normalized_palette == LIGHT_ONLY_COLOR_PALETTE
-        and normalized_theme == "dark"
-    ):
-        normalized_palette = "blue"
     return normalized_theme, normalized_palette
 
 
@@ -139,8 +128,8 @@ class AppSettings:
     ui_end_date: str = ""
     ui_font_size: str = "large"
     ui_column_widths: str = ""
-    ui_color_theme: str = "dark"
-    ui_color_palette: str = "default"
+    ui_color_theme: str = "light"
+    ui_color_palette: str = "blue_white"
     ui_member_filter_levels: str = DEFAULT_MEMBER_FILTER_LEVELS
 
     @property

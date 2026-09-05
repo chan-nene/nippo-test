@@ -73,11 +73,23 @@ html[data-color-palette="blue_white"][data-theme="light"] body #tableWrap table 
   color: var(--text-strong);
 }
 
-/* Keep a stale blue_white + dark pair visually equivalent to the existing
-   blue dark profile until the frontend normalizes and saves it. */
+/* The blue_white dark surface keeps report holidays quiet while calendar
+   holidays retain their blue meaning in the administration screen. */
 html[data-color-palette="blue_white"][data-theme="dark"] body #reportPanel {
-  --report-today-bg: rgb(59 130 246 / 15%);
-  --report-today-fg: #60a5fa;
+  --report-period-bg: #0b0b0b;
+  --report-period-indicator: #181818;
+  --report-period-fg: #f8fafc;
+  --report-period-muted: #94a3b8;
+  --report-period-hover: #1b1b1b;
+  --report-period-shadow: 0 1px 4px -1px rgb(0 0 0 / 45%);
+  --holiday-row-bg: #171717;
+  --holiday-row-hover-bg: #202020;
+  --report-today-bg: rgb(96 165 250 / 18%);
+  --report-today-fg: #bfdbfe;
+}
+
+html[data-color-palette="blue_white"][data-theme="dark"] body #tableWrap table th {
+  color: var(--text-strong);
 }
 
 html body {

@@ -5,6 +5,8 @@ nippo-admin.key
 issue.md
 cache/
 logs/
+text/
+tests/
 test_data/
 .agent/
 .hallmark/

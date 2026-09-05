@@ -771,7 +771,39 @@ function syncPeriodPresets(config = {}) {
     );
   }
   syncMissingCommentCount();
+  syncPeriodDateRange();
   syncPeriodShiftButtons();
+}
+
+function syncPeriodDateRange() {
+  const rangeElement = $("periodDateRange");
+  if (!rangeElement) return;
+  const rangeText = formatPeriodDateRange(state.startDate, state.endDate);
+  if (rangeElement.textContent !== rangeText) {
+    rangeElement.textContent = rangeText;
+  }
+}
+
+function formatPeriodDateRange(startDate, endDate) {
+  if (!startDate && !endDate) return "";
+  if (!startDate || !endDate) return startDate || endDate;
+
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const validDates = !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime());
+  if (!validDates) return `${startDate} ~ ${endDate}`;
+  if (startDate === endDate) return formatCompactPeriodDate(start);
+
+  const differentYear = start.getUTCFullYear() !== end.getUTCFullYear();
+  return `${formatCompactPeriodDate(start, differentYear)} ~ ${formatCompactPeriodDate(end, differentYear)}`;
+}
+
+function formatCompactPeriodDate(date, includeYear = false) {
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  return includeYear
+    ? `${date.getUTCFullYear()}/${month}/${day}`
+    : `${month}/${day}`;
 }
 
 function syncPeriodShiftButtons() {

@@ -1323,6 +1323,24 @@ html body #reportPanel .period-navigation .period-shift-step-label {
   line-height: 1;
 }
 
+/* The active range is contextual information, not another control. */
+html body #reportPanel .period-date-range {
+  display: inline-flex;
+  min-width: max-content;
+  min-height: var(--control-height);
+  align-items: center;
+  flex: 0 0 auto;
+  padding-inline: 2px;
+  color: color-mix(in srgb, var(--text-muted) 76%, var(--surface));
+  font-family: var(--font-ui);
+  font-size: max(11px, calc(var(--ui-font-size) - 2px));
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 html body #reportPanel .period-navigation.is-missing-range .period-shift-step-label {
   min-width: max-content;
   padding-inline: 8px;

@@ -10,9 +10,7 @@ tests/
 test_data/
 .agent/
 .hallmark/
-web/vendor/flat*
-web/vendor/Sortable*
-web/vendor/tabulator*
+web/vendor/
 tools/
 .agents/
 package.json

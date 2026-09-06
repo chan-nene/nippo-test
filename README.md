@@ -28,9 +28,13 @@ CSVをデータストアとして利用する、pywebview製の日報デスク�
 
 ## 使用するJavaScriptライブラリ
 
-- Flatpickr
-- Tabulator
-- SortableJS
+WebView内では、次のライブラリを `web/vendor/` に配置して使用します。ライブラリ本体、ロケール、ライセンスファイルはGit管理せず、利用者が各自で公式配布元からダウンロードしてください。
+
+- [Flatpickr](https://flatpickr.js.org/) `4.6.13` — 日付入力カレンダー。MIT License
+- [Tabulator](https://tabulator.info/) `6.5.2` — 管理画面の一覧表示・並び替え・検索。MIT License
+- [SortableJS](https://sortablejs.github.io/Sortable/) `1.15.7` — 組織・所属ユーザーのドラッグ＆ドロップによる並び替え。MIT License
+
+Flatpickrの日本語表示には、Flatpickr `4.6.13` に対応する日本語ロケール `l10n/ja.js` を使用します。各ライブラリのライセンス本文も、ダウンロード元の同じバージョンから取得して `web/vendor/` に配置してください。
 
 ## ライセンス
 

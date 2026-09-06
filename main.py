@@ -201,7 +201,7 @@ def main() -> None:
         # before_load runs after the trusted document is loaded but before the
         # JavaScript bridge (and therefore untrusted CSV content) is exposed.
         window.events.before_load += install_navigation_guard
-        webview.start(debug=not getattr(sys, "frozen", False))
+        webview.start(debug=False)
     finally:
         instance_lock.release()
 

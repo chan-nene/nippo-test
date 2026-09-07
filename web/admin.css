@@ -969,8 +969,8 @@ html body .inspector-field-hint {
 html body #adminPanel .inspector-field-error,
 html body .team-create-dialog .inspector-field-error {
   color: var(--error);
-  font-size: var(--font-12);
-  font-weight: 600;
+  font-size: var(--font-10);
+  font-weight: 400;
   line-height: 1.35;
 }
 
@@ -3028,6 +3028,28 @@ html body #adminPanel .user-managed-label {
   font-weight: 600;
 }
 
+html body #adminPanel .inspector-required-tag {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--error) 36%, var(--org-rule));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--error) 8%, var(--org-surface));
+  color: color-mix(in srgb, var(--error) 76%, var(--org-ink));
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+html body #adminPanel .user-editor-fields .inspector-field-label {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 7px;
+}
+
 html body #adminPanel .user-editor-fields .inspector-field :is(
   input:not([type="radio"]),
   select
@@ -4014,8 +4036,17 @@ html body #adminPanel .organization-card .organization-section-count {
   white-space: nowrap;
 }
 
+html body #adminPanel .organization-section-card .organization-card-select {
+  text-align: left;
+}
+
 html body #adminPanel .organization-section-card .organization-card-copy {
+  text-align: left;
   gap: 7px;
+}
+
+html body #adminPanel .organization-section-card .organization-card-copy strong {
+  text-align: left;
 }
 
 html body #adminPanel .organization-section-card .organization-card-copy .team-level-label {

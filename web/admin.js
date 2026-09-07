@@ -1105,6 +1105,8 @@
   }
 
   function activate(options = {}) {
+    // 管理画面へ戻るたびに、前回の管理タブを引き継がずユーザー管理を初期表示する。
+    activeMaster = "user_master";
     return load({
       manual: false,
       forceRefresh: true,
@@ -1498,23 +1500,20 @@
       );
       field?.querySelector(".inspector-field-error")?.remove();
       const controls = [...(field?.querySelectorAll("input, select, textarea") || [])];
-      const checkedRadio = controls.find(
-        (control) => control.type === "radio" && control.checked,
-      );
-      const fieldValue = checkedRadio ? checkedRadio.value : controls[0]?.value || "";
-      const isRequiredInvalid =
-        controls.some((control) => control.required) && !String(fieldValue).trim();
+      // 必須タグで入力対象を案内するため、未入力だけでは赤強調を出さない。
+      // 赤強調は保存後に返された検証エラーの表示に限定する。
+      const isValidationInvalid = false;
       controls.forEach((control) => {
-        control.classList.toggle("is-invalid", isRequiredInvalid);
-        control.setAttribute("aria-invalid", String(isRequiredInvalid));
+        control.classList.toggle("is-invalid", isValidationInvalid);
+        control.setAttribute("aria-invalid", String(isValidationInvalid));
       });
       field?.querySelector(".inspector-radio-group")?.classList.toggle(
         "is-invalid",
-        isRequiredInvalid,
+        isValidationInvalid,
       );
       field
         ?.querySelector(".inspector-radio-group")
-        ?.setAttribute("aria-invalid", String(isRequiredInvalid));
+        ?.setAttribute("aria-invalid", String(isValidationInvalid));
     }
     if (state.saveError) {
       state.saveError = "";
@@ -2046,7 +2045,7 @@
         error.id = errorId;
         error.className = "inspector-field-error hidden";
         error.setAttribute("role", "alert");
-        field.append(error);
+        (field.querySelector(".inspector-field-label") || field).append(error);
       }
       const message = teamCreateValidationErrors[key] || "";
       error.textContent = message;
@@ -2486,7 +2485,8 @@
       normalizeSiblingOrders(previousValue);
       normalizeSiblingOrders(nextValue);
     }
-    const isInvalid = input.required && !nextValue.trim();
+    // 未入力の必須項目はタグで案内し、赤強調は保存後の検証エラーに限定する。
+    const isInvalid = false;
     input.classList.toggle("is-invalid", isInvalid);
     input.setAttribute("aria-invalid", String(isInvalid));
     renderMasterNav();
@@ -4276,9 +4276,11 @@
     fields.className = "inspector-fields user-editor-fields";
     ["employee_id", "display_name"].forEach((key) => {
       const column = definition.columns.find((item) => item.key === key);
+      const isRequired = key !== "employee_id" || entry.isNew;
       fields.append(
         createInspectorField(column, valueFor(entry, key), {
-          required: true,
+          required: isRequired,
+          showRequiredTag: isRequired,
           disabled: key === "employee_id" && !entry.isNew,
           hideKey: true,
           errorMessage: validationErrors[key],
@@ -4500,14 +4502,14 @@
     return heading;
   }
 
-  // インスペクター項目の直下に、検証時だけフィールドエラーを配置する。
+  // ラベル行の右側に、検証時だけフィールドエラーを配置する。
   function appendInspectorFieldError(field, message) {
     if (!message) return;
     const error = document.createElement("span");
     error.className = "inspector-field-error";
     error.setAttribute("role", "alert");
     error.textContent = message;
-    field.append(error);
+    (field.querySelector(".inspector-field-label") || field).append(error);
   }
 
   // モーダル操作バーの直上に、保存失敗を表示する。
@@ -4517,6 +4519,15 @@
     error.setAttribute("role", "alert");
     error.textContent = message;
     return error;
+  }
+
+  // 項目ラベルへ、保存に必要なことを示す視認用タグを追加する。入力自体のrequired属性とは分けて管理する。
+  function appendRequiredTag(labelText) {
+    const tag = document.createElement("span");
+    tag.className = "inspector-required-tag";
+    tag.textContent = "必須";
+    tag.setAttribute("aria-hidden", "true");
+    labelText.append(tag);
   }
 
   // 列定義に応じてラジオ、select、inputを生成し、必須・無効・不正表示と選択肢を共通化する。
@@ -4537,6 +4548,7 @@
     const key = document.createElement("small");
     key.textContent = column.key;
     labelText.append(visibleLabel);
+    if (options.showRequiredTag) appendRequiredTag(labelText);
     if (!options.hideKey) labelText.append(key);
 
     if (isRadioField) {
@@ -4550,9 +4562,8 @@
           : column.type === "admin_flag"
             ? [["1", "管理者"], ["0", "一般"]]
             : [["1", "要"], ["0", "不要"]];
-      const isInvalid =
-        Boolean(options.errorMessage) ||
-        (Boolean(options.required) && !String(value).trim());
+      // 必須項目の未入力はタグで案内し、保存後の検証エラーだけを赤く表示する。
+      const isInvalid = Boolean(options.errorMessage);
       choices.forEach(([optionValue, text], index) => {
         const optionLabel = document.createElement("label");
         optionLabel.className = "inspector-radio-option";
@@ -4636,9 +4647,8 @@
     input.required = Boolean(options.required);
     input.disabled = Boolean(options.disabled);
     input.autocomplete = "off";
-    const isInvalid =
-      Boolean(options.errorMessage) ||
-      (input.required && !String(value).trim());
+    // 必須項目の未入力はタグで案内し、保存後の検証エラーだけを赤く表示する。
+    const isInvalid = Boolean(options.errorMessage);
     input.classList.toggle("is-invalid", isInvalid);
     input.setAttribute("aria-invalid", String(isInvalid));
     label.append(labelText, input);

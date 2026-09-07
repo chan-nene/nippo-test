@@ -250,6 +250,7 @@
     minimumFiscalYear,
     fiscalYearForDate(new Date()),
   );
+  let calendarViewFiscalYear = activeFiscalYear;
   let calendarFocusDate = "";
   let isChangingFiscalYear = false;
   let searchText = "";
@@ -280,6 +281,11 @@
     "データを保存できませんでした。もう一度更新してください。";
   const ADMIN_CONFLICT_MESSAGE =
     "別ユーザーがデータ変更していたため、更新を破棄しました。「最新データを再読み込み」を押してください。";
+
+  // 管理画面とナビゲーションのカレンダーは年度を別々に保持し、表示側に応じた年度を返す。
+  function displayedFiscalYear() {
+    return isCalendarReadOnly ? calendarViewFiscalYear : activeFiscalYear;
+  }
 
   // ---------------------------------------------------------------------------
   // 下書き管理・DOM境界
@@ -1072,7 +1078,7 @@
       revision: "",
       selectedId: "",
     });
-    activeFiscalYear = Math.max(minimumFiscalYear, fiscalYearForDate(new Date()));
+    calendarViewFiscalYear = Math.max(calendarViewFiscalYear, minimumFiscalYear);
     calendarFocusDate = "";
     isLoaded = true;
     byId("adminLoading").classList.add("hidden");
@@ -1814,12 +1820,13 @@
   async function changeFiscalYear(direction) {
     if (![-1, 1].includes(Number(direction))) return;
     if (isChangingFiscalYear) return;
-    const targetFiscalYear = activeFiscalYear + Number(direction);
+    const currentFiscalYear = displayedFiscalYear();
+    const targetFiscalYear = currentFiscalYear + Number(direction);
     if (targetFiscalYear < minimumFiscalYear) return;
     const draft = drafts.get("calendar");
     if (!draft) return;
     if (isCalendarReadOnly) {
-      activeFiscalYear = targetFiscalYear;
+      calendarViewFiscalYear = targetFiscalYear;
       calendarFocusDate = "";
       render();
       return;
@@ -2603,7 +2610,7 @@
         ? "ユーザー"
         : definition.key === "team_master"
           ? "チーム"
-          : `${activeFiscalYear}年度カレンダー`;
+          : `${displayedFiscalYear()}年度カレンダー`;
     title.hidden = ["user_master", "calendar"].includes(definition.key);
     addButton.hidden = isTeam || definition.key === "calendar";
     searchControl.hidden = isTeam || definition.key === "calendar";
@@ -2808,7 +2815,7 @@
     wrap.replaceChildren();
     const fiscalEntries = draft.entries.filter((entry) => {
       const target = calendarDate(valueFor(entry, "date"));
-      return target && fiscalYearForDate(target) === activeFiscalYear;
+      return target && fiscalYearForDate(target) === displayedFiscalYear();
     });
     const entriesByDate = new Map(
       fiscalEntries.map((entry) => [valueFor(entry, "date"), entry]),
@@ -2822,7 +2829,7 @@
     const previous = createFiscalYearButton(-1, "前年度を表示");
     const year = document.createElement("strong");
     year.className = "fiscal-year-label";
-    year.textContent = `${activeFiscalYear}年度`;
+    year.textContent = `${displayedFiscalYear()}年度`;
     year.setAttribute("aria-live", "polite");
     const next = createFiscalYearButton(1, "次年度を表示");
     yearNavigation.append(previous, year, next);
@@ -2841,11 +2848,11 @@
     const calendar = document.createElement("div");
     calendar.className = "fiscal-calendar-grid";
     calendar.setAttribute("role", "grid");
-    calendar.setAttribute("aria-label", `${activeFiscalYear}年度カレンダー`);
+    calendar.setAttribute("aria-label", `${displayedFiscalYear()}年度カレンダー`);
     calendarFocusDate = getCalendarFocusDate();
     for (let offset = 0; offset < 12; offset += 1) {
       const absoluteMonth = 3 + offset;
-      const calendarYear = activeFiscalYear + Math.floor(absoluteMonth / 12);
+      const calendarYear = displayedFiscalYear() + Math.floor(absoluteMonth / 12);
       const monthIndex = absoluteMonth % 12;
       calendar.append(
         createCalendarMonth(calendarYear, monthIndex, entriesByDate),
@@ -2857,7 +2864,7 @@
   // 年度内で維持可能なカレンダーのフォーカス日を選び、今日または年度初日にフォールバックする。
   function getCalendarFocusDate() {
     const candidate = calendarDate(calendarFocusDate);
-    if (candidate && fiscalYearForDate(candidate) === activeFiscalYear) {
+    if (candidate && fiscalYearForDate(candidate) === displayedFiscalYear()) {
       return calendarFocusDate;
     }
     const today = new Date();
@@ -2867,10 +2874,10 @@
       today.getDate(),
     );
     const todayDate = calendarDate(todayText);
-    if (todayDate && fiscalYearForDate(todayDate) === activeFiscalYear) {
+    if (todayDate && fiscalYearForDate(todayDate) === displayedFiscalYear()) {
       return todayText;
     }
-    return calendarIsoDate(activeFiscalYear, 3, 1);
+    return calendarIsoDate(displayedFiscalYear(), 3, 1);
   }
 
   // 年度を前後へ移動するボタンを生成し、下限年度では戻る操作を無効化する。
@@ -2880,7 +2887,7 @@
     button.className = "fiscal-year-button";
     button.dataset.calendarYearAction = String(direction);
     button.setAttribute("aria-label", label);
-    button.disabled = direction < 0 && activeFiscalYear <= minimumFiscalYear;
+    button.disabled = direction < 0 && displayedFiscalYear() <= minimumFiscalYear;
     button.append(
       createTeamSvgIcon(
         direction < 0 ? "m15 18-6-6 6-6" : "m9 18 6-6-6-6",
@@ -4862,6 +4869,7 @@
       if (!Number.isInteger(parsed) || parsed < 1) return;
       minimumFiscalYear = parsed;
       activeFiscalYear = Math.max(activeFiscalYear, minimumFiscalYear);
+      calendarViewFiscalYear = Math.max(calendarViewFiscalYear, minimumFiscalYear);
       if (isLoaded) render();
     },
     // ログイン中の社員番号を記録し、管理者保護の判定に使う。読込済みなら保護対象表示を直ちに再描画する。

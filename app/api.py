@@ -553,11 +553,29 @@ class DailyReportApi:
                 value.get("error_code") == "csv_readonly"
                 for value in public_result.values()
             )
+            review_patch = None
+            if (
+                result.get("comment", {}).get("saved") is True
+                and not cache_sync_failed
+                and payload.get("view_request") is not None
+            ):
+                try:
+                    view_request = validate_load_request(payload["view_request"])
+                    review_patch = data_cache.saved_comment_view(
+                        self._settings, self._employee_id,
+                        [update["subordinate_employee_id"] for update in comment_updates],
+                        view_request.get("start_date"), view_request.get("end_date"),
+                    )
+                except Exception:
+                    # A display failure must never turn a completed disk save
+                    # into a failed save; the client can reload as a fallback.
+                    logger.exception("Failed to build saved comment review patch")
             return {
                 "ok": bool(targets) and all(value.get("saved") for value in targets),
                 "no_targets": not targets,
                 "result": public_result,
                 "cache_sync_failed": cache_sync_failed,
+                "review_patch": review_patch,
                 **(
                     {
                         "csv_locked": True,

@@ -1,12 +1,15 @@
 // Daily report and supervisor report screens.
 const imeEditorStates = new WeakMap();
+const REPORT_RENDER_BATCH_MEMBERS = 2;
+const REPORT_RENDER_BATCH_ROWS = 50;
+let reportTableRenderSession = null;
 
 const TABLE_COLUMN_WIDTH_PROFILES = Object.freeze({
-  compact: { user: 112, date: 70, name: 170, detail: 300, comment: 117 },
-  standard: { user: 128, date: 78, name: 190, detail: 350, comment: 117 },
-  medium: { user: 136, date: 84, name: 205, detail: 390, comment: 129 },
-  large: { user: 144, date: 92, name: 220, detail: 420, comment: 141 },
-  xlarge: { user: 160, date: 102, name: 240, detail: 460, comment: 153 },
+  compact: { user: 88, date: 70, name: 255, detail: 450, comment: 176 },
+  standard: { user: 96, date: 78, name: 285, detail: 525, comment: 176 },
+  medium: { user: 104, date: 84, name: 308, detail: 585, comment: 194 },
+  large: { user: 112, date: 92, name: 330, detail: 630, comment: 212 },
+  xlarge: { user: 124, date: 102, name: 360, detail: 690, comment: 230 },
 });
 const TABLE_COLUMN_MIN_WIDTH_PROFILES = Object.freeze({
   compact: { user: 88, date: 70, name: 112, detail: 160, comment: 78 },
@@ -351,7 +354,7 @@ function syncMissingCommentCount() {
   if (!label) {
     label = document.createElement("span");
     label.className = "missing-filter-label";
-    label.textContent = "未コメント";
+    label.textContent = "未コメントのみ";
     button.appendChild(label);
   }
   if (!badge) {
@@ -640,6 +643,9 @@ function formatPeriodDateRange(startDate, endDate) {
   const end = new Date(`${endDate}T00:00:00Z`);
   const validDates = !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime());
   if (!validDates) return `${startDate} ~ ${endDate}`;
+  if (state.activePeriodPreset === "month" && !state.showMissingCommentsOnly) {
+    return `${start.getUTCMonth() + 1}月`;
+  }
   if (startDate === endDate) return formatCompactPeriodDate(start);
 
   const differentYear = start.getUTCFullYear() !== end.getUTCFullYear();
@@ -649,9 +655,12 @@ function formatPeriodDateRange(startDate, endDate) {
 function formatCompactPeriodDate(date, includeYear = false) {
   const month = date.getUTCMonth() + 1;
   const day = date.getUTCDate();
+  const weekday = ["week", "default"].includes(state.activePeriodPreset)
+    ? `(${["日", "月", "火", "水", "木", "金", "土"][date.getUTCDay()]})`
+    : "";
   return includeYear
-    ? `${date.getUTCFullYear()}/${month}/${day}`
-    : `${month}/${day}`;
+    ? `${date.getUTCFullYear()}/${month}/${day}${weekday}`
+    : `${month}/${day}${weekday}`;
 }
 
 function syncPeriodShiftButtons() {
@@ -876,6 +885,7 @@ function discardDirtyEdits() {
 }
 
 function clearReportViewForLoadFailure() {
+  disposeReportTableRender();
   state.rows = [];
   state.viewableMembers = [];
   state.currentTeam = [];
@@ -902,6 +912,7 @@ async function loadData({
   const requestSequence = ++state.loadRequestSequence;
   const hadData = Boolean(state.hasInitializedReportView);
   if (transition || !hadData) {
+    disposeReportTableRender();
     showMain(false);
     $("tableWrap")?.replaceChildren();
   }
@@ -997,6 +1008,9 @@ async function loadData({
     return { ok: false };
   }
   state.accessDenied = false;
+  if (forceRefresh && !result.cache_warning_count && !result.refresh_result?.failed) {
+    state.reportRefreshPending = false;
+  }
   state.displayName = result.data.display_name || result.data.employee_id || "";
   syncCurrentUserDisplay();
   state.canInputOwnReport = result.data.can_input_own_report !== false;
@@ -1044,25 +1058,7 @@ async function loadData({
   );
   state.cacheGeneration = Number(result.cache_generation || 0);
   const missingCommentSummary = result.data.missing_comment_summary;
-  state.missingCommentDates = Array.isArray(missingCommentSummary?.dates)
-    ? missingCommentSummary.dates
-    : null;
-  state.missingCommentRangeStart = missingCommentSummary?.start_date || "";
-  state.missingCommentRangeEnd = missingCommentSummary?.end_date || "";
-  state.missingCommentMode = missingCommentSummary?.mode || "daily";
-  state.missingCommentMemberCounts =
-    missingCommentSummary?.member_counts &&
-    typeof missingCommentSummary.member_counts === "object"
-      ? { ...missingCommentSummary.member_counts }
-      : {};
-  state.directorMissingDays = Math.max(
-    0,
-    Number(
-      missingCommentSummary?.director_missing_days ??
-        missingCommentSummary?.max_elapsed_workdays ??
-        0,
-    ) || 0,
-  );
+  applyMissingCommentSummary(missingCommentSummary);
   state.startDate = result.data.start_date || state.startDate;
   state.endDate = result.data.end_date || state.endDate;
   state.legacyLoadPreset = "";
@@ -1366,7 +1362,7 @@ async function applyPreset(presetName) {
   state.legacyLoadPreset = "";
   $("startDate").value = state.startDate;
   $("endDate").value = state.endDate;
-  await loadData();
+  await loadData({ transition: presetName === "missing" });
   persistUiState();
 }
 
@@ -1450,9 +1446,47 @@ function getCalendarMonthRange(referenceDate, monthOffset = 0) {
   };
 }
 
+function getReportBatchEnd(rows, start, minimum = 0) {
+  let end = start;
+  let members = 0;
+  const useRowThreshold = !state.showMissingCommentsOnly
+    && ["week", "default"].includes(state.activePeriodPreset);
+  const minimumRows = Math.max(minimum, useRowThreshold ? REPORT_RENDER_BATCH_ROWS : 0);
+  const minimumMembers = useRowThreshold ? 0 : REPORT_RENDER_BATCH_MEMBERS;
+  // Finish the current employee's rows even when that crosses the row threshold.
+  while (end < rows.length && (members < minimumMembers || end < start + minimumRows)) {
+    const employeeId = rows[end].employee_id;
+    do { end += 1; } while (end < rows.length && rows[end].employee_id === employeeId);
+    members += 1;
+  }
+  return end;
+}
+
+function disposeReportTableRender() {
+  const session = reportTableRenderSession;
+  if (!session) return;
+  reportTableRenderSession = null;
+  if (session.frame !== null) cancelAnimationFrame(session.frame);
+  session.observer?.disconnect();
+  session.scroll.removeEventListener("scroll", session.schedule);
+}
+
+function appendNextReportBatch(session = reportTableRenderSession) {
+  if (!session || session !== reportTableRenderSession || !session.scroll.isConnected
+      || session.loaded >= session.rows.length) return false;
+  const end = getReportBatchEnd(session.rows, session.loaded);
+  session.body.insertAdjacentHTML("beforeend",
+    renderReportRows(session.rows.slice(session.loaded, end), session.context, session.loaded > 0));
+  session.loaded = end;
+  session.schedule();
+  return true;
+}
+
 function renderTable({ preserveScroll = false } = {}) {
   const wrap = $("tableWrap");
+  const previous = preserveScroll ? reportTableRenderSession : null;
   const scrollState = preserveScroll ? captureTableScrollState(wrap) : null;
+  disposeReportTableRender();
   const rows = getFilteredRows();
   if (!rows.length) {
     wrap.innerHTML = `<div class="empty">${escapeHtml(getEmptyMessage())}</div>`;
@@ -1460,13 +1494,49 @@ function renderTable({ preserveScroll = false } = {}) {
   }
 
   const context = createTableRenderContext(rows);
+  let minimum = 0;
+  if (previous) {
+    const lastKey = getReportRowKey(previous.rows[previous.loaded - 1]);
+    const lastIndex = rows.findIndex((row) => getReportRowKey(row) === lastKey);
+    minimum = Math.max(minimum, lastIndex >= 0 ? lastIndex + 1 : previous.loaded);
+  }
+  if (state.pendingReplyFocusKey) {
+    const focusIndex = rows.findIndex((row) =>
+      state.pendingReplyFocusKey.startsWith(`${row.employee_id}|${row.date}|`));
+    minimum = Math.max(minimum, focusIndex + 1);
+  }
+  const loaded = getReportBatchEnd(rows, 0, minimum);
   wrap.innerHTML = renderTableShell({
     header: renderTableHeader(context),
-    body: renderReportRows(rows, context),
+    body: renderReportRows(rows.slice(0, loaded), context),
     columns: context.columns,
   });
+  const scroll = wrap.querySelector(".table-scroll");
+  const session = {
+    rows, context, loaded, scroll, body: scroll.querySelector("tbody"),
+    frame: null, observer: null, schedule: null,
+  };
+  session.schedule = () => {
+    if (session !== reportTableRenderSession || session.frame !== null
+        || session.loaded >= rows.length) return;
+    session.frame = requestAnimationFrame(() => {
+      session.frame = null;
+      if (session !== reportTableRenderSession || !scroll.isConnected || scroll.clientHeight === 0) return;
+      if (scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= scroll.clientHeight * 3) {
+        appendNextReportBatch(session);
+      }
+    });
+  };
+  reportTableRenderSession = session;
+  scroll.addEventListener("scroll", session.schedule, { passive: true });
+  if (typeof ResizeObserver !== "undefined") {
+    session.observer = new ResizeObserver(session.schedule);
+    session.observer.observe(scroll);
+    session.observer.observe(session.body);
+  }
   restoreTableScrollState(wrap, scrollState);
   focusPendingReplyEditor();
+  session.schedule();
 }
 
 function captureTableScrollState(wrap) {
@@ -1598,10 +1668,8 @@ function renderTableHeader(context) {
 function renderResizableHeader(column) {
   const columnId = escapeHtml(column.id);
   const label = `<span class="column-header-label">${escapeHtml(column.label)}</span>`;
-  const headerContent = column.isCurrentUser
-    ? `<span class="column-header-content">${label}<span class="column-header-you" aria-label="You">You</span></span>`
-    : label;
-  return `<th class="${column.className}" data-column-id="${columnId}">
+  const headerContent = label;
+  return `<th class="${column.className}" data-column-id="${columnId}"${column.isCurrentUser ? ' aria-label="自分の上司コメント列"' : ""}>
     ${headerContent}
     <span class="column-resize-handle" role="separator" aria-orientation="vertical" aria-label="${escapeHtml(column.label)}列の幅を変更" aria-valuemin="${column.minWidth}" aria-valuemax="${column.maxWidth}" aria-valuenow="${column.width}" data-column-id="${columnId}" data-column-kind="${column.kind}" tabindex="0"></span>
   </th>`;
@@ -1615,7 +1683,7 @@ function getVisibleComments(comments = []) {
   );
 }
 
-function renderReportRows(rows, context) {
+function renderReportRows(rows, context, hasPreviousGroups = false) {
   const groups = [];
   rows.forEach((row) => {
     let group = groups.at(-1);
@@ -1635,7 +1703,7 @@ function renderReportRows(rows, context) {
           displayName,
           rowSpan: group.rows.length,
           showUserCell: idx === 0,
-          showGroupDivider: groupIndex > 0 && idx === 0,
+          showGroupDivider: (hasPreviousGroups || groupIndex > 0) && idx === 0,
         }))
         .join("");
     })
@@ -1695,9 +1763,6 @@ function renderReportRowClass(row, idx, context) {
 
 function renderDateCell(row, idx, context) {
   const holidayLabel = renderHolidayLabel(row);
-  const todayLabel = row.is_today
-    ? '<span class="date-today-label" aria-hidden="true">本日</span>'
-    : "";
   const todayAriaLabel = row.is_today
     ? ` aria-label="今日、${escapeHtml(formatNavigationDate(row.date, true))}"`
     : "";
@@ -1706,7 +1771,6 @@ function renderDateCell(row, idx, context) {
         <span class="date-value">${formatDisplayDateHTML(row.date)}</span>
         ${holidayLabel}
       </div>
-      ${todayLabel}
       `,
     "cell-frame-static date-content",
   );
@@ -1779,6 +1843,9 @@ function renderCommentCells(row, context) {
       const originalIndex = row.comments.indexOf(cell);
       return renderCommentCell(row, cell, row.__index, originalIndex);
     })
+    .map((markup, index) => context.commenterIds[index] === state.employeeId
+      ? markup.replace('class="comment-col', 'class="comment-col self-comment-col')
+      : markup)
     .join("");
 }
 
@@ -1845,10 +1912,7 @@ function renderCommentCell(row, cell, rowIndex, commentIndex) {
 
 function createCommentRenderContext(row, cell, rowIndex, commentIndex) {
   const canEditComment = Boolean(cell.editable);
-  const canShowBossCommentActions =
-    cell.comment_mode !== "weekly" || cell.is_weekly_target;
-  const canAddBossComment =
-    canEditComment && canShowBossCommentActions && rowCanReceiveBossComment(row);
+  const canAddBossComment = canEditComment;
   const hasBossComment = Boolean(String(cell.comment || "").trim());
   const hasReply = Boolean(String(cell.reply || "").trim());
   const canEditReply =
@@ -1878,8 +1942,7 @@ function renderBossCommentCell(context) {
 function renderBossCommentActions(context) {
   if (!context.canAddBossComment) return "";
   return `<div class="cell-frame boss-comment-actions${context.hasBossComment ? " hidden" : ""}" data-boss-comment-actions="true">
-    <button class="boss-comment-link" type="button" data-action="sign-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}" aria-label="名前を記入" title="名前を記入"><svg class="boss-comment-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5h16" /><path d="m14.5 4.5 5 5" /><path d="m13 6 4 4-7.5 7.5-4.5 1 1-4.5Z" /></svg></button>
-    <button class="boss-comment-link" type="button" data-action="edit-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}" aria-label="コメントを記入" title="コメントを記入"><svg class="boss-comment-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19H5l-3 3V6a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v4" /><path d="m14 17 5.5-5.5a1.77 1.77 0 0 1 2.5 2.5L16.5 19.5 13 20Z" /></svg></button>
+    <button class="boss-comment-link" type="button" data-action="sign-comment" data-row="${context.rowIndex}" data-comment="${context.commentIndex}" aria-label="サインを記入" title="サインを記入">サイン</button>
   </div>`;
 }
 
@@ -1897,7 +1960,7 @@ function renderBossCommentDisplay(context) {
     value: "",
     editable: context.canEditComment,
     showEmptyIcon: false,
-    hidden: context.canAddBossComment,
+    hidden: false,
     editLabel: `${formatNavigationDate(context.row.date, true)}の${context.cell.superior_name || "上司"}へのコメント`,
   });
 }
@@ -1911,6 +1974,7 @@ function renderBossCommentEditor(context, editable) {
     commentIndex: context.commentIndex,
     value: context.cell.comment,
     editable,
+    showEmptyIcon: false,
     dirty: isBossCommentDirty(context.row, context.cell),
     editLabel: `${formatNavigationDate(context.row.date, true)}の${context.cell.superior_name || "上司"}へのコメント`,
   });
@@ -1968,6 +2032,7 @@ function renderReplyEditor(context) {
     commentIndex: context.commentIndex,
     value: context.cell.reply || "",
     editable: context.canEditReply,
+    showEmptyIcon: false,
     dirty: isReplyDirty(context.row, context.cell),
     dataAttributes: { "reply-key": context.replyKey },
     editLabel: `${formatNavigationDate(context.row.date, true)}の${context.cell.superior_name || "上司"}への返信`,
@@ -2325,10 +2390,10 @@ function getEditableTargetFromEvent(event) {
   const directTarget = event.target.closest(".editable-content");
   if (directTarget instanceof HTMLElement) return directTarget;
 
-  const cell = event.target.closest("td.name-col, td.detail-col");
+  const cell = event.target.closest("td.name-col, td.detail-col, td.comment-col");
   if (!(cell instanceof HTMLElement)) return null;
 
-  const cellTarget = cell.querySelector(":scope > .editable-content");
+  const cellTarget = cell.querySelector(':scope > .editable-content, :scope > .comment-stack > .editable-content[data-kind="comment"]');
   return cellTarget instanceof HTMLElement ? cellTarget : null;
 }
 
@@ -2448,10 +2513,13 @@ function moveEditingFocus(direction) {
 }
 
 function findHorizontalEditableTarget(direction) {
-  const editables = getVisibleEditableTargets();
+  let editables = getVisibleEditableTargets();
   const current = currentEditingElement;
   const index = editables.indexOf(current);
   if (index < 0) return null;
+  while (direction > 0 && index === editables.length - 1 && appendNextReportBatch()) {
+    editables = getVisibleEditableTargets();
+  }
   return editables[index + direction] || null;
 }
 
@@ -2529,8 +2597,7 @@ function finishEditing() {
       const bossCommentActions = editingElement.parentElement?.querySelector(
         ".boss-comment-actions",
       );
-      const hasActions = Boolean(bossCommentActions);
-      editingElement.classList.toggle("hidden", isEmpty(normalized) && hasActions);
+      editingElement.classList.remove("hidden");
       bossCommentActions?.classList.toggle("hidden", !isEmpty(normalized));
     }
 
@@ -2559,12 +2626,6 @@ function rowHasReportData(row) {
     normalizeCellValue(row.business_name) ||
       normalizeCellValue(row.business_detail),
   );
-}
-
-function rowCanReceiveBossComment(row) {
-  if (!row) return false;
-  if (row.date > getTodayJST()) return false;
-  return !row.is_holiday;
 }
 
 function rowNeedsBossComment(row) {
@@ -2854,6 +2915,41 @@ function applySavedReportEntry(entry) {
   });
 }
 
+function applyMissingCommentSummary(missingCommentSummary) {
+  state.missingCommentDates = Array.isArray(missingCommentSummary?.dates)
+    ? missingCommentSummary.dates
+    : null;
+  state.missingCommentRangeStart = missingCommentSummary?.start_date || "";
+  state.missingCommentRangeEnd = missingCommentSummary?.end_date || "";
+  state.missingCommentMode = missingCommentSummary?.mode || "daily";
+  state.missingCommentMemberCounts =
+    missingCommentSummary?.member_counts &&
+    typeof missingCommentSummary.member_counts === "object"
+      ? { ...missingCommentSummary.member_counts }
+      : {};
+  state.directorMissingDays = Math.max(
+    0,
+    Number(
+      missingCommentSummary?.director_missing_days ??
+        missingCommentSummary?.max_elapsed_workdays ??
+        0,
+    ) || 0,
+  );
+}
+
+function applySavedReviewPatch(patch) {
+  applyMissingCommentSummary(patch.missing_comment_summary);
+  state.cacheGeneration = Number(patch.cache_generation || state.cacheGeneration || 0);
+  const flags = new Map(patch.rows.map((row) => [`${row.employee_id}|${row.date}`, row.needs_review]));
+  for (const row of state.rows) {
+    const key = `${row.employee_id}|${row.date}`;
+    if (flags.has(key)) row.needs_review = flags.get(key);
+  }
+  for (const member of state.viewableMembers || []) {
+    member.pending_review_count = state.missingCommentMemberCounts[member.employee_id] || 0;
+  }
+}
+
 function applySavedCommentEntry(entry) {
   const currentChange = state.commentChanges.get(entry.key);
   if (currentChange && !commentChangeMatchesSnapshot(currentChange, entry.snapshot)) {
@@ -2910,6 +3006,7 @@ async function saveUpdates() {
     result = await window.pywebview.api.save_updates({
       user_updates: reportEntries.map(({ update }) => update),
       comment_updates: commentEntries.map(({ update }) => update),
+      view_request: { start_date: state.startDate || null, end_date: state.endDate || null },
     });
   } catch (error) {
     console.error("日報の保存に失敗しました。", error);
@@ -2977,11 +3074,19 @@ async function saveUpdates() {
     }
     try {
       if (commentChangesSaved) {
-        const refreshResult = await loadData({
-          silent: true,
-          preserveDirty: true,
-          preserveTableScroll: true,
-        });
+        let refreshResult;
+        if (result.review_patch && !result.cache_sync_failed) {
+          applySavedReviewPatch(result.review_patch);
+          refreshResult = { ok: true };
+          syncChrome();
+          renderTable({ preserveScroll: true });
+        } else {
+          refreshResult = await loadData({
+            silent: true,
+            preserveDirty: true,
+            preserveTableScroll: true,
+          });
+        }
         if (refreshResult?.ok !== true) {
           displayUpdateFailed = true;
           syncChrome();

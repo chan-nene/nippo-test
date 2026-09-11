@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+from copy import deepcopy
+from collections import OrderedDict
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -12,7 +14,7 @@ from typing import Any
 import polars as pl
 
 from app.config import AppSettings
-from app.repository import DailyReportRepository
+from app.repository import DailyReportRepository, USER_COLUMNS, COMMENT_COLUMNS
 from app.security import safe_employee_csv_path
 
 
@@ -78,6 +80,9 @@ class DailyReportDataCache:
         self._snapshot: CacheSnapshot | None = None
         self._generation = 0
         self._invalid_paths: set[str] = set()
+        self._combined: tuple[int, pl.DataFrame, pl.DataFrame] | None = None
+        self._review_summary: tuple[tuple[Any, ...], dict[str, Any]] | None = None
+        self._views: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
 
     @property
     def is_loaded(self) -> bool:
@@ -93,6 +98,9 @@ class DailyReportDataCache:
                     reason,
                 )
             self._snapshot = None
+            self._combined = None
+            self._review_summary = None
+            self._views.clear()
             self._invalid_paths.clear()
 
     def invalidate_partition(self, path: Path | str, reason: str) -> None:
@@ -205,32 +213,50 @@ class DailyReportDataCache:
         snapshot = access.snapshot
         repository = DailyReportRepository(settings, self._base_dir)
         view_started = perf_counter()
-        users_df = repository.combine_report_partitions(
-            list(snapshot.report_partitions.values())
-        )
-        comments_df = repository.combine_comment_partitions(
-            list(snapshot.comment_partitions.values())
-        )
-        data = repository.build_view_data_from_cache(
-            employee_id,
-            snapshot.common,
-            users_df,
-            comments_df,
-            start_date=start_date,
-            end_date=end_date,
-            period_preset=period_preset,
-            load_warning_count=len(snapshot.warnings),
-            failed_report_employee_ids={
-                str(item.get("employee_id", ""))
-                for item in snapshot.report_load_failures
-                if item.get("employee_id")
-            },
-            failed_comment_superior_ids={
-                str(item.get("superior_employee_id", ""))
-                for item in snapshot.comment_load_failures
-                if item.get("superior_employee_id")
-            },
-        )
+        users_df, comments_df = self._combined_frames(snapshot, repository)
+        view_key = (snapshot.generation, repository.today_jst(), start_date, end_date,
+                    period_preset, settings.default_start_offset_days, settings.default_end_offset_days,
+                    settings.missing_comment_start_date, settings.include_today_in_missing_comments)
+        with self._lock:
+            cached_view = self._views.get(view_key)
+            if cached_view is not None:
+                self._views.move_to_end(view_key)
+                data = cached_view
+        if cached_view is None:
+            data = repository.build_view_data_from_cache(
+                employee_id,
+                snapshot.common,
+                users_df,
+                comments_df,
+                start_date=start_date,
+                end_date=end_date,
+                period_preset=period_preset,
+                columnar_rows=True,
+                missing_comment_summary=self._missing_summary(snapshot, repository, users_df, comments_df),
+                load_warning_count=len(snapshot.warnings),
+                failed_report_employee_ids={
+                    str(item.get("employee_id", ""))
+                    for item in snapshot.report_load_failures
+                    if item.get("employee_id")
+                },
+                failed_comment_superior_ids={
+                    str(item.get("superior_employee_id", ""))
+                    for item in snapshot.comment_load_failures
+                    if item.get("superior_employee_id")
+                },
+            )
+            with self._lock:
+                # Bound memory and drop older generations, including changed
+                # permissions. Never hand mutable cached rows to API callers.
+                for key in list(self._views):
+                    if key[0] != snapshot.generation:
+                        del self._views[key]
+                if len(data["rows"]) <= 5000:
+                    self._views[view_key] = data
+                    while len(self._views) > 2:
+                        self._views.popitem(last=False)
+        data = {**deepcopy({key: value for key, value in data.items() if key != "rows"}),
+                "rows": data["rows"].to_dicts()}
         data_load_diagnostics = self._classify_view_data_load(settings, snapshot)
         view_duration_ms = (perf_counter() - view_started) * 1000
         total_duration_ms = (perf_counter() - operation_started) * 1000
@@ -255,6 +281,39 @@ class DailyReportDataCache:
             **data_load_diagnostics,
         }
         return data, diagnostics
+
+    def _combined_frames(
+        self, snapshot: CacheSnapshot, repository: DailyReportRepository
+    ) -> tuple[pl.DataFrame, pl.DataFrame]:
+        # A bounded, generation-scoped cache. The lock prevents an old reader
+        # from mixing frames with a concurrently published snapshot.
+        with self._lock:
+            if self._combined is None or self._combined[0] != snapshot.generation:
+                self._combined = (
+                    snapshot.generation,
+                    repository.combine_report_partitions(list(snapshot.report_partitions.values())),
+                    repository.combine_comment_partitions(list(snapshot.comment_partitions.values())),
+                )
+            return self._combined[1], self._combined[2]
+
+    def _missing_summary(
+        self, snapshot: CacheSnapshot, repository: DailyReportRepository,
+        users: pl.DataFrame, comments: pl.DataFrame,
+    ) -> dict[str, Any]:
+        key = (snapshot.generation, repository.today_jst(),
+               repository.settings.missing_comment_start_date,
+               repository.settings.include_today_in_missing_comments)
+        with self._lock:
+            if self._review_summary is None or self._review_summary[0] != key:
+                failed_reports = {item["employee_id"] for item in snapshot.report_load_failures}
+                targets = repository.resolve_view_scope(snapshot.common, snapshot.employee_id)["assigned_subordinate_ids"]
+                summary = repository._build_missing_comment_summary(
+                    users, comments, snapshot.common, snapshot.employee_id,
+                    sorted(set(targets) - failed_reports),
+                    failed_comment_superior_ids={item["superior_employee_id"] for item in snapshot.comment_load_failures},
+                )
+                self._review_summary = (key, summary)
+            return deepcopy(self._review_summary[1])
 
     def _classify_view_data_load(
         self, settings: AppSettings, snapshot: CacheSnapshot
@@ -297,10 +356,33 @@ class DailyReportDataCache:
     ) -> tuple[dict[str, list[dict[str, Any]]], pl.DataFrame]:
         snapshot = self.ensure_loaded(settings, employee_id).snapshot
         repository = DailyReportRepository(settings, self._base_dir)
-        comments = repository.combine_comment_partitions(
-            list(snapshot.comment_partitions.values())
-        )
+        _, comments = self._combined_frames(snapshot, repository)
         return snapshot.common, comments
+
+    def saved_comment_view(
+        self, settings: AppSettings, employee_id: str, target_ids: list[str],
+        start_date: str | None, end_date: str | None,
+    ) -> dict[str, Any]:
+        """Return review flags for affected members, without a full view reload."""
+        snapshot = self.ensure_loaded(settings, employee_id).snapshot
+        repository = DailyReportRepository(settings, self._base_dir)
+        users, comments = self._combined_frames(snapshot, repository)
+        summary = self._missing_summary(snapshot, repository, users, comments)
+        scope = repository.resolve_view_scope(snapshot.common, employee_id)
+        failed = {item["employee_id"] for item in snapshot.report_load_failures}
+        targets = sorted(set(target_ids) & set(scope["target_employee_ids"]) - failed)
+        rows, _, _ = repository._build_rows(
+            users.filter(pl.col("employee_id").is_in(targets)), comments,
+            snapshot.common, employee_id, scope["assigned_subordinate_ids"], targets,
+            start_date, end_date, summary,
+            failed_comment_superior_ids={item["superior_employee_id"] for item in snapshot.comment_load_failures},
+        )
+        return {
+            "cache_generation": snapshot.generation,
+            "missing_comment_summary": summary,
+            "rows": [{"employee_id": row["employee_id"], "date": row["date"],
+                      "needs_review": row["needs_review"]} for row in rows],
+        }
 
     def get_admin_common(
         self, settings: AppSettings, employee_id: str
@@ -404,6 +486,7 @@ class DailyReportDataCache:
     ) -> CacheSnapshot:
         started = perf_counter()
         repository = DailyReportRepository(settings, self._base_dir)
+        repository.defer_partition_normalization = True
         repository.validate_paths()
         csv_read_started = perf_counter()
         common = repository.load_common()
@@ -556,6 +639,13 @@ class DailyReportDataCache:
 
         csv_read_duration_ms = (perf_counter() - csv_read_started) * 1000
 
+        report_partitions = repository.normalize_partitions(
+            report_partitions, USER_COLUMNS, ["employee_id", "date"]
+        )
+        comment_partitions = repository.normalize_partitions(
+            comment_partitions, COMMENT_COLUMNS,
+            ["superior_employee_id", "subordinate_employee_id", "date"],
+        )
         snapshot = CacheSnapshot(
             settings_paths=self._settings_paths(settings),
             employee_id=employee_id,
@@ -781,7 +871,8 @@ class DailyReportDataCache:
                 f"上司コメントフォルダにアクセスできません: {comments_dir.name}"
             )
 
-        current_manifest = self._scan_manifest(settings, target_ids, common)
+        if target_ids != snapshot.target_employee_ids or common is not snapshot.common:
+            current_manifest = self._scan_manifest(settings, target_ids, common)
         manifest_scan_duration_ms += (perf_counter() - next_scan_started) * 1000
         report_path_by_key = {
             self._path_key(path): (target_id, path)

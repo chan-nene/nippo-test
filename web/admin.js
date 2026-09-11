@@ -83,7 +83,7 @@
         },
         {
           key: "parent_team_id",
-          label: "親課",
+          label: "親係",
           type: "parent_department",
           required: false,
         },
@@ -468,6 +468,12 @@
   // 委譲された一覧ハンドラより先に、再読み込み・追加・検索・マスター切替を固定クロームへ登録する。
   function bindAdminChromeEvents() {
     byId("adminReloadButton").addEventListener("click", reload);
+    byId("adminTeamSaveButton").addEventListener("click", async () => {
+      if (isLoading || activeMaster !== "team_master" || !isOrganizationAdministrationDirty()) return;
+      if (await save("team_master")) {
+        notify({ text: "チーム管理の変更を保存しました。", type: "success" });
+      }
+    });
     byId("adminCalendarSaveButton").addEventListener("click", () => {
       void save("calendar");
     });
@@ -1252,6 +1258,7 @@
         });
       }
 
+      window.markReportDataStale?.();
       if (saveCalendar && !options.suppressSuccessToast) {
         notify({
           text: "カレンダー設定を保存しました。",
@@ -1316,7 +1323,7 @@
     syncAdminChrome();
   }
 
-  // 組織ツリーで課を選択し、選択中の課を再クリックした場合は選択解除する。
+  // 組織ツリーで係を選択し、選択中の係を再クリックした場合は選択解除する。
   async function selectOrganizationDepartment(teamId) {
     if (activeMaster !== "team_master") return;
     const entry = teamEntryFor(teamId);
@@ -1328,7 +1335,7 @@
     syncAdminChrome();
   }
 
-  // 組織一覧の外側を選択したとき、課の選択状態を解除する。
+  // 組織一覧の外側を選択したとき、係の選択状態を解除する。
   async function clearSelectedOrganizationDepartment() {
     if (activeMaster !== "team_master" || !selectedOrganizationDepartmentId) return;
     if (!(await confirmAdminDraftDiscard(managementDraftKeys("team_master")))) return;
@@ -1366,7 +1373,7 @@
     );
   }
 
-  // 課名は全体、係名は同じ親課内だけで重複を判定する。別の親課の同名係は許可する。
+  // 係名は全体、チーム名は同じ親係内だけで重複を判定する。別の親係の同名チームは許可する。
   function hasDuplicateTeamName(
     teamType,
     teamName,
@@ -1429,7 +1436,7 @@
     return errors;
   }
 
-  // 課・係の作成・更新時の必須項目と階層規則に沿った名称重複を検証する。
+  // 係・チームの作成・更新時の必須項目と階層規則に沿った名称重複を検証する。
   function validateTeamEditorEntry(entry) {
     const errors = {};
     const teamType = valueFor(entry, "team_type").trim();
@@ -1440,7 +1447,7 @@
     if (!teamName) {
       errors.team_name = requiredEditorMessage(
         "team_name",
-        teamType === "section" ? "係名" : "課名",
+        teamType === "section" ? "チーム名" : "係名",
       );
     } else if (
       hasDuplicateTeamName(
@@ -1452,8 +1459,8 @@
     ) {
       errors.team_name =
         teamType === "section"
-          ? "この課には同じ名前の係が既に登録されています。"
-          : "同じ名前の課が既に登録されています。";
+          ? "この係には同じ名前のチームが既に登録されています。"
+          : "同じ名前の係が既に登録されています。";
     }
     return errors;
   }
@@ -1648,7 +1655,7 @@
     renderUserEditorDialog();
   }
 
-  // 指定した課・係をチーム編集モーダルで開き、編集前スナップショットを保持する。
+  // 指定した係・チームをチーム編集モーダルで開き、編集前スナップショットを保持する。
   function openTeamEditor(rowId) {
     if (teamEditorModalState || userEditorModalState) return;
     const draft = drafts.get("team_master");
@@ -1793,11 +1800,11 @@
         text:
           isNew
             ? valueFor(entry, "team_type") === "department"
-              ? "課を追加しました。"
-              : "係を追加しました。"
+              ? "係を追加しました。"
+              : "チームを追加しました。"
             : valueFor(entry, "team_type") === "department"
-              ? "課を更新しました。"
-              : "係を更新しました。",
+              ? "係を更新しました。"
+              : "チームを更新しました。",
         type: "success",
       });
       return;
@@ -1969,7 +1976,7 @@
     renderTable();
   }
 
-  // 課カード内の係一覧を展開・折りたたみし、組織表示を再描画する。
+  // 係カード内のチーム一覧を展開・折りたたみし、組織表示を再描画する。
   function toggleOrganizationSections(teamId) {
     if (!teamId) return;
     if (expandedOrganizationIds.has(teamId)) expandedOrganizationIds.delete(teamId);
@@ -1999,12 +2006,11 @@
     render();
   }
 
-  // 親階層を検証して課・係を新規作成し、作成したチームの編集画面を開く。
+  // 係・チームを作成して保存する。失敗時は下書きを戻し、作成フォームで再試行する。
   async function addTeam(level, parentTeamId = "", teamName = "") {
     const definition = getDefinition("team_master");
     const draft = drafts.get("team_master");
     if (!definition || !draft || !["department", "section"].includes(level)) return;
-    if (!(await confirmAdminDraftDiscard(managementDraftKeys("team_master"), "追加"))) return;
     const parent = draft.entries.find(
       (entry) => valueFor(entry, "team_id") === parentTeamId,
     );
@@ -2034,7 +2040,20 @@
       level === "department" ? valueFor(entry, "team_id") : parentTeamId;
     if (parentTeamId) expandedOrganizationIds.add(parentTeamId);
     searchText = "";
-    openTeamEditor(entry.id, snapshotState);
+    let failure = null;
+    const saved = await save("team_master", {
+      suppressSuccessToast: true,
+      onFailure: (details) => { failure = details; },
+    });
+    if (!saved) {
+      if (!failure?.conflict) restoreUserEditorSnapshot(snapshotState);
+      render();
+      return false;
+    }
+    draft.selectedId = "";
+    render();
+    notify({ text: level === "department" ? "係を追加しました。" : "チームを追加しました。", type: "success" });
+    return true;
   }
 
   // チーム新規作成ダイアログの各入力へ、検証エラーと不正属性を同期する。
@@ -2063,7 +2082,7 @@
     });
   }
 
-  // 課・係の新規作成ダイアログを初期化し、必要な親課の選択肢を表示する。
+  // 係・チームの新規作成ダイアログを初期化し、必要な親係の選択肢を表示する。
   async function openTeamCreateDialog(level = "department", parentTeamId = "") {
     if (!(await confirmAdminDraftDiscard(managementDraftKeys("team_master"), "追加"))) return;
     if (teamEditorModalState) closeTeamEditorModal(false);
@@ -2071,8 +2090,8 @@
     const levelInput = byId("teamCreateLevel");
     const nextLevel = ["department", "section"].includes(level) ? level : "department";
     levelInput.value = nextLevel;
-    byId("teamCreateDialogTitle").textContent = nextLevel === "section" ? "係を追加" : "課を追加";
-    byId("teamCreateNameLabel").textContent = nextLevel === "section" ? "係名" : "課名";
+    byId("teamCreateDialogTitle").textContent = nextLevel === "section" ? "チームを追加" : "係を追加";
+    byId("teamCreateNameLabel").textContent = nextLevel === "section" ? "チーム名" : "係名";
     byId("teamCreateName").value = "";
     teamCreateValidationErrors = {};
     renderTeamCreateParentChoices(parentTeamId);
@@ -2084,6 +2103,7 @@
 
   // チーム新規作成ダイアログを閉じ、入力エラー表示をクリアする。
   function closeTeamCreateDialog() {
+    if (isLoading) return;
     const dialog = byId("teamCreateDialog");
     if (typeof dialog.close === "function" && dialog.open) dialog.close();
     else dialog.removeAttribute("open");
@@ -2092,23 +2112,24 @@
   }
 
   // チーム新規作成フォームを検証し、入力値をチーム追加処理へ渡す。
-  function submitTeamCreateDialog(event) {
+  async function submitTeamCreateDialog(event) {
     event.preventDefault();
+    if (isLoading) return;
     const level = byId("teamCreateLevel").value;
     const parentTeamId = byId("teamCreateParent")?.dataset.teamId || "";
     const teamName = byId("teamCreateName").value.trim();
     const errors = {};
     if (!teamName) {
-      errors.team_name = `${level === "section" ? "係名" : "課名"}を入力してください。`;
+      errors.team_name = `${level === "section" ? "チーム名" : "係名"}を入力してください。`;
     }
     if (level !== "department" && !teamEntryFor(parentTeamId)) {
-      errors.parent_team_id = "親課を選択してください。";
+      errors.parent_team_id = "親係を選択してください。";
     }
     if (teamName && hasDuplicateTeamName(level, teamName, parentTeamId)) {
       errors.team_name =
         level === "section"
-          ? "この課には同じ名前の係が既に登録されています。"
-          : "同じ名前の課が既に登録されています。";
+          ? "この係には同じ名前のチームが既に登録されています。"
+          : "同じ名前の係が既に登録されています。";
     }
     teamCreateValidationErrors = errors;
     applyTeamCreateValidationErrors();
@@ -2116,11 +2137,10 @@
       focusFirstInvalidControl(byId("teamCreateForm"));
       return;
     }
-    closeTeamCreateDialog();
-    void addTeam(level, parentTeamId, teamName);
+    if (await addTeam(level, parentTeamId, teamName)) closeTeamCreateDialog();
   }
 
-  // 選択された階層に合わせて親課フィールドを生成・更新し、作成可否を反映する。
+  // 選択された階層に合わせて親係フィールドを生成・更新し、作成可否を反映する。
   function renderTeamCreateParentChoices(preferredParentId = null) {
     const level = byId("teamCreateLevel").value;
     const nameField = byId("teamCreateName").closest(".inspector-field");
@@ -2131,7 +2151,7 @@
       parentField.className = "inspector-field";
       const label = document.createElement("span");
       label.className = "inspector-field-label";
-      label.textContent = "親課";
+      label.textContent = "親係";
       const input = document.createElement("input");
       input.id = "teamCreateParent";
       input.dataset.teamCreateParent = "true";
@@ -2157,7 +2177,7 @@
     updateTeamCreateDialogState();
   }
 
-  // チーム名と親課の入力状態から、新規作成ボタンの有効・無効を切り替える。
+  // チーム名と親係の入力状態から、新規作成ボタンの有効・無効を切り替える。
   function updateTeamCreateDialogState() {
     const level = byId("teamCreateLevel").value;
     const parentTeamId = byId("teamCreateParent")?.dataset.teamId || "";
@@ -2234,7 +2254,7 @@
     });
   }
 
-  // 課削除時に配下の係IDを再帰的に集め、2階層以外の既存データも孤児にしない。
+  // 係削除時に配下のチームIDを再帰的に集め、2階層以外の既存データも孤児にしない。
   function descendantTeamIdsForDelete(teamId) {
     const ids = new Set([teamId]);
     let expanded = true;
@@ -2346,8 +2366,8 @@
       description:
         activeMaster === "team_master"
           ? teamType === "department"
-            ? "この課を削除すると、配下の係も削除され、所属ユーザーは「所属登録なし」になります。関連するコメント対象設定も解除されます。"
-            : "この係を削除すると、所属ユーザーは「所属登録なし」になります。関連するコメント対象設定も解除されます。"
+            ? "この係を削除すると、配下のチームも削除され、所属ユーザーは「所属登録なし」になります。関連するコメント対象設定も解除されます。"
+            : "このチームを削除すると、所属ユーザーは「所属登録なし」になります。関連するコメント対象設定も解除されます。"
           : `「${identifyingValue || "この行"}」を削除します。`,
       confirmLabel: "削除",
       cancelLabel: "キャンセル",
@@ -2408,8 +2428,8 @@
           activeMaster === "user_master"
             ? "ユーザーを削除しました。"
             : teamType === "department"
-              ? "課を削除しました。"
-              : "係を削除しました。",
+              ? "係を削除しました。"
+              : "チームを削除しました。",
         type: "success",
       });
       return;
@@ -2980,15 +3000,15 @@
     return month;
   }
 
-  // 課・係を選択状態と並び順付きのカード2ペインへ描画し、描画後にSortableを初期化する。
-  // 選択中の課だけ係を表示し、空状態でも追加導線を維持する。
+  // 係・チームを選択状態と並び順付きのカード2ペインへ描画し、描画後にSortableを初期化する。
+  // 選択中の係だけチームを表示し、空状態でも追加導線を維持する。
   function renderOrganizationTree(draft) {
     const wrap = byId("adminTableWrap");
     destroyOrganizationSortables();
     wrap.replaceChildren();
     const browser = document.createElement("section");
     browser.className = "team-browser organization-browser-v2";
-    browser.setAttribute("aria-label", "課と係の管理");
+    browser.setAttribute("aria-label", "係とチームの管理");
     const columns = document.createElement("div");
     columns.className = "organization-browser-columns";
 
@@ -2997,9 +3017,9 @@
     departmentPane.setAttribute("aria-labelledby", "organization-departments-heading");
     const departmentHeading = createOrganizationPaneHeading(
       "organization-departments-heading",
-      "課",
+      "係",
     );
-    const addDepartment = createOrganizationAddButton("課を追加");
+    const addDepartment = createOrganizationAddButton("係を追加");
     addDepartment.dataset.addTeamRoot = "true";
     addDepartment.classList.add("organization-department-add");
     departmentHeading.append(addDepartment);
@@ -3007,7 +3027,7 @@
     departmentList.className = "organization-card-list organization-department-list";
     departmentList.dataset.organizationSortList = "departments";
     departmentList.setAttribute("role", "list");
-    departmentList.setAttribute("aria-label", "課一覧");
+    departmentList.setAttribute("aria-label", "係一覧");
 
     const departments = draft.entries
       .filter((entry) => valueFor(entry, "team_type") === "department")
@@ -3032,7 +3052,7 @@
     if (!departments.length) {
       const empty = document.createElement("p");
       empty.className = "admin-table-empty team-browser-empty organization-pane-empty";
-      empty.textContent = "課がありません。「課を追加」から作成してください。";
+      empty.textContent = "係がありません。「係を追加」から作成してください。";
       departmentList.append(empty);
     }
     departmentPane.append(departmentHeading, departmentList);
@@ -3044,7 +3064,7 @@
       (entry) => valueFor(entry, "team_id") === selectedOrganizationDepartmentId,
     );
     const activeDepartmentId = valueFor(activeDepartment, "team_id");
-    const activeDepartmentName = valueFor(activeDepartment, "team_name") || "選択した課";
+    const activeDepartmentName = valueFor(activeDepartment, "team_name") || "選択した係";
     const sections = activeDepartmentId
       ? draft.entries
           .filter(
@@ -3056,10 +3076,10 @@
       : [];
     const sectionHeading = createOrganizationPaneHeading(
       "organization-sections-heading",
-      activeDepartmentId ? `${activeDepartmentName}の係` : "係",
+      activeDepartmentId ? `${activeDepartmentName}のチーム` : "チーム",
     );
     sectionHeading.querySelector("h2")?.setAttribute("aria-live", "polite");
-    const addSection = createOrganizationAddButton("係を追加");
+    const addSection = createOrganizationAddButton("チームを追加");
     addSection.classList.add("organization-section-add");
     addSection.dataset.addChildLevel = "section";
     addSection.dataset.parentTeamId = activeDepartmentId;
@@ -3071,7 +3091,7 @@
     sectionList.dataset.organizationSortList = "sections";
     sectionList.dataset.organizationParentTeamId = activeDepartmentId;
     sectionList.setAttribute("role", "list");
-    sectionList.setAttribute("aria-label", activeDepartmentId ? `${activeDepartmentName}の係一覧` : "係一覧");
+    sectionList.setAttribute("aria-label", activeDepartmentId ? `${activeDepartmentName}のチーム一覧` : "チーム一覧");
     sections.forEach((section) => {
       sectionList.append(
         createOrganizationCard(section, {
@@ -3084,12 +3104,12 @@
     if (!activeDepartmentId) {
       const empty = document.createElement("p");
       empty.className = "admin-table-empty team-browser-empty organization-pane-empty";
-      empty.textContent = departments.length ? "課を選択してください。" : "課がありません。";
+      empty.textContent = departments.length ? "係を選択してください。" : "係がありません。";
       sectionList.append(empty);
     } else if (!sections.length) {
       const empty = document.createElement("p");
       empty.className = "admin-table-empty team-browser-empty organization-pane-empty";
-      empty.textContent = "この課には係がありません。";
+      empty.textContent = "この係にはチームがありません。";
       sectionList.append(empty);
     }
     sectionPane.append(sectionHeading, sectionList);
@@ -3137,7 +3157,7 @@
     return card;
   }
 
-  // 課または係の下書き行を編集・選択・ドラッグ可能なカードへ変換する。
+  // 係またはチームの下書き行を編集・選択・ドラッグ可能なカードへ変換する。
   // optionsで操作可否を切り替え、Sortableとイベント委譲が使う識別属性も付与する。
   function createOrganizationCard(entry, options = {}) {
     const teamId = valueFor(entry, "team_id");
@@ -3202,18 +3222,18 @@
     return header;
   }
 
-  // 係一覧の開閉状態を示すトグルを生成し、件数とARIAラベルで操作内容を伝える。
+  // チーム一覧の開閉状態を示すトグルを生成し、件数とARIAラベルで操作内容を伝える。
   function createOrganizationToggleButton(teamId, sectionCount, expanded) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "organization-card-toggle";
     button.dataset.organizationToggle = teamId;
     button.setAttribute("aria-expanded", String(expanded));
-    button.setAttribute("aria-label", `係${sectionCount}件を${expanded ? "閉じる" : "開く"}`);
-    button.title = expanded ? "係を閉じる" : "係を表示";
+    button.setAttribute("aria-label", `チーム${sectionCount}件を${expanded ? "閉じる" : "開く"}`);
+    button.title = expanded ? "チームを閉じる" : "チームを表示";
     button.append(
       createTeamSvgIcon(expanded ? "m5 15 7-7 7 7" : "m5 9 7 7 7-7"),
-      document.createTextNode(`係 ${sectionCount}件`),
+      document.createTextNode(`チーム ${sectionCount}件`),
     );
     return button;
   }
@@ -3254,7 +3274,7 @@
     }));
   }
 
-  // 課・係リストへ同階層限定のSortableを登録し、ドラッグ開始前の順序を記録する。
+  // 係・チームリストへ同階層限定のSortableを登録し、ドラッグ開始前の順序を記録する。
   // Sortableがない場合は通知して終了し、依存機能の不在で描画を壊さない。
   function initializeOrganizationSortables() {
     if (typeof window.Sortable !== "function") {
@@ -3419,8 +3439,7 @@
     syncAdminChrome();
   }
 
-  // 課・係カードのドラッグ結果を親IDとsort_orderへ反映し、変更があれば保存を開始する。
-  // 並び替え前のスナップショットを保持し、保存失敗時に元の順序へ戻せるようにする。
+  // 係・チームの並び順を下書きに反映する。CSVへの保存は保存ボタンで行う。
   function commitOrganizationDrag() {
     const state = organizationDragState;
     if (!state) return;
@@ -3433,9 +3452,6 @@
       renderTable();
       return;
     }
-    const previousOrders = new Map(
-      state.previousOrder.map(({ teamId, sortOrder }) => [teamId, sortOrder]),
-    );
     const parentTeamId = state.list.dataset.organizationParentTeamId || "";
     nextOrder.forEach((teamId, index) => {
       const entry = teamEntryFor(teamId);
@@ -3445,34 +3461,10 @@
     });
     renderTable();
     syncAdminChrome();
-    void saveOrganizationOrder(previousOrders);
+
   }
 
-  // 組織順を保存し、失敗時はドラッグ前のsort_orderへ戻して一覧と未保存表示を再同期する。
-  async function saveOrganizationOrder(previousOrders) {
-    let failure = null;
-    const saved = await save("team_master", {
-      normalizeAdministration: false,
-      suppressFailureToast: true,
-      suppressSuccessToast: true,
-      onFailure: (details) => {
-        failure = details;
-      },
-    });
-    if (saved) return;
-    if (failure?.conflict) return;
-    previousOrders.forEach((sortOrder, teamId) => {
-      const entry = teamEntryFor(teamId);
-      if (entry) entry.values.sort_order = sortOrder;
-    });
-    renderTable();
-    syncAdminChrome();
-    notify({
-      scope: "admin",
-      text: "表示順を保存できませんでした。もう一度並び替えてください。",
-      type: "error",
-    });
-  }
+
 
   // 組織カードの編集操作ボタンを生成し、名前入りのARIAラベルと編集アイコンを付ける。
   function createOrganizationEditButton(editId, nameText) {
@@ -3528,11 +3520,11 @@
     return value === "temporary" ? "派遣社員" : "正社員";
   }
 
-  // 組織レベルの内部値を課・係などの日本語表示へ変換し、未知値はそのまま返す。
+  // 組織レベルの内部値を係・チームなどの日本語表示へ変換し、未知値はそのまま返す。
   function teamLevelLabel(level) {
     return {
-      department: "課",
-      section: "係",
+      department: "係",
+      section: "チーム",
     }[level] || level || "—";
   }
 
@@ -3612,7 +3604,7 @@
     return key(left) - key(right) || compareUserEntries(left, right);
   }
 
-  // 課と係を組織階層の並び順に展開し、ユーザー一覧で使う組織IDから順序への対応表を作る。
+  // 係とチームを組織階層の並び順に展開し、ユーザー一覧で使う組織IDから順序への対応表を作る。
   function organizationDisplayOrder() {
     const entries = drafts.get("team_master")?.entries || [];
     const order = new Map();
@@ -3762,7 +3754,7 @@
     header.className = "user-editor-dialog-header team-editor-dialog-header";
     const title = document.createElement("h2");
     title.id = "teamEditorDialogTitle";
-    title.textContent = teamType === "department" ? "課を編集" : "係を編集";
+    title.textContent = teamType === "department" ? "係を編集" : "チームを編集";
     header.append(title);
     content?.insertBefore(header, form);
 
@@ -3789,13 +3781,13 @@
       createEditorActionBar({
         modal: true,
         saveLabel: entry.isNew ? "作成" : "更新",
-        deleteLabel: `${teamType === "department" ? "課" : "係"}を削除`,
+        deleteLabel: `${teamType === "department" ? "係" : "チーム"}を削除`,
       }),
     );
     initializeTeamEditorMemberSortables();
   }
 
-  // 課・係または部長に直接所属するユーザーをモーダル用カードとして描画する。通常の組織所属だけドラッグ並べ替え対象にする。
+  // 係・チームまたは部長に直接所属するユーザーをモーダル用カードとして描画する。通常の組織所属だけドラッグ並べ替え対象にする。
   function renderTeamEditorMembers(teamId, affiliationType = "organization") {
     const section = document.createElement("section");
     section.className = "organization-members-section team-editor-modal-members";
@@ -4041,7 +4033,7 @@
       .sort(compareUserListEntries);
   }
 
-  // コメント担当設定を一覧表示用の短い日本語へ要約する。なし・組織・複数課・個別設定を件数付きで区別する。
+  // コメント担当設定を一覧表示用の短い日本語へ要約する。なし・組織・複数係・個別設定を件数付きで区別する。
   function commentAssignmentSummary(employeeId) {
     const assignment = assignmentEntryForUser(employeeId);
     const type = valueFor(assignment, "target_type") || "none";
@@ -4055,13 +4047,13 @@
     }
     if (type === "departments") {
       const count = splitIds(valueFor(assignment, "target_organization_ids")).length;
-      return `複数課（${count}課）`;
+      return `複数係（${count}係）`;
     }
     const count = splitIds(valueFor(assignment, "target_employee_ids")).length;
     return "個別設定（" + count + "人）";
   }
 
-  // 所属登録なし、部長、課、係を階層順の所属選択肢へ展開する。ユーザーの移動先と編集フォームで同じ選択肢を使う。
+  // 所属登録なし、部長、係、チームを階層順の所属選択肢へ展開する。ユーザーの移動先と編集フォームで同じ選択肢を使う。
   function organizationAffiliationChoices() {
     const teams = drafts.get("team_master")?.entries || [];
     const departments = teams
@@ -4203,12 +4195,11 @@
       ? [...new Set([...values, id])]
       : values.filter((value) => value !== id);
     assignment.values[column] = next.join(";");
-    renderTable();
-    renderInspector();
+    // Keep the checklist DOM, focus and scroll position while editing the draft.
     syncAdminChrome();
   }
 
-  // ユーザーの所属に応じてコメント対象にできる課・係を返す。係所属では親課も含め、所属範囲外は候補に出さない。
+  // ユーザーの所属に応じてコメント対象にできる係・チームを返す。チーム所属では親係も含め、所属範囲外は候補に出さない。
   function allowedOrganizationTargets(user) {
     const organization = teamEntryFor(valueFor(user, "organization_id"));
     if (!organization) return [];
@@ -4351,7 +4342,7 @@
     form.append(createUserEditorActions({ isNew: entry.isNew }));
   }
 
-  // 雇用区分・所属に応じたコメント対象の選択肢と、複数課/個別対象のチェックリストを描画する。
+  // 雇用区分・所属に応じたコメント対象の選択肢と、複数係/個別対象のチェックリストを描画する。
   function renderCommentAssignmentEditor(user) {
     const assignment = assignmentEntryForUser(valueFor(user, "employee_id"), true);
     const wrap = document.createElement("div");
@@ -4375,7 +4366,7 @@
     const choices = isTemporary || (!isDirector && !hasOrganization)
       ? [["none", "なし"]]
       : isDirector
-      ? [["none", "なし"], ["departments", "複数課"]]
+      ? [["none", "なし"], ["departments", "複数係"]]
       : [["none", "なし"], ...organizationChoices, ["custom", "所属組織内で個別設定"]];
     choices.forEach(([value, text]) => {
       const option = document.createElement("option");
@@ -4408,7 +4399,7 @@
         .sort(compareTeamEntries);
       wrap.append(
         createAssignmentChecklist(
-          "対象の課（複数選択）",
+          "対象の係（複数選択）",
           departments,
           splitIds(valueFor(assignment, "target_organization_ids")),
           "department",
@@ -4621,17 +4612,17 @@
       } else if (column.type === "active") {
         choices = [["1", "有効"], ["0", "廃止"]];
       } else if (column.type === "team_type") {
-        choices = [["department", "課"], ["section", "係"]];
+        choices = [["department", "係"], ["section", "チーム"]];
       } else if (column.type === "affiliation_type") {
         choices = [
           ["unassigned", "所属登録なし"],
-          ["organization", "課・係"],
+          ["organization", "係・チーム"],
           ["director", "部長"],
         ];
       } else if (column.type === "organization") {
         choices = [["", "所属を選択"], ...teamAssignmentChoices()];
       } else if (column.type === "parent_department") {
-        choices = [["", "親課を選択"], ...teamChoices("department")];
+        choices = [["", "親係を選択"], ...teamChoices("department")];
       }
       choices.forEach(([optionValue, text]) => {
         const option = document.createElement("option");
@@ -4689,7 +4680,7 @@
       ]);
   }
 
-  // 所属先として選択可能な課・係だけを組織パス順の選択肢へ変換する。
+  // 所属先として選択可能な係・チームだけを組織パス順の選択肢へ変換する。
   function teamAssignmentChoices() {
     const entries = drafts.get("team_master")?.entries || [];
     return entries
@@ -4824,6 +4815,14 @@
     document.querySelectorAll("[data-save-editor]").forEach((button) => {
       button.disabled = !activeEditorDirty || isLoading;
     });
+    const teamSaveButton = byId("adminTeamSaveButton");
+    if (teamSaveButton) {
+      const teamActive = activeMaster === "team_master" && !isCalendarReadOnly;
+      const teamDirty = isOrganizationAdministrationDirty();
+      teamSaveButton.classList.toggle("hidden", !teamActive);
+      teamSaveButton.disabled = !teamActive || !teamDirty || isLoading;
+      teamSaveButton.querySelector(".save-pending-indicator")?.classList.toggle("hidden", !teamDirty);
+    }
     const calendarSaveButton = byId("adminCalendarSaveButton");
     const reloadButton = byId("adminReloadButton");
     if (reloadButton) reloadButton.hidden = isCalendarReadOnly;

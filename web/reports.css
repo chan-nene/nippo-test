@@ -3,6 +3,8 @@
 /* Command bar */
 
 html body #reportPanel {
+  --weekday-sat: #2563eb;
+  --weekday-sun: var(--danger-icon);
   --report-regular-row-height: 58px;
   --report-period-bg: #ededed;
   --report-period-indicator: #ffffff;
@@ -36,6 +38,9 @@ html:not([data-theme="dark"]) body #reportPanel {
 }
 
 html[data-theme="dark"] body #reportPanel {
+  --weekday-sat: #60a5fa;
+  --holiday-row-bg: color-mix(in srgb, var(--table-cell-bg) 93%, white);
+  --holiday-row-hover-bg: color-mix(in srgb, var(--table-cell-bg) 95%, white);
   --report-period-bg: #0d0d0d;
   --report-period-indicator: #303030;
   --report-period-fg: var(--text-strong);
@@ -82,8 +87,8 @@ html[data-color-palette="blue_white"][data-theme="dark"] body #reportPanel {
   --report-period-muted: #94a3b8;
   --report-period-hover: #1b1b1b;
   --report-period-shadow: 0 1px 4px -1px rgb(0 0 0 / 45%);
-  --holiday-row-bg: #171717;
-  --holiday-row-hover-bg: #202020;
+  --holiday-row-bg: color-mix(in srgb, var(--table-cell-bg) 93%, white);
+  --holiday-row-hover-bg: color-mix(in srgb, var(--table-cell-bg) 95%, white);
   --report-today-bg: rgb(96 165 250 / 18%);
   --report-today-fg: #bfdbfe;
 }
@@ -311,16 +316,9 @@ html body #reportPanel.is-missing-mode :is(
 }
 
 html body #reportPanel .missing-mode-status {
-  display: inline-flex;
-  min-height: var(--control-height);
-  align-items: center;
-  padding-inline: var(--control-wide-padding-x);
-  border: 1px solid var(--filter-active-border);
-  border-radius: var(--radius-control);
-  background: var(--filter-active-bg);
-  color: var(--filter-active-fg);
+  color: var(--text-muted);
   font-size: var(--ui-font-size);
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -412,7 +410,7 @@ html body #missingCommentsFilterGroup .period-filter-divider {
 }
 
 html body #missingCommentsFilterGroup #showMissingCommentsButton {
-  margin-left: 8px;
+  margin-left: 0;
 }
 
 /* Table */
@@ -483,6 +481,8 @@ html body thead th:last-child {
 }
 
 html body .user-content {
+  position: sticky;
+  top: calc(var(--table-header-height) + 1px);
   display: flex;
   min-height: var(--table-row-height);
   flex-direction: column;
@@ -573,6 +573,32 @@ html body .column-header-content {
   align-items: center;
   gap: 6px;
   pointer-events: none;
+}
+
+html body #reportPanel table thead th.self-comment-col,
+html body #reportPanel table tbody tr.is-today > td.date-col {
+  background: linear-gradient(var(--report-today-bg), var(--report-today-bg)), var(--table-header-bg);
+  color: var(--report-today-fg);
+}
+
+html body #reportPanel table tbody tr.is-today > td.date-col .date-content {
+  color: inherit;
+}
+
+html body #reportPanel tr.is-today .date-value span {
+  color: inherit;
+}
+
+html body #reportPanel .date-value .date-weekday .date-weekday-sat {
+  color: var(--weekday-sat);
+}
+
+html body #reportPanel .date-value .date-weekday .date-weekday-sun {
+  color: var(--weekday-sun);
+}
+
+html body #reportPanel td.self-comment-col:not(.is-dirty-cell):not(:has(.is-editing)):not(:hover) {
+  background: color-mix(in srgb, var(--report-today-fg) 5%, var(--table-cell-bg));
 }
 
 html body #reportPanel table thead th .column-header-you {
@@ -712,17 +738,12 @@ html body .date-weekday-sun {
   color: var(--weekday-sun);
 }
 
-html body tr.holiday td:not(.date-col, .user-col) {
+html body #reportPanel tr.holiday:not(.is-today) > td.date-col {
   background: var(--holiday-row-bg);
 }
 
-html body #reportPanel tbody tr:not(.holiday) {
-  --table-row-height: var(--report-regular-row-height);
-}
-
-/* Holidays stay compact when their cells contain little or no content. The
-   row can still grow naturally for entered reports, comments, or replies. */
-html body #reportPanel tbody tr.holiday {
+/* Keep one-line rows compact; wrapped text and replies grow naturally. */
+html body #reportPanel tbody tr {
   --table-row-height: max(30px, var(--compact-control-height));
 }
 
@@ -748,14 +769,8 @@ html body .editable-content.is-editable:hover {
   box-shadow: none;
 }
 
-html body td:has(.editable-content.is-editable:hover) {
+html body td:not(:has(.is-editing)):has(.editable-content.is-editable:hover) {
   background: var(--editable-cell-hover);
-}
-
-html body tr.holiday td:not(.date-col, .user-col):has(
-    .editable-content.is-editable:hover
-  ) {
-  background: var(--holiday-row-hover-bg);
 }
 
 html body td:has(.editable-content.is-editable:not(.is-editing):hover)::after {
@@ -780,7 +795,7 @@ html body .editable-content.is-empty .editable-empty-icon {
   align-items: center;
   justify-content: center;
   color: var(--report-empty-icon);
-  opacity: 0.72;
+  opacity: 0;
   vertical-align: middle;
 }
 
@@ -788,6 +803,29 @@ html body .editable-empty-icon svg {
   display: block;
   width: 15px;
   height: 15px;
+}
+
+html body td:hover .editable-content.is-empty .editable-empty-icon,
+html body .editable-content.is-empty:focus-visible .editable-empty-icon {
+  opacity: 0.72;
+}
+
+/* Report cells expose the same edit affordance before and after entering text. */
+html body #reportPanel td:is(.name-col, .detail-col) .editable-content .editable-empty-icon {
+  display: none;
+}
+
+html body td:is(.name-col, .detail-col):is(:hover, :focus-within):has(> .editable-content.is-editable:not(.is-editing))::before {
+  content: "";
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  width: 17px;
+  height: 17px;
+  z-index: 2;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--text-muted) 60%, transparent);
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22black%22%20fill-rule%3D%22evenodd%22%20d%3D%22M16.793%202.793a3.121%203.121%200%201%201%204.414%204.414l-8.5%208.5A1%201%200%200%201%2012%2016H9a1%201%200%200%201-1-1v-3a1%201%200%200%201%20.293-.707l8.5-8.5Zm3%201.414a1.121%201.121%200%200%200-1.586%200L10%2012.414V14h1.586l8.207-8.207a1.121%201.121%200%200%200%200-1.586ZM6%205a1%201%200%200%201-1%201v12a1%201%200%200%200%201%201h12a1%201%200%200%201-1-1v-4a1%201%200%201%201%202%200v4a3%203%200%200%201-3%203H6a3%203%200%200%201-3-3V6a3%203%200%200%201%203-3h4a1%201%200%201%201%200%202H6Z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
 }
 
 html body .editable-content.is-editing,
@@ -834,6 +872,14 @@ html body .editing-textarea:focus-visible {
   outline-offset: 0;
 }
 
+html body #reportPanel td:has(.is-editing):not(.is-dirty-cell) {
+  background: var(--surface);
+}
+
+html body #reportPanel td:has(.is-editing) .editing-textarea {
+  background: transparent;
+}
+
 html body td.is-dirty-cell,
 html body .editable-content.is-dirty,
 html body .editable-content.is-dirty.is-editing .editing-textarea {
@@ -850,7 +896,7 @@ html body tr.holiday td.is-dirty-cell:not(.date-col) {
 }
 
 html body .comment-stack {
-  position: relative;
+  position: static;
   display: grid;
   min-width: 0;
   max-width: 100%;
@@ -859,25 +905,44 @@ html body .comment-stack {
 }
 
 html body .boss-comment-actions {
+  position: absolute;
+  width: auto;
+  min-height: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 0 6px 2px;
+}
+
+html body td:hover .boss-comment-actions,
+html body .boss-comment-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 html body .boss-comment-link {
   display: inline-flex;
-  width: calc(var(--control-height) - 4px);
-  min-width: calc(var(--control-height) - 4px);
-  height: calc(var(--control-height) - 4px);
+  width: auto;
+  min-width: 0;
+  height: 22px;
+  min-height: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--action-secondary-fg);
-  padding: 0;
+  color: color-mix(in srgb, var(--text-muted) 65%, transparent);
+  padding: 2px 8px;
 }
 
 html body .boss-comment-action-icon {
@@ -905,10 +970,10 @@ html body .reply-toggle-button {
   min-height: 28px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   border-radius: var(--radius-sm);
   background: var(--surface-alt);
-  color: var(--action-secondary-fg);
+  color: color-mix(in srgb, var(--text-muted) 65%, transparent);
   padding: 0;
 }
 
@@ -929,7 +994,7 @@ html body .reply-section {
 html body .reply-section.is-collapsed {
   position: absolute;
   z-index: 11;
-  top: 6px;
+  bottom: 6px;
   right: 8px;
   width: auto;
   min-width: 0;
@@ -938,7 +1003,7 @@ html body .reply-section.is-collapsed {
   pointer-events: none;
 }
 
-html body .comment-stack:hover > .reply-section.is-collapsed,
+html body td:hover .reply-section.is-collapsed,
 html body .comment-stack:focus-within > .reply-section.is-collapsed {
   opacity: 1;
   pointer-events: auto;
@@ -959,8 +1024,8 @@ html body .reply-card {
   margin: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--report-today-bg);
-  color: var(--report-today-fg);
+  background: var(--table-cell-bg);
+  color: var(--text);
   padding: 6px 8px;
 }
 
@@ -1663,7 +1728,21 @@ html body #reportPanel .member-switch-list {
   flex: 1 1 auto;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  padding-bottom: 10px;
+}
+
+html body #reportPanel #bossSearchControl > #showSelfButton {
+  margin-right: 24px;
+}
+
+html body #reportPanel #bossSearchControl > #missingCommentsFilterGroup {
+  margin-left: 0;
+  margin-right: 24px;
+  gap: 0;
 }
 
 html body #reportPanel .member-switch-bar {
@@ -1781,53 +1860,14 @@ html body #reportPanel .member-switch-button:disabled::before {
   opacity: 0;
 }
 
-html body #reportPanel #showMissingCommentsButton {
-  position: relative;
-  display: inline-flex;
-  box-sizing: border-box;
-  min-height: var(--control-height);
-  height: var(--control-height);
-  line-height: normal;
-  white-space: nowrap;
-  overflow: visible;
-  overflow-wrap: normal;
-  padding-block: 0;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--action-secondary-border);
-  border-radius: var(--radius-control);
-  background: var(--action-secondary-bg);
-  color: var(--action-secondary-fg);
-  font-family: var(--font-ui);
-  font-size: var(--ui-font-size);
-  font-weight: 700;
-  cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-  width: max-content;
-  min-width: max-content;
-  flex: 0 0 auto;
-  padding-inline: var(--control-wide-padding-x);
-  }
 
-html body #reportPanel #refreshButton:hover:not(:disabled),
-html body #reportPanel #showMissingCommentsButton:hover:not(:disabled) {
+html body #reportPanel #refreshButton:hover:not(:disabled) {
   border-color: var(--border-strong);
   background: var(--surface-hover);
   color: var(--action-secondary-hover-fg);
 }
 
-html body #reportPanel #showMissingCommentsButton:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 0;
-}
 
-html body #reportPanel #showMissingCommentsButton:disabled {
-  border-color: var(--control-disabled-border);
-  background: var(--control-disabled-bg);
-  color: var(--control-disabled-fg);
-  cursor: not-allowed;
-  opacity: 1;
-}
 
 html body #reportPanel .toolbar-right > .toolbar-button {
   box-sizing: border-box;
@@ -1843,22 +1883,10 @@ html body #reportPanel .toolbar-right > .toolbar-button {
   font-weight: 700;
 }
 
-html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]) {
-  border-color: transparent;
-  background: var(--filter-active-bg) !important;
-  color: var(--filter-active-fg);
-  box-shadow: inset 0 0 0 1px var(--filter-active-border);
-}
 
 /* Active missing-comment filtering keeps the same hover contrast as active member filters. */
-html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="true"]):hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--filter-active-hover-bg) !important;
-  color: var(--filter-active-fg);
-  box-shadow: inset 0 0 0 1px var(--filter-active-border);
-}
 
-/* At compact window widths, keep the date range and period actions on explicit rows. */
+/* Keep period actions and save controls on the same row at the minimum window width. */
 @media (max-width: 1100px) {
   html body #reportPanel .toolbar-filter-row {
     display: grid;
@@ -1877,8 +1905,8 @@ html body #reportPanel #showMissingCommentsButton:is(.is-active, [aria-pressed="
   }
 
   html body #reportPanel .toolbar-filter-row .period-main-controls {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    grid-column: 1;
+    grid-row: 1;
     width: 100%;
     min-width: 0;
     flex-wrap: nowrap;
@@ -2007,4 +2035,18 @@ html body #reportPanel .date-weekday,
 html body #reportPanel .cell-sub-label,
 html body #reportPanel .cell-frame:not(:has(> *)) {
   top: var(--ui-text-offset-y) !important;
+}
+
+html body #reportPanel #showMissingCommentsButton {
+  gap: 8px;
+  max-width: none;
+}
+html body #reportPanel #showMissingCommentsButton .missing-count-badge {
+  position: static;
+  flex: 0 0 auto;
+  border: 0;
+  box-shadow: none;
+}
+html body #reportPanel.is-missing-mode .period-date-range {
+  display: none;
 }

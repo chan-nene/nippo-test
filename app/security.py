@@ -145,7 +145,9 @@ def validate_save_request(
     payload: Any,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     source = require_request_mapping(payload)
-    _reject_unknown_keys(source, {"user_updates", "comment_updates"})
+    _reject_unknown_keys(source, {"user_updates", "comment_updates", "view_request"})
+    if "view_request" in source:
+        validate_load_request(source["view_request"])
     user_updates = _validate_update_list(
         source.get("user_updates", []), "日報更新", _validate_user_update
     )
@@ -476,7 +478,7 @@ def _validate_team_hierarchy(rows: list[dict[str, str]]) -> None:
         team_name = row["team_name"]
         _validate_organization_id(team_id, f"組織「{team_name}」の組織ID")
         if parent_id:
-            _validate_organization_id(parent_id, f"組織「{team_name}」の親課ID")
+            _validate_organization_id(parent_id, f"組織「{team_name}」の親係ID")
         sibling_key = (parent_id, team_name.casefold())
         if sibling_key in sibling_names:
             location = "最上位" if not parent_id else f"「{teams.get(parent_id, {}).get('team_name', parent_id)}」の直下"
@@ -488,7 +490,7 @@ def _validate_team_hierarchy(rows: list[dict[str, str]]) -> None:
         if not parent_id:
             if team_type != "department":
                 raise RequestValidationError(
-                    f"係「{team_name}」には親の課を指定してください。"
+                    f"チーム「{team_name}」には親の係を指定してください。"
                 )
             continue
         parent = teams.get(parent_id)
@@ -498,7 +500,7 @@ def _validate_team_hierarchy(rows: list[dict[str, str]]) -> None:
             )
         if team_type != "section" or parent["team_type"] != "department":
             raise RequestValidationError(
-                f"係「{team_name}」の親組織には課を指定してください。"
+                f"チーム「{team_name}」の親組織には係を指定してください。"
             )
 
 
@@ -532,10 +534,10 @@ def _validate_comment_assignment_references(
         return
     if target_type == "organization":
         if len(organization_ids) != 1 or employee_ids:
-            raise RequestValidationError(f"{label}の課・係指定は1組織だけ指定してください。")
+            raise RequestValidationError(f"{label}の係・チーム指定は1組織だけ指定してください。")
         if commenter.get("affiliation_type") != "organization":
             raise RequestValidationError(
-                f"{label}の課・係指定は組織所属ユーザーだけが使用できます。"
+                f"{label}の係・チーム指定は組織所属ユーザーだけが使用できます。"
             )
         allowed = _allowed_comment_organizations(commenter, teams)
         if organization_ids[0] not in allowed:
@@ -543,9 +545,9 @@ def _validate_comment_assignment_references(
         return
     if target_type == "departments":
         if commenter.get("affiliation_type") != "director" or not organization_ids or employee_ids:
-            raise RequestValidationError(f"{label}の複数課指定は部長だけが使用できます。")
+            raise RequestValidationError(f"{label}の複数係指定は部長だけが使用できます。")
         if any(teams.get(team_id, {}).get("team_type") != "department" for team_id in organization_ids):
-            raise RequestValidationError(f"{label}の複数課指定には課だけを指定してください。")
+            raise RequestValidationError(f"{label}の複数係指定には係だけを指定してください。")
         return
     if target_type != "custom" or organization_ids or not employee_ids:
         raise RequestValidationError(f"{label}の個別指定が不正です。")

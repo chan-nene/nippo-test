@@ -21,6 +21,8 @@ CSVをデータストアとして利用する、pywebview製の日報デスク�
 
 ## CSVファイルのスキーマ
 
+アプリからのCSV保存は、Excelで日本語を開けるようUTF-8 BOM付きで行います。既存のBOMなしUTF-8・CP932のCSVも読み込み可能で、次回保存時にUTF-8 BOM付きになります。
+
 - `user_master.csv`:　`employee_id,display_name,can_input_own_report,employment_type,is_admin,affiliation_type,organization_id,member_order`
 - `team_master.csv`: `team_id,team_name,team_type,parent_team_id,sort_order`
 - `comment_assignment.csv`: `commenter_employee_id,target_type,target_organization_ids,target_employee_ids`

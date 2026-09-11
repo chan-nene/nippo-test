@@ -1,8 +1,8 @@
 // Shared application state, shell behavior, and startup.
 const MEMBER_FILTER_LEVELS = Object.freeze(["department", "section", "member"]);
 const MEMBER_FILTER_LABELS = Object.freeze({
-  department: "課",
-  section: "係",
+  department: "係",
+  section: "チーム",
   member: "個人",
 });
 function normalizeMemberFilterLevels(value, fallback = []) {
@@ -1134,13 +1134,18 @@ function updateToastElement(message, toast) {
   message.querySelector(".message-text").textContent = toast.text;
 }
 
+function getVisibleToasts() {
+  return [...toastState.screens.values()].flat()
+    .sort((a, b) => Number(a.id) - Number(b.id))
+    .slice(0, TOAST_VISIBLE_LIMIT);
+}
+
 function renderToasts() {
   const region = $("statusRegion");
   const messageList = $("messageList");
   if (!region || !messageList) return;
 
-  const activeToasts = toastState.screens.get(state.activeView) || [];
-  const visibleToasts = activeToasts.slice(0, TOAST_VISIBLE_LIMIT);
+  const visibleToasts = getVisibleToasts();
   const visibleIds = new Set(visibleToasts.map((toast) => toast.id));
   [...messageList.children].forEach((message) => {
     if (!visibleIds.has(message.dataset.toastId)) message.remove();
@@ -1189,9 +1194,7 @@ function pauseToastTimer(toast) {
 }
 
 function isToastDisplayed(toast) {
-  const screenToasts = toastState.screens.get(toast.scope);
-  return state.activeView === toast.scope &&
-    Boolean(screenToasts?.slice(0, TOAST_VISIBLE_LIMIT).includes(toast));
+  return getVisibleToasts().includes(toast);
 }
 
 function canRunToastTimer(toast) {
@@ -1298,7 +1301,7 @@ function dismissToast(event) {
   const toastId = event?.target?.closest?.(".message")?.dataset.toastId;
   const toast = toastId
     ? findToastById(toastId)
-    : (toastState.screens.get(state.activeView) || [])[0];
+    : getVisibleToasts()[0];
   if (toast) removeToast(toast);
 }
 
@@ -1366,6 +1369,14 @@ async function reloadCurrentView() {
   return false;
 }
 
+function shouldRefreshReportFiles() {
+  return state.reportRefreshPending === true;
+}
+
+function markReportDataStale() {
+  state.reportRefreshPending = true;
+}
+
 async function loadViewForSwitch(view, viewSequence) {
   if (view === "reports") {
     if (typeof loadData !== "function") {
@@ -1374,7 +1385,7 @@ async function loadViewForSwitch(view, viewSequence) {
     }
     return loadData({
       preserveDirty: false,
-      forceRefresh: true,
+      forceRefresh: shouldRefreshReportFiles(),
       transition: true,
       viewSequence,
     });

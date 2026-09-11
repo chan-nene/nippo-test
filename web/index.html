@@ -266,24 +266,8 @@
                       aria-live="polite"
                       aria-atomic="true"
                     ></span>
-                    <div
-                      id="missingCommentsFilterGroup"
-                      class="missing-filter-group hidden"
-                    >
-                      <span class="period-filter-divider" aria-hidden="true"></span>
-                      <button
-                        id="showMissingCommentsButton"
-                        class="preset-button missing-filter-button"
-                        type="button"
-                        aria-pressed="false"
-                      >
-                        <span class="missing-filter-label">未コメント</span>
-                        <span class="missing-count-badge is-empty" aria-hidden="true">0日</span>
-                      </button>
-                    </div>
                     <div class="missing-mode-summary" aria-label="未コメントモード">
-                      <span class="missing-mode-status" aria-live="polite">未コメント</span>
-                      <span class="missing-mode-target">対象：全員</span>
+                      <span class="missing-mode-status" aria-live="polite">未コメントのみ表示</span>
                       <button
                         id="exitMissingCommentsButton"
                         class="toolbar-button missing-mode-exit-button"
@@ -355,6 +339,21 @@
                 >
                   <span class="relative">全員</span>
                 </button>
+                    <div
+                      id="missingCommentsFilterGroup"
+                      class="missing-filter-group hidden"
+                    >
+                      <button
+                        id="showMissingCommentsButton"
+                        class="member-switch-button missing-filter-button"
+                        type="button"
+                        aria-pressed="false"
+                      >
+                        <span class="missing-filter-label">未コメントのみ</span>
+                        <span class="missing-count-badge is-empty" aria-hidden="true">0日</span>
+                      </button>
+                    </div>
+
               </div>
             </div>
             <div id="tableWrap" class="table-card hidden"></div>
@@ -378,6 +377,15 @@
                   <span class="toolbar-button-icon" aria-hidden="true">
                     <svg class="is-refresh-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M4.5 2.5a1 1 0 0 1 1 1v1.572A9.5 9.5 0 1 1 12 21.5c-4.87 0-8.882-3.663-9.435-8.384a1 1 0 0 1 1.986-.232A7.501 7.501 0 0 0 19.5 12 7.5 7.5 0 0 0 6.41 7H9a1 1 0 0 1 0 2H4.5a1 1 0 0 1-1-1.024V3.5a1 1 0 0 1 1-1Z" clip-rule="evenodd" /></svg>
                   </span>
+                </button>
+                <button
+                  id="adminTeamSaveButton"
+                  class="toolbar-button primary hidden"
+                  type="button"
+                  disabled
+                >
+                  保存
+                  <span class="save-pending-indicator hidden" aria-hidden="true"></span>
                 </button>
                 <button
                   id="adminCalendarSaveButton"
@@ -613,11 +621,11 @@
                     >
                       <label class="member-filter-option">
                         <input id="memberFilterDepartment" type="checkbox" value="department" data-member-filter-level />
-                        <span>課</span>
+                        <span>係</span>
                       </label>
                       <label class="member-filter-option">
                         <input id="memberFilterSection" type="checkbox" value="section" data-member-filter-level />
-                        <span>係</span>
+                        <span>チーム</span>
                       </label>
                       <label class="member-filter-option">
                         <input id="memberFilterMember" type="checkbox" value="member" data-member-filter-level />
@@ -734,10 +742,10 @@
       aria-labelledby="teamCreateDialogTitle"
     >
       <form id="teamCreateForm" class="team-create-dialog-content">
-        <h2 id="teamCreateDialogTitle">課を追加</h2>
+        <h2 id="teamCreateDialogTitle">係を追加</h2>
         <input id="teamCreateLevel" data-team-create-level type="hidden" value="department" />
         <label class="inspector-field">
-          <span class="inspector-field-label"><span id="teamCreateNameLabel">課名</span></span>
+          <span class="inspector-field-label"><span id="teamCreateNameLabel">係名</span></span>
           <input id="teamCreateName" data-team-create-name type="text" required autocomplete="off" />
           <span id="teamCreateNameError" class="inspector-field-error hidden" role="alert"></span>
         </label>

@@ -887,17 +887,6 @@ class DailyReportRepository:
     def _is_workday(target_date: date, holiday_dates: set[date]) -> bool:
         return target_date.weekday() < 5 and target_date not in holiday_dates
 
-    @classmethod
-    def _director_weekly_target_date(
-        cls, target_date: date, holiday_dates: set[date]
-    ) -> date | None:
-        week_start = target_date - timedelta(days=target_date.weekday())
-        for weekday in range(4, -1, -1):
-            candidate = week_start + timedelta(days=weekday)
-            if cls._is_workday(candidate, holiday_dates):
-                return candidate
-        return None
-
     def _get_my_rank(self, common: dict[str, Any], employee_id: str) -> int:
         try:
             return self._global_user_order(common).index(employee_id)
@@ -967,12 +956,6 @@ class DailyReportRepository:
                 "dates": [],
                 "member_counts": {},
             }
-        if self._is_director(
-            common, employee_id
-        ):
-            return self._build_director_missing_comment_summary(
-                comments_df, common, employee_id, target_employee_ids
-            )
         today = self.today_jst()
         range_end = (
             today
@@ -1009,100 +992,36 @@ class DailyReportRepository:
         days = pl.DataFrame({"date": pl.date_range(range_start, range_end, eager=True)}).lazy().filter(
             ~pl.col("date").is_in(list(holiday_dates))
         ).with_columns(pl.col("date").dt.to_string("%Y-%m-%d"))
+        candidates = pl.DataFrame({"employee_id": subordinate_ids}).lazy().join(
+            days, how="cross"
+        )
+        if not self.settings.include_empty_report_days_in_missing_comments:
+            report_days = users_df.lazy().cast(pl.String).filter(
+                pl.col("employee_id").is_in(subordinate_ids)
+                & pl.col("date").is_between(
+                    pl.lit(range_start.isoformat()), pl.lit(range_end.isoformat())
+                )
+                & (
+                    (pl.col("business_name").fill_null("").str.strip_chars() != "")
+                    | (pl.col("business_detail").fill_null("").str.strip_chars() != "")
+                )
+            ).select("employee_id", "date").unique()
+            candidates = candidates.join(
+                report_days, on=["employee_id", "date"], how="inner"
+            )
         completed = comments_df.lazy().cast(pl.String).filter(
             (pl.col("superior_employee_id") == employee_id)
             & pl.col("date").is_between(pl.lit(range_start.isoformat()), pl.lit(range_end.isoformat()))
         ).unique(subset=["subordinate_employee_id", "date"], keep="last").filter(
             pl.col("comment").fill_null("").str.strip_chars() != ""
         ).select(pl.col("subordinate_employee_id").alias("employee_id"), "date")
-        missing = pl.DataFrame({"employee_id": subordinate_ids}).lazy().join(days, how="cross").join(
+        missing = candidates.join(
             completed, on=["employee_id", "date"], how="anti"
         ).collect()
         summary["dates"] = missing.get_column("date").unique().sort().to_list()
         counts = dict(missing.group_by("employee_id").len().iter_rows())
         summary["member_counts"] = {eid: counts.get(eid, 0) for eid in subordinate_ids}
         return summary
-
-    def _build_director_missing_comment_summary(
-        self,
-        comments_df: pl.DataFrame,
-        common: dict[str, list[dict[str, Any]]],
-        employee_id: str,
-        target_employee_ids: list[str],
-    ) -> dict[str, Any]:
-        today = self.today_jst()
-        configured_start = self._to_date(self.settings.missing_comment_start_date)
-        if configured_start is None:
-            configured_start = DEFAULT_MISSING_COMMENT_START_DATE
-        holiday_dates = {
-            calendar_date
-            for row in common.get("calendar", [])
-            if self._calendar_row_is_holiday(row)
-            and (calendar_date := self._to_date(row.get("date"))) is not None
-        }
-        targets = [
-            target_id
-            for target_id in dict.fromkeys(target_employee_ids)
-            if target_id and target_id != employee_id
-        ]
-        latest = dict(comments_df.lazy().filter(
-            (pl.col("superior_employee_id") == employee_id)
-            & pl.col("subordinate_employee_id").is_in(targets)
-            & (pl.col("comment").fill_null("").str.strip_chars() != "")
-        ).with_columns(pl.col("date").str.slice(0, 10).str.to_date("%Y-%m-%d", strict=False)).filter(
-            pl.col("date") <= today
-        ).group_by("subordinate_employee_id").agg(pl.col("date").max()).collect().iter_rows())
-        earliest = min([configured_start, *[day + timedelta(days=1) for day in latest.values()], today])
-        workdays = pl.date_range(earliest, today, eager=True)
-        workdays = workdays.filter((workdays.dt.weekday() <= 5) & ~workdays.is_in(list(holiday_dates)))
-
-        member_counts: dict[str, int] = {}
-        calculation_starts: dict[str, str] = {}
-        last_confirmed_dates: dict[str, str] = {}
-        start_dates: list[date] = []
-        for target_id in targets:
-            last_confirmed = latest.get(target_id)
-            calculation_start = (
-                last_confirmed + timedelta(days=1)
-                if last_confirmed is not None
-                else configured_start
-            )
-            start_dates.append(min(calculation_start, today))
-            calculation_starts[target_id] = calculation_start.isoformat()
-            if last_confirmed is not None:
-                last_confirmed_dates[target_id] = last_confirmed.isoformat()
-            elapsed = len(workdays) - int(workdays.search_sorted(calculation_start))
-            member_counts[target_id] = elapsed
-
-        range_start = min(start_dates) if start_dates else min(configured_start, today)
-        weekly_target_dates: list[str] = []
-        week_cursor = range_start - timedelta(days=range_start.weekday())
-        final_week = today - timedelta(days=today.weekday())
-        while week_cursor <= final_week:
-            weekly_target = self._director_weekly_target_date(
-                week_cursor, holiday_dates
-            )
-            if (
-                weekly_target is not None
-                and range_start <= weekly_target <= today
-            ):
-                weekly_target_dates.append(weekly_target.isoformat())
-            week_cursor += timedelta(days=7)
-
-        maximum = max(member_counts.values(), default=0)
-        return {
-            "mode": "weekly_director",
-            "start_date": range_start.isoformat(),
-            "end_date": today.isoformat(),
-            "dates": weekly_target_dates,
-            "weekly_target_dates": weekly_target_dates,
-            "member_counts": member_counts,
-            "member_elapsed_workdays": member_counts,
-            "member_start_dates": calculation_starts,
-            "last_confirmed_dates": last_confirmed_dates,
-            "max_elapsed_workdays": maximum,
-            "director_missing_days": maximum,
-        }
 
     @staticmethod
     def _row_has_report_data(row: dict[str, Any]) -> bool:
@@ -1192,31 +1111,12 @@ class DailyReportRepository:
             if self._is_temporary_user(current_user):
                 raise PermissionError("派遣社員は他の利用者へのコメントを更新できません。")
             allowed_subordinates = self._assigned_subordinate_ids(common, employee_id)
-            is_director = self._is_director(common, employee_id)
-            holiday_dates = {
-                calendar_date
-                for row in common.get("calendar", [])
-                if self._calendar_row_is_holiday(row)
-                and (calendar_date := self._to_date(row.get("date"))) is not None
-            }
             for update in comment_updates:
                 subordinate_id = validate_employee_id(
                     update.get("subordinate_employee_id"), "コメント対象者ID"
                 )
                 if subordinate_id not in allowed_subordinates:
                     raise PermissionError("担当外の利用者へのコメント更新です。")
-                if is_director:
-                    comment_date = self._to_date(update.get("date"))
-                    if (
-                        comment_date is None
-                        or self._director_weekly_target_date(
-                            comment_date, holiday_dates
-                        )
-                        != comment_date
-                    ):
-                        raise PermissionError(
-                            "部長コメントは週の最終稼働日にだけ更新できます。"
-                        )
 
         requested_replies: set[tuple[str, str]] = set()
         for update in user_updates:
@@ -1467,23 +1367,6 @@ class DailyReportRepository:
             if self._calendar_row_is_holiday(row)
             and (calendar_date := self._to_date(row.get("date"))) is not None
         }
-        director_ids = {
-            superior_id
-            for superior_id in superior_ids
-            if self._is_director(common, superior_id)
-        }
-        current_user_is_director = employee_id in director_ids
-        director_member_counts = (
-            (missing_comment_summary or {}).get("member_counts", {})
-            if current_user_is_director
-            else {}
-        )
-        director_member_start_dates = (
-            (missing_comment_summary or {}).get("member_start_dates", {})
-            if current_user_is_director
-            else {}
-        )
-
         default_start = self._to_date(start_date)
         default_end = self._to_date(end_date)
         if not default_start:
@@ -1516,23 +1399,12 @@ class DailyReportRepository:
             "_member_order": list(range(len(target_ids))),
             "can_edit_report": [eid == employee_id and self._user_can_input_own_report(user_master.get(eid, {})) for eid in target_ids],
             "can_edit_my_comment": [eid in assigned_subordinate_ids for eid in target_ids],
-            "_elapsed": [int(director_member_counts.get(eid, 0) or 0) for eid in target_ids],
-            "_review_start": [self._to_date(director_member_start_dates.get(eid)) for eid in target_ids],
-        }, schema_overrides={"_review_start": pl.Date})
+        })
         dates = pl.date_range(default_start, default_end, eager=True)
-        weekly_dates = []
-        if director_ids:
-            cursor = default_start - timedelta(days=default_start.weekday())
-            while cursor <= default_end:
-                weekly_target = self._director_weekly_target_date(cursor, holiday_date_values)
-                if weekly_target is not None:
-                    weekly_dates.append(weekly_target)
-                cursor += timedelta(days=7)
         calendar = pl.DataFrame({"_day": dates}).lazy().with_columns(
             pl.col("_day").dt.to_string("%Y-%m-%d").alias("date"),
             pl.col("_day").is_in(list(holiday_date_values)).alias("is_holiday"),
             (pl.col("_day") == today).alias("is_today"),
-            pl.col("_day").is_in(weekly_dates).alias("_weekly"),
         )
         reports = visible_source.lazy()
         comments = comments_df.lazy().cast(pl.String).filter(date_filter & pl.col("subordinate_employee_id").is_in(target_ids))
@@ -1548,25 +1420,23 @@ class DailyReportRepository:
             pl.col("replies").fill_null("[]"),
             (pl.lit("") if employee_id in failed_comment_ids else pl.col("_my_comment").fill_null("")).alias("_my_comment"),
         )
-        needs_review = (pl.col("can_edit_my_comment") & (pl.col("_day") <= today)
-                        & (pl.col("_my_comment").str.strip_chars() == ""))
-        if current_user_is_director:
-            needs_review &= ((pl.col("_elapsed") > 0) & pl.col("_weekly")
-                             & (pl.col("_review_start").is_null() | (pl.col("_day") >= pl.col("_review_start"))))
-        else:
-            needs_review &= (~pl.col("is_holiday")
-                             & pl.lit(employee_id not in failed_comment_ids)
-                             & ((pl.col("_day") < today) | pl.lit(self.settings.include_today_in_missing_comments)))
+        needs_review = (
+            pl.col("can_edit_my_comment")
+            & (pl.col("_day") <= today)
+            & (pl.col("_my_comment").str.strip_chars() == "")
+            & (~pl.col("is_holiday"))
+            & pl.lit(employee_id not in failed_comment_ids)
+            & ((pl.col("_day") < today) | pl.lit(self.settings.include_today_in_missing_comments))
+        )
         rows = rows.with_columns(needs_review.alias("needs_review"), pl.lit("").alias("holiday_description")).collect()
         comment_columns = ["superior_employee_id", "superior_name", "comment", "reply", "editable",
-                           "applies", "available", "load_failed", "comment_mode", "is_weekly_target", "rank"]
+                           "applies", "available", "load_failed", "rank"]
         if superior_ids:
             superiors = pl.DataFrame({
                 "superior_employee_id": superior_ids,
                 "superior_name": [user_master.get(eid, {}).get("display_name") or eid for eid in superior_ids],
                 "rank": list(range(len(superior_ids))),
                 "load_failed": [eid in failed_comment_ids for eid in superior_ids],
-                "comment_mode": ["weekly" if eid in director_ids else "daily" for eid in superior_ids],
             })
             assignments = pl.DataFrame(
                 [(eid, sid, True) for eid in target_ids for sid in target_commenters.get(eid, [])],
@@ -1582,7 +1452,7 @@ class DailyReportRepository:
             replies = pl.DataFrame(reply_rows, schema={"employee_id": pl.String, "date": pl.String,
                 "superior_employee_id": pl.String, "reply": pl.String}, orient="row")
             cell_keys = ["employee_id", "date", "superior_employee_id"]
-            cells = rows.lazy().select("employee_id", "date", "_weekly", "can_edit_my_comment").join(
+            cells = rows.lazy().select("employee_id", "date", "can_edit_my_comment").join(
                 superiors.lazy(), how="cross"
             ).join(assignments.lazy(), on=["employee_id", "superior_employee_id"], how="left").join(
                 comments.select(pl.col("subordinate_employee_id").alias("employee_id"), "date", "superior_employee_id", "comment"),
@@ -1590,7 +1460,6 @@ class DailyReportRepository:
             ).join(replies.lazy(), on=cell_keys, how="left").with_columns(
                 pl.col("applies").fill_null(False),
                 (~pl.col("load_failed")).alias("available"),
-                ((pl.col("comment_mode") == "weekly") & pl.col("_weekly")).alias("is_weekly_target"),
             ).with_columns(
                 pl.when(pl.col("applies") & pl.col("available")).then(pl.col("comment").fill_null("")).otherwise(pl.lit("")).alias("comment"),
                 pl.when(pl.col("applies") & pl.col("available")).then(pl.col("reply").fill_null("")).otherwise(pl.lit("")).alias("reply"),

@@ -32,6 +32,8 @@ function fillSettings(settings, context = null) {
   $("includeTodayInMissingComments").checked = Boolean(
     settings.include_today_in_missing_comments,
   );
+  $("includeEmptyReportDaysInMissingComments").checked =
+    settings.include_empty_report_days_in_missing_comments !== false;
   $("commentSignature").value = settings.comment_signature || "";
   syncColorPaletteControls(appearance.palette);
   const memberFilterLevels = normalizeMemberFilterLevels(
@@ -46,6 +48,8 @@ function fillSettings(settings, context = null) {
   state.includeTodayInMissingComments = Boolean(
     settings.include_today_in_missing_comments,
   );
+  state.includeEmptyReportDaysInMissingComments =
+    settings.include_empty_report_days_in_missing_comments !== false;
   state.commentSignature = settings.comment_signature || "";
   applySettingsContext(context || {});
   markSettingsClean();
@@ -228,6 +232,9 @@ function getSettingsPayload() {
     default_end_offset_days: Number($("defaultEndOffsetDays").value),
     missing_comment_start_date: missingCommentStartDate,
     include_today_in_missing_comments: $("includeTodayInMissingComments").checked,
+    include_empty_report_days_in_missing_comments: $(
+      "includeEmptyReportDaysInMissingComments",
+    ).checked,
     comment_signature: $("commentSignature").value,
     // Theme selection lives in the title bar. Keep its value in the settings
     // payload so saving another setting never resets the persisted theme.

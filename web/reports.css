@@ -769,11 +769,11 @@ html body .editable-content.is-editable:hover {
   box-shadow: none;
 }
 
-html body td:not(:has(.is-editing)):has(.editable-content.is-editable:hover) {
+html body td:hover:not(:has(.is-editing)):has(.editable-content.is-editable:not(.reply-content)) {
   background: var(--editable-cell-hover);
 }
 
-html body td:has(.editable-content.is-editable:not(.is-editing):hover)::after {
+html body td:hover:not(:has(.is-editing)):has(.editable-content.is-editable:not(.reply-content))::after {
   position: absolute;
   z-index: 10;
   inset: 0;
@@ -836,7 +836,7 @@ html body .editable-content.is-editing:hover {
   box-shadow: none;
 }
 
-html body td:has(.editable-content.is-editing)::after {
+html body td:has(.editable-content.is-editing:not(.reply-content))::after {
   position: absolute;
   z-index: 10;
   inset: 0;
@@ -872,7 +872,7 @@ html body .editing-textarea:focus-visible {
   outline-offset: 0;
 }
 
-html body #reportPanel td:has(.is-editing):not(.is-dirty-cell) {
+html body #reportPanel td:has(.is-editing:not(.reply-content)):not(.is-dirty-cell) {
   background: var(--surface);
 }
 
@@ -1022,11 +1022,11 @@ html body .reply-card {
   align-items: flex-start;
   gap: 5px;
   margin: 0;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--text) 24%, var(--table-cell-bg));
   border-radius: var(--radius-sm);
-  background: var(--table-cell-bg);
+  background: color-mix(in srgb, var(--text) 7%, var(--table-cell-bg));
   color: var(--text);
-  padding: 6px 8px;
+  padding: 8px;
 }
 
 html body .reply-card-content {
@@ -1036,7 +1036,7 @@ html body .reply-card-content {
 }
 
 html body .reply-card .reply-content {
-  min-height: 0;
+  min-height: 1.35em;
   padding: 0;
   color: inherit;
   font-size: var(--font-13);
@@ -1046,8 +1046,29 @@ html body .reply-card .reply-content {
   white-space: pre-wrap;
 }
 
-html body .reply-card .reply-content.is-editing {
-  min-height: var(--control-height-compact);
+html body #reportPanel .reply-card .reply-content,
+html body #reportPanel .reply-card .reply-content .editing-textarea {
+  background: transparent;
+}
+
+html body .reply-card .editing-textarea {
+  min-height: 1.35em;
+  padding: 0;
+  border-radius: 0;
+  font: inherit;
+}
+
+html body .reply-card:has(.reply-content.is-editable):not(:has(.is-editing)):hover {
+  background: color-mix(in srgb, var(--text) 11%, var(--table-cell-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 42%, transparent);
+}
+
+html body .reply-card:has(.reply-content.is-editing) {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+html body #reportPanel .reply-card:has(.reply-content.is-dirty) {
+  background: var(--dirty);
 }
 
 html body .empty {
@@ -2022,6 +2043,101 @@ html body #reportPanel table thead th .column-header-you {
 html body #reportPanel table thead th .column-header-you {
   padding-top: 3px;
   padding-bottom: 0;
+}
+
+/* Keep the header surface neutral and move the self-comment emphasis into
+   the compact label beside the boss name. */
+html body #reportPanel table thead th.self-comment-col {
+  background: var(--table-header-bg);
+  color: var(--text-muted);
+}
+
+html body #reportPanel td.self-comment-col:not(.is-dirty-cell):not(:has(.is-editing)):not(:hover) {
+  background: var(--table-cell-bg);
+}
+
+/* Move the role emphasis into a compact label beside the boss name. */
+html body #reportPanel table thead th .column-header-you {
+  border: 1px solid var(--self-label-border);
+  background: var(--self-label-bg);
+  color: var(--self-label-fg);
+}
+
+html[data-color-palette="blue_white"][data-theme="light"] body #reportPanel {
+  --table-header-bg: #fafafa;
+  --self-label-bg: rgb(37 99 235 / 12%);
+  --self-label-fg: #2563eb;
+  --self-label-border: #2563eb;
+}
+
+html[data-color-palette="blue"][data-theme="light"] body #reportPanel {
+  --self-label-bg: rgb(0 99 153 / 12%);
+  --self-label-fg: #006399;
+  --self-label-border: #006399;
+}
+
+html[data-color-palette="default"][data-theme="light"] body #reportPanel {
+  --self-label-bg: rgb(0 134 53 / 12%);
+  --self-label-fg: #008635;
+  --self-label-border: #008635;
+}
+
+html[data-color-palette="blue_white"][data-theme="dark"] body #reportPanel {
+  --self-label-bg: rgb(96 165 250 / 18%);
+  --self-label-fg: #93c5fd;
+  --self-label-border: #60a5fa;
+}
+
+html[data-color-palette="blue"][data-theme="dark"] body #reportPanel {
+  --self-label-bg: rgb(40 147 204 / 18%);
+  --self-label-fg: #64b7e4;
+  --self-label-border: #2893cc;
+}
+
+html[data-color-palette="default"][data-theme="dark"] body #reportPanel {
+  --self-label-bg: rgb(4 184 76 / 16%);
+  --self-label-fg: #04b84c;
+  --self-label-border: #04b84c;
+}
+
+html body #reportPanel table tbody tr.is-today > td.date-col {
+  background: var(--table-cell-bg);
+  color: var(--text);
+}
+
+html body #reportPanel table tbody tr.holiday.is-today > td.date-col {
+  background: var(--holiday-row-bg);
+}
+
+html body #reportPanel .date-today-label {
+  display: inline-flex;
+  width: max-content;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  margin-top: 3px;
+  padding: 2px 6px 1px;
+  border-radius: 4px;
+  background: var(--report-today-bg);
+  color: var(--report-today-fg);
+  font-size: max(1px, calc(var(--ui-font-size) - 2px));
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* The today marker is intentionally achromatic: light mode uses a black
+   label with white text, while dark mode reverses those values. This keeps
+   the marker distinct from palette colors used for editable or holiday
+   states. */
+html:not([data-theme="dark"]) body #reportPanel .date-today-label {
+  background: #111111;
+  color: #ffffff;
+}
+
+html[data-theme="dark"] body #reportPanel .date-today-label {
+  background: #ffffff;
+  color: #111111;
 }
 
 html body #reportPanel .period-shift-step-label,

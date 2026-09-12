@@ -736,6 +736,7 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
             "default_end_offset_days",
             "missing_comment_start_date",
             "include_today_in_missing_comments",
+            "include_empty_report_days_in_missing_comments",
             "comment_signature",
             "ui_color_theme",
             "ui_color_palette",
@@ -751,6 +752,11 @@ def validate_settings_request(payload: Any) -> Mapping[str, Any]:
     include_today = source.get("include_today_in_missing_comments", False)
     if not isinstance(include_today, bool):
         raise RequestValidationError("当日を含める設定が不正です。")
+    include_empty_report_days = source.get(
+        "include_empty_report_days_in_missing_comments", True
+    )
+    if not isinstance(include_empty_report_days, bool):
+        raise RequestValidationError("日報未記入日を含める設定が不正です。")
     color_theme = source.get("ui_color_theme", "light")
     if not isinstance(color_theme, str) or color_theme not in {"light", "dark"}:
         raise RequestValidationError("配色の指定が不正です。")

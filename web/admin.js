@@ -3248,7 +3248,7 @@
     handle.title = "ドラッグで並び替え";
     handle.append(
       createTeamSvgIcon(
-        "M7 5h2v2H7V5Zm4 0h2v2h-2V5ZM7 11h2v2H7v-2Zm4 0h2v2h-2v-2ZM7 17h2v2H7v-2Zm4 0h2v2h-2v-2Z",
+        "M6 5h2v2H6V5Zm6 0h2v2h-2V5ZM6 11h2v2H6v-2Zm6 0h2v2h-2v-2ZM6 17h2v2H6v-2Zm6 0h2v2h-2v-2Z",
       ),
     );
     return handle;
@@ -3432,7 +3432,8 @@
     const usersByEmployeeId = new Map(
       userEntries.map((entry) => [valueFor(entry, "employee_id"), entry]),
     );
-    nextOrder.forEach((employeeId, index) => {
+    // カードは画面上で降順表示するため、保存時は従来の日報・コメント順（昇順）へ戻す。
+    nextOrder.slice().reverse().forEach((employeeId, index) => {
       const user = usersByEmployeeId.get(employeeId);
       if (user) user.values.member_order = String((index + 1) * 10);
     });
@@ -3802,7 +3803,8 @@
       list.dataset.teamEditorMemberAffiliation = affiliationType;
     }
     list.setAttribute("role", "list");
-    const members = directMembersFor(affiliationType, teamId);
+    // チーム編集カードだけは、日報・コメント列の順序と逆向きに表示する。
+    const members = directMembersFor(affiliationType, teamId).slice().reverse();
     members.forEach((member) => {
       const employeeId = valueFor(member, "employee_id");
       const card = document.createElement("div");
@@ -3825,7 +3827,7 @@
         handle.title = "ドラッグで並び替え";
         handle.append(
           createTeamSvgIcon(
-            "M7 5h2v2H7V5Zm4 0h2v2h-2V5ZM7 11h2v2H7v-2Zm4 0h2v2h-2v-2ZM7 17h2v2H7v-2Zm4 0h2v2h-2v-2Z",
+            "M6 5h2v2H6V5Zm6 0h2v2h-2V5ZM6 11h2v2H6v-2Zm6 0h2v2h-2v-2ZM6 17h2v2H6v-2Zm6 0h2v2h-2v-2Z",
           ),
         );
         card.append(handle);

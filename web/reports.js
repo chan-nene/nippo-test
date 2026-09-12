@@ -345,6 +345,8 @@ function syncNativeUnsavedState(hasUnsavedChanges) {
 function syncMissingCommentCount() {
   const button = $("showMissingCommentsButton");
   if (!button) return;
+  button.classList.toggle("hidden", state.isDirector);
+  if (state.isDirector) return;
   const summary = getMissingCommentSummary();
   const isLoading = state.busyAction === "load";
   const controlsBusy = state.isBusy && state.busyAction !== "save";
@@ -372,28 +374,18 @@ function syncMissingCommentCount() {
     .filter(Boolean)
     .join(" ");
   badge.textContent = isLoading ? "…" : `${summary.count}日`;
-  const isDirectorSummary =
-    state.isDirector && state.missingCommentMode === "weekly_director";
-  let statusDescription = isDirectorSummary
-    ? "部長コメントがない対象者はいません。最長経過0日"
-    : "未コメントの日報はありません。対象0日";
+  let statusDescription = "未コメントの日報はありません。対象0日";
   if (isLoading) {
     statusDescription = "未コメントの日数を確認中";
   } else if (summary.count > 0) {
-    if (isDirectorSummary) {
-      statusDescription = `部長コメントがない対象者だけを表示、最長経過${summary.count}稼働日`;
-    } else {
-      const overdueDescription = summary.hasOverdue
-        ? "、過去日の未コメントあり"
-        : "";
-      statusDescription = `未コメントの日報だけを表示、対象${summary.count}日${overdueDescription}`;
-    }
+    const overdueDescription = summary.hasOverdue
+      ? "、過去日の未コメントあり"
+      : "";
+    statusDescription = `未コメントの日報だけを表示、対象${summary.count}日${overdueDescription}`;
   }
-  const todayScopeDescription = isDirectorSummary
-    ? "今日までの稼働日を集計"
-    : state.includeTodayInMissingComments
-      ? "今日分を含む"
-      : "今日分は対象外";
+  const todayScopeDescription = state.includeTodayInMissingComments
+    ? "今日分を含む"
+    : "今日分は対象外";
   const rangeDescription =
     summary.rangeStart &&
     summary.rangeEnd &&
@@ -611,6 +603,7 @@ function syncPeriodPresets(config = {}) {
   updatePeriodPresetIndicator(config);
   const missingButton = $("showMissingCommentsButton");
   if (missingButton) {
+    missingButton.classList.toggle("hidden", state.isDirector);
     missingButton.disabled = controlsBusy;
     missingButton.classList.toggle(
       "is-active",
@@ -894,7 +887,6 @@ function clearReportViewForLoadFailure() {
   state.missingCommentRangeStart = "";
   state.missingCommentRangeEnd = "";
   state.missingCommentMemberCounts = {};
-  state.directorMissingDays = 0;
   $("tableWrap")?.replaceChildren();
   showMain(false);
 }
@@ -1402,7 +1394,7 @@ function getPresetRange(presetName, today = getTodayJST()) {
     const startDate = configuredStart || offsetDateStr(today, -defaultPastDays);
     const endDate =
       state.missingCommentRangeEnd ||
-      (state.isDirector || state.includeTodayInMissingComments
+      (state.includeTodayInMissingComments
         ? today
         : offsetDateStr(today, -1));
     return {
@@ -1616,7 +1608,17 @@ function getApplicableCommentColumns(rows) {
       columnsByCommenter.set(commenterId, cell);
     });
   });
-  return [...columnsByCommenter.values()];
+  return [...columnsByCommenter.values()].sort((left, right) => {
+    const leftRank = Number.isFinite(Number(left?.rank))
+      ? Number(left.rank)
+      : Number.MAX_SAFE_INTEGER;
+    const rightRank = Number.isFinite(Number(right?.rank))
+      ? Number(right.rank)
+      : Number.MAX_SAFE_INTEGER;
+    return leftRank - rightRank || String(left?.superior_employee_id || "").localeCompare(
+      String(right?.superior_employee_id || ""),
+    );
+  });
 }
 
 function createTableColumnDefinitions(sampleComments) {
@@ -1668,7 +1670,10 @@ function renderTableHeader(context) {
 function renderResizableHeader(column) {
   const columnId = escapeHtml(column.id);
   const label = `<span class="column-header-label">${escapeHtml(column.label)}</span>`;
-  const headerContent = label;
+  const selfLabel = column.isCurrentUser
+    ? '<span class="column-header-you">自分</span>'
+    : "";
+  const headerContent = `<span class="column-header-content">${label}${selfLabel}</span>`;
   return `<th class="${column.className}" data-column-id="${columnId}"${column.isCurrentUser ? ' aria-label="自分の上司コメント列"' : ""}>
     ${headerContent}
     <span class="column-resize-handle" role="separator" aria-orientation="vertical" aria-label="${escapeHtml(column.label)}列の幅を変更" aria-valuemin="${column.minWidth}" aria-valuemax="${column.maxWidth}" aria-valuenow="${column.width}" data-column-id="${columnId}" data-column-kind="${column.kind}" tabindex="0"></span>
@@ -1771,6 +1776,7 @@ function renderDateCell(row, idx, context) {
         <span class="date-value">${formatDisplayDateHTML(row.date)}</span>
         ${holidayLabel}
       </div>
+      ${row.is_today ? '<span class="date-today-label">本日</span>' : ''}
       `,
     "cell-frame-static date-content",
   );
@@ -2390,6 +2396,9 @@ function getEditableTargetFromEvent(event) {
   const directTarget = event.target.closest(".editable-content");
   if (directTarget instanceof HTMLElement) return directTarget;
 
+  const replyTarget = event.target.closest(".reply-card")?.querySelector(".reply-content");
+  if (replyTarget instanceof HTMLElement) return replyTarget;
+
   const cell = event.target.closest("td.name-col, td.detail-col, td.comment-col");
   if (!(cell instanceof HTMLElement)) return null;
 
@@ -2637,10 +2646,9 @@ function rowNeedsBossComment(row) {
 }
 
 function rowMatchesMissingCommentFilter(row) {
-  if (state.isDirector && state.missingCommentMode === "weekly_director") {
-    return Number(state.missingCommentMemberCounts?.[row?.employee_id] || 0) > 0;
-  }
-  return rowNeedsBossComment(row);
+  return rowNeedsBossComment(row) && (
+    state.includeEmptyReportDaysInMissingComments || rowHasReportData(row)
+  );
 }
 
 function getMissingCommentSummary({ useCurrentRows = false } = {}) {
@@ -2656,23 +2664,10 @@ function getMissingCommentSummary({ useCurrentRows = false } = {}) {
     rangeEnd,
   };
   if (!state.isSuperior) return emptySummary;
-  if (state.isDirector && state.missingCommentMode === "weekly_director") {
-    const count = Math.max(0, Number(state.directorMissingDays || 0));
-    return {
-      count,
-      hasOverdue: count > 0,
-      dates: Array.isArray(state.missingCommentDates)
-        ? [...state.missingCommentDates]
-        : [],
-      rangeStart: state.missingCommentRangeStart || "",
-      rangeEnd: state.missingCommentRangeEnd || today,
-    };
-  }
-
   const rangeStart =
     state.missingCommentRangeStart || state.missingCommentStartDate || "";
   const sourceDates = useCurrentRows || !Array.isArray(state.missingCommentDates)
-    ? state.rows.filter(rowNeedsBossComment).map((row) => row.date)
+    ? state.rows.filter(rowMatchesMissingCommentFilter).map((row) => row.date)
     : state.missingCommentDates;
   const dates = [
     ...new Set(
@@ -2921,20 +2916,11 @@ function applyMissingCommentSummary(missingCommentSummary) {
     : null;
   state.missingCommentRangeStart = missingCommentSummary?.start_date || "";
   state.missingCommentRangeEnd = missingCommentSummary?.end_date || "";
-  state.missingCommentMode = missingCommentSummary?.mode || "daily";
   state.missingCommentMemberCounts =
     missingCommentSummary?.member_counts &&
     typeof missingCommentSummary.member_counts === "object"
       ? { ...missingCommentSummary.member_counts }
       : {};
-  state.directorMissingDays = Math.max(
-    0,
-    Number(
-      missingCommentSummary?.director_missing_days ??
-        missingCommentSummary?.max_elapsed_workdays ??
-        0,
-    ) || 0,
-  );
 }
 
 function applySavedReviewPatch(patch) {

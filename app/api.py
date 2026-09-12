@@ -187,6 +187,10 @@ class DailyReportApi:
                     payload.get("include_today_in_missing_comments"),
                     self._settings.include_today_in_missing_comments,
                 ),
+                include_empty_report_days_in_missing_comments=to_bool(
+                    payload.get("include_empty_report_days_in_missing_comments"),
+                    self._settings.include_empty_report_days_in_missing_comments,
+                ),
                 comment_signature=str(payload.get("comment_signature", "")).strip(),
                 ui_color_theme=color_theme,
                 ui_color_palette=color_palette,

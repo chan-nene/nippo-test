@@ -120,6 +120,7 @@ class AppSettings:
     default_end_offset_days: int = 0
     missing_comment_start_date: str = ""
     include_today_in_missing_comments: bool = False
+    include_empty_report_days_in_missing_comments: bool = True
     comment_signature: str = ""
     ui_sidebar_open: bool = True
     ui_period_preset: str = "default"

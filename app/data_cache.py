@@ -216,7 +216,9 @@ class DailyReportDataCache:
         users_df, comments_df = self._combined_frames(snapshot, repository)
         view_key = (snapshot.generation, repository.today_jst(), start_date, end_date,
                     period_preset, settings.default_start_offset_days, settings.default_end_offset_days,
-                    settings.missing_comment_start_date, settings.include_today_in_missing_comments)
+                    settings.missing_comment_start_date,
+                    settings.include_today_in_missing_comments,
+                    settings.include_empty_report_days_in_missing_comments)
         with self._lock:
             cached_view = self._views.get(view_key)
             if cached_view is not None:
@@ -302,7 +304,8 @@ class DailyReportDataCache:
     ) -> dict[str, Any]:
         key = (snapshot.generation, repository.today_jst(),
                repository.settings.missing_comment_start_date,
-               repository.settings.include_today_in_missing_comments)
+               repository.settings.include_today_in_missing_comments,
+               repository.settings.include_empty_report_days_in_missing_comments)
         with self._lock:
             if self._review_summary is None or self._review_summary[0] != key:
                 failed_reports = {item["employee_id"] for item in snapshot.report_load_failures}

@@ -398,17 +398,21 @@ class DailyReportRepository:
         self,
         common: dict[str, list[dict[str, Any]]],
         employee_id: str,
+        *, global_order: list[str] | None = None,
+        assignments: tuple[dict[str, set[str]], dict[str, list[str]]] | None = None,
     ) -> dict[str, Any]:
+        global_order = global_order if global_order is not None else self._global_user_order(common)
+        assignments = assignments if assignments is not None else self._resolved_comment_assignments(common, global_order=global_order)
         user_master = {row.get("employee_id", ""): row for row in common["user_master"]}
         current_user = user_master.get(employee_id, {})
         is_temporary_user = self._is_temporary_user(current_user)
         assigned_subordinate_ids = (
             set()
             if is_temporary_user
-            else self._assigned_subordinate_ids(common, employee_id)
+            else set(assignments[0].get(employee_id, set()))
         )
         viewable_members = self._build_viewable_members(
-            common, employee_id, assigned_subordinate_ids
+            common, employee_id, assigned_subordinate_ids, global_order=global_order
         )
         return {
             "user_master": user_master,
@@ -456,7 +460,11 @@ class DailyReportRepository:
             for item in (failed_comment_superior_ids or set())
             if str(item).strip()
         }
-        scope = self.resolve_view_scope(common, employee_id)
+        global_order = self._global_user_order(common)
+        assignments = self._resolved_comment_assignments(common, global_order=global_order)
+        scope = self.resolve_view_scope(
+            common, employee_id, global_order=global_order, assignments=assignments
+        )
         user_master = scope["user_master"]
         current_user = scope["current_user"]
         my_display = current_user.get("display_name") or employee_id
@@ -500,6 +508,8 @@ class DailyReportRepository:
             missing_comment_summary,
             failed_comment_superior_ids=failed_comment_ids,
             return_frame=columnar_rows,
+            global_order=global_order,
+            target_commenters=assignments[1],
         )
         for member in viewable_members:
             member["pending_review_count"] = missing_comment_summary.get(
@@ -522,7 +532,7 @@ class DailyReportRepository:
             "rows": rows,
             "holiday_dates": sorted(day.isoformat() for day in holiday_dates),
             "missing_comment_summary": missing_comment_summary,
-            "my_rank": self._get_my_rank(common, employee_id),
+            "my_rank": global_order.index(employee_id) if employee_id in global_order else -1,
             "start_date": default_start.isoformat() if default_start else None,
             "end_date": default_end.isoformat() if default_end else None,
             "load_warning_count": load_warning_count,
@@ -533,6 +543,7 @@ class DailyReportRepository:
         common: dict[str, list[dict[str, Any]]],
         employee_id: str,
         assigned_subordinate_ids: set[str],
+        *, global_order: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         users = {
             str(row.get("employee_id", "")): row
@@ -565,9 +576,10 @@ class DailyReportRepository:
             if can_input_own_report:
                 target_ids.add(employee_id)
 
-        global_order = self._global_user_order(common)
+        global_order = global_order if global_order is not None else self._global_user_order(common)
         order_index = {target_id: index for index, target_id in enumerate(global_order)}
         members: list[dict[str, Any]] = []
+        team_paths = {}
         for target_id in sorted(
             target_ids, key=lambda item: (order_index.get(item, 999999), item)
         ):
@@ -580,7 +592,9 @@ class DailyReportRepository:
                 relations.append("same_organization")
             if target_id in assigned_subordinate_ids:
                 relations.append("assigned_subordinate")
-            path = self._team_path(common, organization_id)
+            if organization_id not in team_paths:
+                team_paths[organization_id] = self._team_path(common, organization_id)
+            path = team_paths[organization_id]
             relations.extend(
                 f"organization:{item.get('team_id', '')}"
                 for item in path
@@ -611,11 +625,6 @@ class DailyReportRepository:
             str(row.get("team_id", "")): row
             for row in common.get("team_master", [])
             if row.get("team_id")
-        }
-        users = {
-            str(row.get("employee_id", "")): row
-            for row in common.get("user_master", [])
-            if row.get("employee_id")
         }
         path: list[dict[str, str]] = []
         team_id = organization_id
@@ -807,7 +816,8 @@ class DailyReportRepository:
         }
 
     def _resolved_comment_assignments(
-        self, common: dict[str, list[dict[str, Any]]]
+        self, common: dict[str, list[dict[str, Any]]],
+        *, global_order: list[str] | None = None,
     ) -> tuple[dict[str, set[str]], dict[str, list[str]]]:
         users = {
             str(row.get("employee_id", "")): row
@@ -861,7 +871,7 @@ class DailyReportRepository:
             }
             commenter_targets[commenter_id] = target_ids
 
-        global_order = self._global_user_order(common)
+        global_order = global_order if global_order is not None else self._global_user_order(common)
         order_index = {employee_id: index for index, employee_id in enumerate(global_order)}
         target_commenters: dict[str, list[str]] = {}
         for commenter_id, target_ids in commenter_targets.items():
@@ -886,13 +896,6 @@ class DailyReportRepository:
     @staticmethod
     def _is_workday(target_date: date, holiday_dates: set[date]) -> bool:
         return target_date.weekday() < 5 and target_date not in holiday_dates
-
-    def _get_my_rank(self, common: dict[str, Any], employee_id: str) -> int:
-        try:
-            return self._global_user_order(common).index(employee_id)
-        except ValueError:
-            return -1
-
 
     def _commenter_ids_for_targets(
         self,
@@ -941,21 +944,6 @@ class DailyReportRepository:
         *,
         failed_comment_superior_ids: set[str] | None = None,
     ) -> dict[str, Any]:
-        if employee_id in (failed_comment_superior_ids or set()):
-            today = self.today_jst()
-            return {
-                "start_date": (
-                    self.settings.missing_comment_start_date
-                    or DEFAULT_MISSING_COMMENT_START_DATE.isoformat()
-                ),
-                "end_date": (
-                    today.isoformat()
-                    if self.settings.include_today_in_missing_comments
-                    else (today - timedelta(days=1)).isoformat()
-                ),
-                "dates": [],
-                "member_counts": {},
-            }
         today = self.today_jst()
         range_end = (
             today
@@ -965,6 +953,7 @@ class DailyReportRepository:
         range_start = self._to_date(self.settings.missing_comment_start_date)
         if range_start is None:
             range_start = DEFAULT_MISSING_COMMENT_START_DATE
+        range_start = max(range_start, today - timedelta(days=365))
 
         summary = {
             "start_date": range_start.isoformat(),
@@ -972,7 +961,7 @@ class DailyReportRepository:
             "dates": [],
             "member_counts": {},
         }
-        if range_start > range_end:
+        if range_start > range_end or employee_id in (failed_comment_superior_ids or set()):
             return summary
 
         subordinate_ids = [
@@ -1139,16 +1128,13 @@ class DailyReportRepository:
                 cached_comments
                 if cached_comments is not None
                 else self._load_all_comment_rows()
-            ).to_dicts()
+            )
             authorized_replies = {
-                (
-                    str(row.get("superior_employee_id", "")),
-                    self._date_key(row.get("date")),
-                )
-                for row in existing_comments
-                if str(row.get("subordinate_employee_id", "")) == employee_id
-                and str(row.get("comment") or "").strip()
-                and self._date_key(row.get("date"))
+                (superior_id, self._date_key(report_date))
+                for superior_id, report_date in existing_comments.filter(
+                    (pl.col("subordinate_employee_id") == employee_id)
+                    & (pl.col("comment").fill_null("").str.strip_chars() != "")
+                ).select("superior_employee_id", "date").iter_rows()
             }
             if not requested_replies.issubset(authorized_replies):
                 raise PermissionError("存在しない上司コメントへの返信更新です。")
@@ -1220,7 +1206,7 @@ class DailyReportRepository:
         allowed_employee_ids: list[str],
         common: dict[str, list[dict[str, Any]]] | None = None,
     ) -> pl.DataFrame:
-        rows: list[dict[str, Any]] = []
+        partitions: list[pl.DataFrame] = []
         common = common or self.load_common()
         user_master = {
             str(row.get("employee_id", "")).strip(): row
@@ -1268,24 +1254,16 @@ class DailyReportRepository:
             if not file.exists():
                 continue
             try:
-                rows.extend(
-                    self.load_report_partition(file, employee_id).to_dicts()
-                )
+                partitions.append(self.load_report_partition(file, employee_id))
             except Exception as exc:
                 self._record_load_warning(file, exc)
 
-        if allowed_employee_ids:
-            rows = [
-                row
-                for row in rows
-                if str(row.get("employee_id", "")) in allowed_employee_ids
-            ]
-        return self._dedupe_rows_to_df(rows, USER_COLUMNS, ["employee_id", "date"])
+        return self.combine_report_partitions(partitions)
 
     def _load_all_comment_rows(
         self, allowed_employee_ids: list[str] | None = None
     ) -> pl.DataFrame:
-        rows: list[dict[str, Any]] = []
+        partitions: list[pl.DataFrame] = []
         comments_dir = self.storage_dir("comments")
         if not comments_dir.exists():
             self._record_load_warning(
@@ -1311,23 +1289,16 @@ class DailyReportRepository:
         for file in files:
             try:
                 if allowed_employee_ids is None:
-                    rows.extend(
-                        self._normalize_rows(
-                            self._read_csv_frame(file).to_dicts(), COMMENT_COLUMNS
-                        )
-                    )
+                    partitions.append(self._dedupe_frame(
+                        self._read_csv_frame(file), COMMENT_COLUMNS,
+                        ["superior_employee_id", "subordinate_employee_id", "date"],
+                    ))
                 else:
-                    rows.extend(
-                        self.load_comment_partition(file, allowed_ids).to_dicts()
-                    )
+                    partitions.append(self.load_comment_partition(file, allowed_ids))
             except Exception as exc:
                 self._record_load_warning(file, exc)
 
-        return self._dedupe_rows_to_df(
-            rows,
-            COMMENT_COLUMNS,
-            ["superior_employee_id", "subordinate_employee_id", "date"],
-        )
+        return self.combine_comment_partitions(partitions)
 
     def _build_rows(
         self,
@@ -1343,6 +1314,8 @@ class DailyReportRepository:
         *,
         failed_comment_superior_ids: set[str] | None = None,
         return_frame: bool = False,
+        global_order: list[str] | None = None,
+        target_commenters: dict[str, list[str]] | None = None,
     ) -> tuple[list[dict[str, Any]] | pl.DataFrame, date | None, date | None]:
         failed_comment_ids = {
             str(item).strip()
@@ -1355,10 +1328,11 @@ class DailyReportRepository:
             for row in common["calendar"]
             if self._calendar_row_is_holiday(row) and row.get("date")
         }
-        target_commenters = self._resolved_comment_assignments(common)[1]
-        superior_ids = self._commenter_ids_for_targets(
-            common, target_employee_ids
-        )
+        global_order = global_order if global_order is not None else self._global_user_order(common)
+        if target_commenters is None:
+            target_commenters = self._resolved_comment_assignments(common, global_order=global_order)[1]
+        relevant = {sid for eid in target_employee_ids for sid in target_commenters.get(eid, [])}
+        superior_ids = [sid for sid in global_order if sid in relevant]
 
         today = self.today_jst()
         holiday_date_values = {
@@ -1520,14 +1494,16 @@ class DailyReportRepository:
         )
         if not user_path.parent.is_dir():
             raise FileNotFoundError(f"日報フォルダが見つかりません: {user_path.parent}")
-        rows = self._read_csv_or_empty(user_path, USER_COLUMNS).to_dicts()
-        existing = self._dedupe_rows(rows, ["employee_id", "date"])
+        existing = self._dedupe_frame(
+            self._read_csv_or_empty(user_path, USER_COLUMNS), USER_COLUMNS,
+            ["employee_id", "date"],
+        )
+        update_dates = [self._date_key(update.get("date")) for update in updates]
         rows_by_date = {
-            self._date_key(row.get("date")): dict(row)
-            for row in existing
-            if self._date_key(row.get("date"))
+            row["date"]: row
+            for row in existing.filter(pl.col("date").is_in(update_dates)).to_dicts()
         }
-        now = self.now_jst()
+        now = self.now_jst().isoformat()
         for update in updates:
             report_date = self._to_date(update.get("date"))
             if report_date is None:
@@ -1537,7 +1513,7 @@ class DailyReportRepository:
                 date_text,
                 {
                     "employee_id": employee_id,
-                    "date": report_date,
+                    "date": date_text,
                     "business_name": "",
                     "business_detail": "",
                     "replies": "[]",
@@ -1545,7 +1521,7 @@ class DailyReportRepository:
                 },
             )
             row["employee_id"] = employee_id
-            row["date"] = report_date
+            row["date"] = date_text
             if "business_name" in update:
                 row["business_name"] = str(update.get("business_name", ""))
             if "business_detail" in update:
@@ -1566,9 +1542,8 @@ class DailyReportRepository:
             row["updated_at"] = now
             rows_by_date[date_text] = row
 
-        df = self._dedupe_rows_to_df(
-            list(rows_by_date.values()), USER_COLUMNS, ["employee_id", "date"]
-        )
+        changes = pl.DataFrame(list(rows_by_date.values()), schema=USER_COLUMNS, orient="row")
+        df = self._merge_partition_updates(existing, changes, ["employee_id", "date"])
         self._write_csv_atomically(df, user_path, "users")
         return user_path, df
 
@@ -1579,19 +1554,12 @@ class DailyReportRepository:
         if not comments_dir.is_dir():
             raise FileNotFoundError(f"上司コメントフォルダが見つかりません: {comments_dir}")
         comment_path = safe_employee_csv_path(comments_dir, employee_id)
-        rows = self._read_csv_or_empty(comment_path, COMMENT_COLUMNS).to_dicts()
-        existing = self._dedupe_rows(
-            rows, ["superior_employee_id", "subordinate_employee_id", "date"]
+        keys = ["superior_employee_id", "subordinate_employee_id", "date"]
+        existing = self._dedupe_frame(
+            self._read_csv_or_empty(comment_path, COMMENT_COLUMNS), COMMENT_COLUMNS, keys
         )
-        rows_by_key = {
-            (
-                str(row.get("superior_employee_id", "")),
-                str(row.get("subordinate_employee_id", "")),
-                self._date_key(row.get("date")),
-            ): dict(row)
-            for row in existing
-        }
-        now = self.now_jst()
+        rows_by_key = {}
+        now = self.now_jst().isoformat()
         for update in updates:
             subordinate_id = str(update.get("subordinate_employee_id", "")).strip()
             report_date = self._to_date(update.get("date"))
@@ -1601,17 +1569,30 @@ class DailyReportRepository:
             rows_by_key[key] = {
                 "superior_employee_id": employee_id,
                 "subordinate_employee_id": subordinate_id,
-                "date": report_date,
+                "date": report_date.isoformat(),
                 "comment": str(update.get("comment", "")),
                 "updated_at": now,
             }
-        df = self._dedupe_rows_to_df(
-            list(rows_by_key.values()),
-            COMMENT_COLUMNS,
-            ["superior_employee_id", "subordinate_employee_id", "date"],
-        )
+        changes = pl.DataFrame(list(rows_by_key.values()), schema=COMMENT_COLUMNS, orient="row")
+        df = self._merge_partition_updates(existing, changes, keys)
         self._write_csv_atomically(df, comment_path, "comments")
         return comment_path, df
+
+    @staticmethod
+    def _merge_partition_updates(
+        existing: pl.DataFrame, changes: pl.DataFrame, keys: list[str]
+    ) -> pl.DataFrame:
+        """変更行だけを置換し、既存キーの順序と未変更列を保持する。"""
+        if changes.is_empty():
+            return existing
+        return existing.join(
+            changes, on=keys, how="full", coalesce=True,
+            suffix="_new", maintain_order="left_right",
+        ).select([
+            pl.col(column) if column in keys else
+            pl.coalesce(pl.col(f"{column}_new"), pl.col(column)).alias(column)
+            for column in existing.columns
+        ])
 
     def _write_csv_atomically(
         self, df: pl.DataFrame, target_path: Path, backup_group: str
@@ -1801,27 +1782,6 @@ class DailyReportRepository:
                 )
         return df.select(columns)
 
-    def _normalize_rows(
-        self, rows: list[dict[str, Any]], columns: list[str]
-    ) -> list[dict[str, Any]]:
-        return [
-            {
-                column: row.get(column, "[]" if column == "replies" else "")
-                for column in columns
-            }
-            for row in rows
-        ]
-
-    def _dedupe_rows_to_df(
-        self, rows: list[dict[str, Any]], columns: list[str], keys: list[str]
-    ) -> pl.DataFrame:
-        deduped = self._dedupe_rows(self._normalize_rows(rows, columns), keys)
-        return (
-            pl.DataFrame(deduped, schema=columns, orient="row")
-            if deduped
-            else self._empty_df(columns)
-        )
-
     def _dedupe_frame(
         self, frame: pl.DataFrame, columns: list[str], keys: list[str]
     ) -> pl.DataFrame:
@@ -1882,27 +1842,6 @@ class DailyReportRepository:
             .unique(subset=keys, keep="last")
             .sort("_key_order").select(frame.columns).collect()
         )
-
-    def _dedupe_rows(
-        self, rows: list[dict[str, Any]], keys: list[str]
-    ) -> list[dict[str, Any]]:
-        latest: dict[tuple[Any, ...], dict[str, Any]] = {}
-        fallback_updated_at = self.now_jst()
-        for row in rows:
-            dt = self._to_datetime(row.get("updated_at")) or fallback_updated_at
-            row["updated_at"] = dt.isoformat()
-            row["date"] = self._date_key(row.get("date"))
-
-            key = tuple(
-                self._date_key(row.get(column))
-                if column == "date"
-                else str(row.get(column, ""))
-                for column in keys
-            )
-            current = latest.get(key)
-            if current is None or row["updated_at"] >= current["updated_at"]:
-                latest[key] = row
-        return list(latest.values())
 
     def _to_date(self, value: Any) -> date | None:
         if isinstance(value, date) and not isinstance(value, datetime):

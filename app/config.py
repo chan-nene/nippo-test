@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from configparser import ConfigParser, Error as ConfigParserError
 from dataclasses import asdict, dataclass, fields
 import os
+import tempfile
+from threading import RLock
 from pathlib import Path
 from typing import Any
 
@@ -258,9 +260,10 @@ class SettingsManager:
     def __init__(self, base_dir: Path) -> None:
         self.base_dir = base_dir
         self.path = base_dir / SETTINGS_INI_FILENAME
+        self.lock = RLock()
 
     def load(self) -> AppSettings:
-        parser = ConfigParser()
+        parser = ConfigParser(interpolation=None)
         if not self.path.exists():
             settings = AppSettings()
             self.save(settings)
@@ -278,15 +281,27 @@ class SettingsManager:
         return AppSettings.from_mapping(section)
 
     def save(self, settings: AppSettings) -> None:
-        parser = ConfigParser()
+        parser = ConfigParser(interpolation=None)
         parser["settings"] = {
             key: str(value) for key, value in settings.to_dict().items()
         }
         # The executable directory is expected to exist.  Do not create a
         # storage directory (or any other application data directory) as a
         # side-effect of saving personal settings.
-        with self.path.open("w", encoding="utf-8") as file:
-            parser.write(file)
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self.path.parent,
+                prefix=f".{self.path.name}.", suffix=".tmp", delete=False,
+            ) as file:
+                temporary_path = Path(file.name)
+                parser.write(file)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temporary_path, self.path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
 
 class StorageManager:
@@ -303,7 +318,7 @@ class StorageManager:
                 code="storage_config_missing",
                 target=STORAGE_INI_FILENAME,
             )
-        parser = ConfigParser()
+        parser = ConfigParser(interpolation=None)
         try:
             with self.path.open("r", encoding="utf-8") as file:
                 parser.read_file(file)

@@ -126,7 +126,7 @@ html body .settings-card input[type="date"] {
   border-radius: var(--radius-control);
   background: var(--input-bg);
   color: var(--field-fg);
-  padding: 0 var(--field-padding-x);
+  padding: 2px var(--field-padding-x) 0;
   box-shadow: none;
   line-height: 1.2;
 }
@@ -190,7 +190,7 @@ html body .settings-card .member-filter-option {
   padding: 0 14px;
   color: var(--form-option-fg);
   cursor: pointer;
-  font-size: var(--font-13);
+  font-size: var(--ui-font-size);
   font-weight: 600;
 }
 
@@ -252,7 +252,7 @@ html body .settings-card :is(.color-palette-option, .appearance-mode-option) {
   padding: 9px 12px;
   color: var(--choice-card-fg);
   cursor: pointer;
-  font-size: var(--font-13);
+  font-size: var(--ui-font-size);
   font-weight: 600;
 }
 
@@ -383,8 +383,8 @@ html body .default-range-selects select {
   border-radius: var(--radius-control);
   background: var(--field-bg);
   color: var(--text);
-  padding: 0 8px;
-  font-size: var(--font-13);
+  padding: 2px 8px 0;
+  font-size: var(--ui-font-size);
   font-weight: 600;
   cursor: pointer;
 }
@@ -499,4 +499,11 @@ html body #settingsPanel #saveSettingsButton {
   html body #settingsPanel .settings-field > .field-error {
     grid-column: 1;
   }
+}
+
+html body .settings-field-help {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-12);
+  line-height: 1.5;
 }

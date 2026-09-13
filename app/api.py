@@ -141,125 +141,129 @@ class DailyReportApi:
         }
 
     def load_settings(self) -> dict[str, Any]:
-        try:
-            # storage.ini is deployment configuration and is read only at
-            # application startup. Replacing it takes effect after restart.
-            root_path = self._settings.root_path
-            self._settings = self._settings_manager.load()
-            self._settings.root_path = root_path
-            settings_context = self._build_settings_context()
-            return {
-                "ok": True,
-                "settings": self._settings.to_dict(),
-                "settings_complete": self._settings.is_complete,
-                "storage_configured": self._storage_ready,
-                "settings_context": settings_context,
-                **settings_context,
-            }
-        except Exception:
-            logger.exception("Failed to load settings")
-            return {
-                "ok": False,
-                "message": "設定を読み込めませんでした。",
-            }
+        with self._settings_manager.lock:
+            try:
+                # storage.ini is deployment configuration and is read only at
+                # application startup. Replacing it takes effect after restart.
+                root_path = self._settings.root_path
+                self._settings = self._settings_manager.load()
+                self._settings.root_path = root_path
+                settings_context = self._build_settings_context()
+                return {
+                    "ok": True,
+                    "settings": self._settings.to_dict(),
+                    "settings_complete": self._settings.is_complete,
+                    "storage_configured": self._storage_ready,
+                    "settings_context": settings_context,
+                    **settings_context,
+                }
+            except Exception:
+                logger.exception("Failed to load settings")
+                return {
+                    "ok": False,
+                    "message": "設定を読み込めませんでした。",
+                }
 
     def save_settings(self, payload: Any) -> dict[str, Any]:
-        try:
-            payload = validate_settings_request(payload)
-            color_theme, color_palette = normalize_color_appearance(
-                payload.get("ui_color_theme"),
-                payload.get("ui_color_palette"),
-                theme_default=self._settings.ui_color_theme,
-                palette_default=self._settings.ui_color_palette,
-            )
-            candidate = replace(
-                self._settings,
-                default_start_offset_days=to_int(
-                    payload.get("default_start_offset_days"), -2
-                ),
-                default_end_offset_days=to_int(
-                    payload.get("default_end_offset_days"), 0
-                ),
-                missing_comment_start_date=str(
-                    payload.get("missing_comment_start_date", "")
-                ).strip(),
-                include_today_in_missing_comments=to_bool(
-                    payload.get("include_today_in_missing_comments"),
-                    self._settings.include_today_in_missing_comments,
-                ),
-                include_empty_report_days_in_missing_comments=to_bool(
-                    payload.get("include_empty_report_days_in_missing_comments"),
-                    self._settings.include_empty_report_days_in_missing_comments,
-                ),
-                comment_signature=str(payload.get("comment_signature", "")).strip(),
-                ui_color_theme=color_theme,
-                ui_color_palette=color_palette,
-                ui_member_filter_levels=normalize_member_filter_levels(
-                    payload.get("ui_member_filter_levels"),
-                    self._settings.ui_member_filter_levels,
-                ),
-            )
-            self._settings = candidate
-            self._settings_manager.save(self._settings)
-            settings_context = self._build_settings_context()
-            return {
-                "ok": True,
-                "message": "設定を保存しました。",
-                "settings": self._settings.to_dict(),
-                "storage_configured": getattr(self, "_storage_error", None) is None
-                and self._settings.is_complete,
-                "settings_context": settings_context,
-                **settings_context,
-            }
-        except RequestValidationError as exc:
-            return self._invalid_request(exc)
-        except Exception:
-            logger.exception("Failed to save settings")
-            return {"ok": False, "message": "設定の保存に失敗しました。"}
+        with self._settings_manager.lock:
+            try:
+                payload = validate_settings_request(payload)
+                color_theme, color_palette = normalize_color_appearance(
+                    payload.get("ui_color_theme"),
+                    payload.get("ui_color_palette"),
+                    theme_default=self._settings.ui_color_theme,
+                    palette_default=self._settings.ui_color_palette,
+                )
+                candidate = replace(
+                    self._settings,
+                    default_start_offset_days=to_int(
+                        payload.get("default_start_offset_days"), -2
+                    ),
+                    default_end_offset_days=to_int(
+                        payload.get("default_end_offset_days"), 0
+                    ),
+                    missing_comment_start_date=str(
+                        payload.get("missing_comment_start_date", "")
+                    ).strip(),
+                    include_today_in_missing_comments=to_bool(
+                        payload.get("include_today_in_missing_comments"),
+                        self._settings.include_today_in_missing_comments,
+                    ),
+                    include_empty_report_days_in_missing_comments=to_bool(
+                        payload.get("include_empty_report_days_in_missing_comments"),
+                        self._settings.include_empty_report_days_in_missing_comments,
+                    ),
+                    comment_signature=str(payload.get("comment_signature", "")).strip(),
+                    ui_color_theme=color_theme,
+                    ui_color_palette=color_palette,
+                    ui_member_filter_levels=normalize_member_filter_levels(
+                        payload.get("ui_member_filter_levels"),
+                        self._settings.ui_member_filter_levels,
+                    ),
+                )
+                self._settings_manager.save(candidate)
+                self._settings = candidate
+                settings_context = self._build_settings_context()
+                return {
+                    "ok": True,
+                    "message": "設定を保存しました。",
+                    "settings": self._settings.to_dict(),
+                    "storage_configured": getattr(self, "_storage_error", None) is None
+                    and self._settings.is_complete,
+                    "settings_context": settings_context,
+                    **settings_context,
+                }
+            except RequestValidationError as exc:
+                return self._invalid_request(exc)
+            except Exception:
+                logger.exception("Failed to save settings")
+                return {"ok": False, "message": "設定の保存に失敗しました。"}
 
     def save_ui_state(self, payload: Any) -> dict[str, Any]:
-        try:
-            payload = validate_ui_state_request(payload)
-            color_theme, color_palette = normalize_color_appearance(
-                payload.get("ui_color_theme"),
-                payload.get("ui_color_palette"),
-                theme_default=self._settings.ui_color_theme,
-                palette_default=self._settings.ui_color_palette,
-            )
-            preset = str(payload.get("period_preset", "")).strip()
-            if preset == "last7days":
-                preset = "default"
-            if preset not in PERIOD_PRESETS:
-                preset = "default"
-            self._settings = replace(
-                self._settings,
-                ui_sidebar_open=to_bool(
-                    payload.get("sidebar_open"), self._settings.ui_sidebar_open
-                ),
-                ui_period_preset=preset,
-                ui_start_date=str(payload.get("start_date", "")).strip(),
-                ui_end_date=str(payload.get("end_date", "")).strip(),
-                ui_font_size=self._validated_font_size(payload.get("font_size")),
-                ui_color_theme=color_theme,
-                ui_color_palette=color_palette,
-                ui_column_widths=(
-                    json.dumps(
-                        payload["column_widths"],
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                        sort_keys=True,
-                    )
-                    if "column_widths" in payload
-                    else self._settings.ui_column_widths
-                ),
-            )
-            self._settings_manager.save(self._settings)
-            return {"ok": True}
-        except RequestValidationError as exc:
-            return self._invalid_request(exc)
-        except Exception:
-            logger.exception("Failed to save UI state")
-            return {"ok": False, "message": "表示状態の保存に失敗しました。"}
+        with self._settings_manager.lock:
+            try:
+                payload = validate_ui_state_request(payload)
+                color_theme, color_palette = normalize_color_appearance(
+                    payload.get("ui_color_theme"),
+                    payload.get("ui_color_palette"),
+                    theme_default=self._settings.ui_color_theme,
+                    palette_default=self._settings.ui_color_palette,
+                )
+                preset = str(payload.get("period_preset", "")).strip()
+                if preset == "last7days":
+                    preset = "default"
+                if preset not in PERIOD_PRESETS:
+                    preset = "default"
+                candidate = replace(
+                    self._settings,
+                    ui_sidebar_open=to_bool(
+                        payload.get("sidebar_open"), self._settings.ui_sidebar_open
+                    ),
+                    ui_period_preset=preset,
+                    ui_start_date=str(payload.get("start_date", "")).strip(),
+                    ui_end_date=str(payload.get("end_date", "")).strip(),
+                    ui_font_size=self._validated_font_size(payload.get("font_size")),
+                    ui_color_theme=color_theme,
+                    ui_color_palette=color_palette,
+                    ui_column_widths=(
+                        json.dumps(
+                            payload["column_widths"],
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        )
+                        if "column_widths" in payload
+                        else self._settings.ui_column_widths
+                    ),
+                )
+                self._settings_manager.save(candidate)
+                self._settings = candidate
+                return {"ok": True}
+            except RequestValidationError as exc:
+                return self._invalid_request(exc)
+            except Exception:
+                logger.exception("Failed to save UI state")
+                return {"ok": False, "message": "表示状態の保存に失敗しました。"}
 
     def load_data(self, payload: Any = None) -> dict[str, Any]:
         try:

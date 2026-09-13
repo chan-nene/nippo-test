@@ -384,7 +384,7 @@ html body .missing-count-badge {
   font-size: var(--font-10);
   font-weight: 800;
   line-height: 1;
-  white-space: nowrap;
+
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -597,10 +597,6 @@ html body #reportPanel .date-value .date-weekday .date-weekday-sun {
   color: var(--weekday-sun);
 }
 
-html body #reportPanel td.self-comment-col:not(.is-dirty-cell):not(:has(.is-editing)):not(:hover) {
-  background: color-mix(in srgb, var(--report-today-fg) 5%, var(--table-cell-bg));
-}
-
 html body #reportPanel table thead th .column-header-you {
   display: inline-flex;
   width: max-content;
@@ -612,26 +608,8 @@ html body #reportPanel table thead th .column-header-you {
   justify-content: center;
   padding: 2px 6px 1px;
   border-radius: 4px;
-  background: var(--report-today-bg);
-  color: var(--report-today-fg);
-  font-family: var(--font-ui);
-  font-size: calc(var(--ui-font-size) - 2px);
-  font-weight: 600;
-  line-height: 1.1;
-  white-space: nowrap;
-}
 
-html body #reportPanel .date-today-label {
-  display: inline-flex;
-  width: max-content;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-  margin-top: 3px;
-  padding: 2px 6px 1px;
-  border-radius: 4px;
-  background: var(--report-today-bg);
-  color: var(--report-today-fg);
+  font-family: var(--font-ui);
   font-size: calc(var(--ui-font-size) - 2px);
   font-weight: 600;
   line-height: 1.1;
@@ -1191,7 +1169,7 @@ html body #reportPanel .period-presets {
   min-height: var(--control-height);
   height: var(--control-height);
   line-height: 1;
-  white-space: nowrap;
+
   position: relative;
   display: inline-flex;
   width: max-content;
@@ -1783,7 +1761,7 @@ html body #reportPanel .member-switch-button {
   display: inline-flex;
   width: max-content;
   max-width: min(220px, 100%);
-  height: auto;
+
   min-height: 28px;
   height: var(--control-height);
   align-items: center;
@@ -1881,14 +1859,11 @@ html body #reportPanel .member-switch-button:disabled::before {
   opacity: 0;
 }
 
-
 html body #reportPanel #refreshButton:hover:not(:disabled) {
   border-color: var(--border-strong);
   background: var(--surface-hover);
   color: var(--action-secondary-hover-fg);
 }
-
-
 
 html body #reportPanel .toolbar-right > .toolbar-button {
   box-sizing: border-box;
@@ -1903,7 +1878,6 @@ html body #reportPanel .toolbar-right > .toolbar-button {
   font-size: var(--ui-font-size);
   font-weight: 700;
 }
-
 
 /* Active missing-comment filtering keeps the same hover contrast as active member filters. */
 
@@ -1957,7 +1931,6 @@ html body #reportPanel .toolbar-right > .toolbar-button {
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
   }
-
 }
 
 @media (max-width: 760px) {
@@ -2037,7 +2010,8 @@ html body #reportPanel .date-today-label {
 
 html body #reportPanel .date-today-label,
 html body #reportPanel table thead th .column-header-you {
-  top: 0 !important;
+  --ui-text-offset-y: 0px;
+  top: 0;
 }
 
 html body #reportPanel table thead th .column-header-you {
@@ -2110,6 +2084,8 @@ html body #reportPanel table tbody tr.holiday.is-today > td.date-col {
 }
 
 html body #reportPanel .date-today-label {
+  --today-label-bg: #111111;
+  --today-label-fg: #ffffff;
   display: inline-flex;
   width: max-content;
   min-width: 0;
@@ -2118,8 +2094,8 @@ html body #reportPanel .date-today-label {
   margin-top: 3px;
   padding: 2px 6px 1px;
   border-radius: 4px;
-  background: var(--report-today-bg);
-  color: var(--report-today-fg);
+  background: var(--today-label-bg);
+  color: var(--today-label-fg);
   font-size: max(1px, calc(var(--ui-font-size) - 2px));
   font-weight: 600;
   line-height: 1.1;
@@ -2130,14 +2106,9 @@ html body #reportPanel .date-today-label {
    label with white text, while dark mode reverses those values. This keeps
    the marker distinct from palette colors used for editable or holiday
    states. */
-html:not([data-theme="dark"]) body #reportPanel .date-today-label {
-  background: #111111;
-  color: #ffffff;
-}
-
 html[data-theme="dark"] body #reportPanel .date-today-label {
-  background: #ffffff;
-  color: #111111;
+  --today-label-bg: #ffffff;
+  --today-label-fg: #111111;
 }
 
 html body #reportPanel .period-shift-step-label,
@@ -2150,7 +2121,7 @@ html body #reportPanel .date-value,
 html body #reportPanel .date-weekday,
 html body #reportPanel .cell-sub-label,
 html body #reportPanel .cell-frame:not(:has(> *)) {
-  top: var(--ui-text-offset-y) !important;
+  top: var(--ui-text-offset-y);
 }
 
 html body #reportPanel #showMissingCommentsButton {

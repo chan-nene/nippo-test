@@ -1398,7 +1398,7 @@ function getPresetRange(presetName, today = getTodayJST()) {
         ? today
         : offsetDateStr(today, -1));
     return {
-      startDate: startDate <= endDate ? startDate : endDate,
+      startDate: [startDate <= endDate ? startDate : endDate, offsetDateStr(today, -365)].sort().at(-1),
       endDate,
     };
   }
@@ -3007,29 +3007,6 @@ async function saveUpdates() {
     return false;
   }
 
-  if (result?.csv_locked === true) {
-    notify({
-      text:
-        result.message ||
-        "CSVが使用中です。Excelなどで開いている場合は閉じてから、もう一度保存してください。",
-      type: "error",
-      autoHide: false,
-      source: "save",
-    });
-    syncChrome();
-    return false;
-  }
-  if (result?.csv_readonly === true) {
-    notify({
-      text: result.message || "CSVを読み取り専用に設定できませんでした。",
-      type: "error",
-      autoHide: false,
-      source: "save",
-    });
-    syncChrome();
-    return false;
-  }
-
   const userSaved =
     reportEntries.length === 0 || result?.result?.user?.saved === true;
   const commentSaved =
@@ -3100,6 +3077,29 @@ async function saveUpdates() {
     }
   } else {
     syncChrome();
+  }
+
+  if (result?.csv_locked === true) {
+    notify({
+      text:
+        result.message ||
+        "CSVが使用中です。Excelなどで開いている場合は閉じてから、もう一度保存してください。",
+      type: "error",
+      autoHide: false,
+      source: "save",
+    });
+    syncChrome();
+    return false;
+  }
+  if (result?.csv_readonly === true) {
+    notify({
+      text: result.message || "CSVを読み取り専用に設定できませんでした。",
+      type: "error",
+      autoHide: false,
+      source: "save",
+    });
+    syncChrome();
+    return false;
   }
 
   if (allSaved) {

@@ -512,7 +512,6 @@ html body[data-font-size="xlarge"] {
   --settings-padding: 22px;
 }
 
-
 html,
 html body {
   height: 100%;
@@ -607,7 +606,7 @@ html body :is(#settingsPanel, #reportPanel)
   content: "0000/00/00";
   display: block;
   visibility: hidden;
-  padding: 0 var(--single-date-input-padding-right) 0 var(--field-padding-x);
+  padding: 2px var(--single-date-input-padding-right) 0 var(--field-padding-x);
   font: inherit;
   line-height: var(--control-height);
   white-space: nowrap;
@@ -645,7 +644,7 @@ html body :is(#settingsPanel, #reportPanel)
   border: 0;
   background: transparent;
   color: var(--field-fg);
-  padding: 0 var(--single-date-input-padding-right) 0 var(--field-padding-x);
+  padding: 2px var(--single-date-input-padding-right) 0 var(--field-padding-x);
   font-size: var(--ui-font-size);
   font-weight: inherit;
   line-height: 1.2;
@@ -714,12 +713,12 @@ html[data-theme] body .flatpickr-calendar .flatpickr-day.week.selected {
 
 html body .title-bar {
   display: flex;
-  height: var(--title-height);
+
   flex: 0 0 var(--title-height);
   align-items: center;
   justify-content: space-between;
   padding: 0 18px 0 20px;
-  background: var(--title-bar-bg);
+
   color: var(--text);
 }
 
@@ -753,10 +752,9 @@ html body .title-bar-actions {
 }
 
 html body .current-user {
-  max-width: 200px;
   overflow: hidden;
   color: var(--text);
-  font-size: 13px;
+
   font-weight: 600;
   line-height: 1;
   text-overflow: ellipsis;
@@ -772,7 +770,7 @@ html body .current-user-icon {
 html body .current-user-display {
   height: 32px;
   min-width: 0;
-  gap: 6px;
+
   line-height: 1;
 }
 
@@ -807,13 +805,6 @@ html body .header-icon-button {
   color: var(--text-muted);
   padding: 0;
   line-height: 1;
-}
-
-html body .header-icon-button:hover,
-html body .header-icon-button.is-active {
-  border-color: var(--border);
-  background: var(--surface-hover);
-  color: var(--primary-ink);
 }
 
 html:not([data-theme="dark"]) body .header-icon-button,
@@ -1161,15 +1152,14 @@ html body .app-shell {
 html body .sidebar {
   --sidebar-item-gap: 8px;
   display: flex;
-  width: var(--sidebar-closed);
+
   flex: 0 0 var(--sidebar-closed);
   flex-direction: column;
   row-gap: var(--sidebar-item-gap);
   overflow: hidden;
   border-right: 0;
-  background: var(--sidebar-bg);
+
   color: var(--sidebar-text);
-  transition: none;
 }
 
 html body .sidebar-nav {
@@ -1189,49 +1179,16 @@ html body .sidebar-nav ul {
 html body .sidebar-item,
 html body .sidebar-utility-button {
   display: inline-flex;
-  width: 100%;
-  height: 60px;
-  flex-direction: column;
+
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+
   overflow: hidden;
   border: 0;
   border-radius: 10px;
   background: transparent;
   color: var(--sidebar-text);
-  padding: 8px 2px;
+
   transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease;
-}
-
-html body .sidebar-item,
-html body .sidebar-utility-button {
-  width: 72px;
-  justify-content: center;
-  gap: 0;
-  margin-inline: 0;
-  padding: 0;
-}
-
-html body .sidebar-item:hover,
-html body .sidebar-utility-button:hover {
-  border-color: color-mix(in srgb, var(--primary-border) 38%, transparent);
-  background: var(--surface-hover);
-  color: var(--primary-ink);
-}
-
-html body .sidebar-item.is-active,
-html body .sidebar-utility-button.is-active {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-on);
-}
-
-html body .sidebar-item.is-active:hover,
-html body .sidebar-utility-button.is-active:hover {
-  border-color: var(--primary-hover);
-  background: var(--primary-hover);
-  color: var(--primary-on);
 }
 
 html body .sidebar-icon {
@@ -1257,29 +1214,25 @@ html body .sidebar-utility-button svg {
 html body .sidebar-secondary-nav {
   display: grid;
   flex: 0 0 auto;
-  gap: var(--sidebar-item-gap);
+
   padding: 4px;
   border-top: 0;
 }
 
 html body .sidebar-text,
 html body .sidebar-utility-text {
-  width: 68px;
-  max-width: 68px;
   overflow: hidden;
   color: currentColor;
-  font-size: 12px;
+
   font-weight: 500;
   opacity: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1.2;
-  text-align: center;
 }
 
 html body .sidebar-item .sidebar-text,
 html body .sidebar-utility-button .sidebar-utility-text {
-  font-size: 12px !important;
+  font-size: 12px;
 }
 
 /* Main layout */
@@ -1493,22 +1446,22 @@ html body[data-font-size]
     .message,
     .empty
   ) {
-  font-size: var(--ui-font-size) !important;
+  font-size: var(--ui-font-size);
 }
 
 html body[data-font-size]
   :is(th, td, .editable-content) {
-  font-size: var(--ui-font-size) !important;
+  font-size: var(--ui-font-size);
 }
 
 html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"])
   :is(.title-bar-title, .view-label #pageTitle) {
-  font-size: var(--font-16) !important;
+  font-size: var(--font-16);
 }
 
 html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"])
   :is(.settings-card h2, .settings-card h3) {
-  font-size: var(--font-18) !important;
+  font-size: var(--font-18);
 }
 
 html body[data-font-size]
@@ -1517,12 +1470,12 @@ html body[data-font-size]
     .period-shift-button,
     .preset-button
 ) {
-  font-size: var(--ui-font-size) !important;
+  font-size: var(--ui-font-size);
 }
 
 html body:is([data-font-size="compact"], [data-font-size="medium"], [data-font-size="large"], [data-font-size="xlarge"])
   .toolbar-button-badge {
-  font-size: var(--font-10) !important;
+  font-size: var(--font-10);
 }
 
 /* Japanese UI typography */
@@ -1535,11 +1488,6 @@ html body textarea,
 html body select,
 html body button {
   font-weight: 600;
-}
-
-html body .sidebar-text,
-html body .sidebar-utility-text {
-  font-size: 13px;
 }
 
 html body :is(
@@ -1564,7 +1512,6 @@ html body :is(
   html body .content {
     padding: 8px;
   }
-
 }
 
 @media (max-width: 520px) {
@@ -1664,7 +1611,7 @@ html body .sidebar-utility-text {
   width: 68px;
   max-width: 68px;
   flex: 0 0 auto;
-  font-size: 12px !important;
+  font-size: 12px;
   line-height: 1.2;
   text-align: center;
 }
@@ -1684,7 +1631,7 @@ html body .current-user {
 /* Keep the compact rail labels at 10pt even when the global font-size control is enlarged. */
 html body[data-font-size] .sidebar .sidebar-item .sidebar-text,
 html body[data-font-size] .sidebar .sidebar-utility-button .sidebar-utility-text {
-  font-size: 12px !important;
+  font-size: 12px;
 }
 
 /* IBM Plex Sans JP sits slightly high inside a browser line box. Move
@@ -1710,7 +1657,7 @@ html body :where(
     .cell-frame:not(:has(> *))
   ):not(:has(> *)):not(:empty):not([aria-hidden="true"]):not(.toolbar-button-icon):not(.sidebar-icon):not(.sidebar-utility-icon) {
   position: relative;
-  top: var(--ui-text-offset-y) !important;
+  top: var(--ui-text-offset-y);
 }
 
 html body :is(
@@ -1721,8 +1668,8 @@ html body :is(
     input[type="email"],
     select
   ) {
-  padding-top: 2px !important;
-  padding-bottom: 0 !important;
+  padding-top: 2px;
+  padding-bottom: 0;
 }
 
 html body .font-size-button,

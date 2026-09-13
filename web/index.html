@@ -648,12 +648,13 @@
                       <label class="settings-field-label" for="missingCommentStartDate">未コメントの集計開始日</label>
                       <div class="settings-missing-controls">
                         <div class="period-field-group flatpickr-date-field">
-                          <input id="missingCommentStartDate" type="date" aria-label="未コメントの集計開始日" />
+                          <input id="missingCommentStartDate" type="date" aria-describedby="missingCommentRangeHelp" aria-label="未コメントの集計開始日" />
                           <svg class="period-field-display-icon" viewBox="0 0 24 24" aria-hidden="true">
                             <rect x="4" y="5" width="16" height="15" rx="2" />
                             <path d="M8 3v4M16 3v4M4 10h16" />
                           </svg>
                         </div>
+                        <p id="missingCommentRangeHelp" class="settings-field-help">未コメント集計は過去1年（当日を含め最大366日）のみです。それ以前の日付は、集計開始日に設定しても集計されません。</p>
                         <label class="settings-check-option">
                           <input id="includeTodayInMissingComments" type="checkbox" />
                           <span class="settings-check-copy">当日分を未コメントに含める</span>

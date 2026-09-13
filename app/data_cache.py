@@ -225,6 +225,10 @@ class DailyReportDataCache:
                 self._views.move_to_end(view_key)
                 data = cached_view
         if cached_view is None:
+            global_order = repository._global_user_order(snapshot.common)
+            assignments = repository._resolved_comment_assignments(
+                snapshot.common, global_order=global_order
+            )
             data = repository.build_view_data_from_cache(
                 employee_id,
                 snapshot.common,
@@ -234,7 +238,15 @@ class DailyReportDataCache:
                 end_date=end_date,
                 period_preset=period_preset,
                 columnar_rows=True,
-                missing_comment_summary=self._missing_summary(snapshot, repository, users_df, comments_df),
+                missing_comment_summary=self._missing_summary(
+                    snapshot,
+                    repository,
+                    users_df,
+                    comments_df,
+                    assigned_subordinate_ids=set(
+                        assignments[0].get(employee_id, set())
+                    ),
+                ),
                 load_warning_count=len(snapshot.warnings),
                 failed_report_employee_ids={
                     str(item.get("employee_id", ""))
@@ -246,6 +258,8 @@ class DailyReportDataCache:
                     for item in snapshot.comment_load_failures
                     if item.get("superior_employee_id")
                 },
+                global_order=global_order,
+                assignments=assignments,
             )
             with self._lock:
                 # Bound memory and drop older generations, including changed
@@ -301,6 +315,7 @@ class DailyReportDataCache:
     def _missing_summary(
         self, snapshot: CacheSnapshot, repository: DailyReportRepository,
         users: pl.DataFrame, comments: pl.DataFrame,
+        *, assigned_subordinate_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         key = (snapshot.generation, repository.today_jst(),
                repository.settings.missing_comment_start_date,
@@ -309,7 +324,13 @@ class DailyReportDataCache:
         with self._lock:
             if self._review_summary is None or self._review_summary[0] != key:
                 failed_reports = {item["employee_id"] for item in snapshot.report_load_failures}
-                targets = repository.resolve_view_scope(snapshot.common, snapshot.employee_id)["assigned_subordinate_ids"]
+                targets = (
+                    assigned_subordinate_ids
+                    if assigned_subordinate_ids is not None
+                    else repository.resolve_view_scope(
+                        snapshot.common, snapshot.employee_id
+                    )["assigned_subordinate_ids"]
+                )
                 summary = repository._build_missing_comment_summary(
                     users, comments, snapshot.common, snapshot.employee_id,
                     sorted(set(targets) - failed_reports),
@@ -370,8 +391,23 @@ class DailyReportDataCache:
         snapshot = self.ensure_loaded(settings, employee_id).snapshot
         repository = DailyReportRepository(settings, self._base_dir)
         users, comments = self._combined_frames(snapshot, repository)
-        summary = self._missing_summary(snapshot, repository, users, comments)
-        scope = repository.resolve_view_scope(snapshot.common, employee_id)
+        global_order = repository._global_user_order(snapshot.common)
+        assignments = repository._resolved_comment_assignments(
+            snapshot.common, global_order=global_order
+        )
+        summary = self._missing_summary(
+            snapshot,
+            repository,
+            users,
+            comments,
+            assigned_subordinate_ids=set(assignments[0].get(employee_id, set())),
+        )
+        scope = repository.resolve_view_scope(
+            snapshot.common,
+            employee_id,
+            global_order=global_order,
+            assignments=assignments,
+        )
         failed = {item["employee_id"] for item in snapshot.report_load_failures}
         targets = sorted(set(target_ids) & set(scope["target_employee_ids"]) - failed)
         rows, _, _ = repository._build_rows(
@@ -379,6 +415,8 @@ class DailyReportDataCache:
             snapshot.common, employee_id, scope["assigned_subordinate_ids"], targets,
             start_date, end_date, summary,
             failed_comment_superior_ids={item["superior_employee_id"] for item in snapshot.comment_load_failures},
+            global_order=global_order,
+            target_commenters=assignments[1],
         )
         return {
             "cache_generation": snapshot.generation,

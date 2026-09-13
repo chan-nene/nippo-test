@@ -379,7 +379,16 @@ class DailyReportRepository:
         period_preset: str | None = None,
     ) -> dict[str, Any]:
         common = self.load_common()
-        scope = self.resolve_view_scope(common, employee_id)
+        global_order = self._global_user_order(common)
+        assignments = self._resolved_comment_assignments(
+            common, global_order=global_order
+        )
+        scope = self.resolve_view_scope(
+            common,
+            employee_id,
+            global_order=global_order,
+            assignments=assignments,
+        )
         target_employee_ids = scope["target_employee_ids"]
         users_df = self._load_all_user_rows(target_employee_ids, common)
         comments_df = self._load_all_comment_rows(target_employee_ids)
@@ -392,6 +401,8 @@ class DailyReportRepository:
             end_date=end_date,
             period_preset=period_preset,
             load_warning_count=len(self.load_warnings),
+            global_order=global_order,
+            assignments=assignments,
         )
 
     def resolve_view_scope(
@@ -439,6 +450,8 @@ class DailyReportRepository:
         failed_comment_superior_ids: set[str] | None = None,
         missing_comment_summary: dict[str, Any] | None = None,
         columnar_rows: bool = False,
+        global_order: list[str] | None = None,
+        assignments: tuple[dict[str, set[str]], dict[str, list[str]]] | None = None,
     ) -> dict[str, Any]:
         if period_preset == "previousWorkday":
             previous_working_date = self._previous_working_date(common["calendar"])
@@ -460,8 +473,18 @@ class DailyReportRepository:
             for item in (failed_comment_superior_ids or set())
             if str(item).strip()
         }
-        global_order = self._global_user_order(common)
-        assignments = self._resolved_comment_assignments(common, global_order=global_order)
+        global_order = (
+            global_order
+            if global_order is not None
+            else self._global_user_order(common)
+        )
+        assignments = (
+            assignments
+            if assignments is not None
+            else self._resolved_comment_assignments(
+                common, global_order=global_order
+            )
+        )
         scope = self.resolve_view_scope(
             common, employee_id, global_order=global_order, assignments=assignments
         )
